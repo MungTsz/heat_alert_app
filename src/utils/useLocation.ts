@@ -27,8 +27,7 @@ export const useLocation = () => {
           if (data && data.address) {
             const addr = data.address;
 
-            // Pick the most specific area / suburb / district (Ignoring roads/streets)
-            const area = addr.suburb || addr.road || 'Hong Kong';
+            const area = addr.suburb || addr.road;
 
             setLocationText(area);
           } else {
