@@ -3,9 +3,15 @@ import { useState, useEffect } from 'react';
 import { PermissionsAndroid, Platform } from 'react-native';
 import Geolocation from 'react-native-geolocation-service';
 
+export type Coordinates = {
+  latitude: number;
+  longitude: number;
+};
+
 export const useLocation = () => {
   const [locationText, setLocationText] = useState<string>('Locating...');
   const [loading, setLoading] = useState<boolean>(true);
+  const [coords, setCoords] = useState<Coordinates | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -50,6 +56,7 @@ export const useLocation = () => {
           if (isMounted) {
             const { latitude, longitude } = position.coords;
             fetchPlaceName(latitude, longitude);
+            setCoords({ latitude, longitude });
           }
         },
         error => {
@@ -103,5 +110,5 @@ export const useLocation = () => {
     };
   }, []);
 
-  return { locationText, loading };
+  return { locationText, loading, coords };
 };
