@@ -102,15 +102,6 @@ const CharacterLayer: React.FC<Props> = ({ width, height, horizonY }) => {
         {/* Head */}
         <Circle cx={centerX} cy={headCy} r={headR} color="#F2C199" />
 
-        {/* Sun-Flushed Red Face */}
-        <Circle
-          cx={centerX}
-          cy={headCy + 2}
-          r={14}
-          color="#FF5252"
-          opacity={0.35}
-        />
-
         {/* Face Features */}
         <Circle cx={centerX - 7} cy={headCy - 2} r={2.2} color="#263238" />
         <Circle cx={centerX + 7} cy={headCy - 2} r={2.2} color="#263238" />

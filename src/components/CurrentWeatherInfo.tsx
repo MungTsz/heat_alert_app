@@ -10,34 +10,39 @@ interface Props {
 
 const CurrentWeatherInfo: React.FC<Props> = ({ temperature, humidity }) => {
   return (
-    <View style={styles.blockContainer}>
-      <View style={styles.item}>
-        <Thermometer size={16} color="#718096" />
-        <Text style={styles.text}>Temp: {temperature}°C</Text>
-      </View>
+    <View style={styles.wrapper}>
+      <View style={styles.content}>
+        <View style={styles.item}>
+          <Thermometer size={16} color="#FFFFFF" />
+          <Text style={styles.text}>Temp: {temperature}°C</Text>
+        </View>
 
-      <View style={styles.divider} />
+        <View style={styles.divider} />
 
-      <View style={styles.item}>
-        <Droplets size={16} color="#718096" />
-        <Text style={styles.text}>Humidity: {humidity}%</Text>
+        <View style={styles.item}>
+          <Droplets size={16} color="#FFFFFF" />
+          <Text style={styles.text}>Humidity: {humidity}%</Text>
+        </View>
       </View>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  blockContainer: {
+  wrapper: {
+    borderRadius: 14,
+    marginTop: 12,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.5)',
+    backgroundColor: 'rgba(255,255,255,0.22)', // translucent tint — shows the orange gradient through it
+  },
+  content: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.4)', // Soft translucent fill
-    borderWidth: 1,
-    borderColor: 'rgba(144, 183, 235, 0.7)', // Subtle border outline
-    borderRadius: 14,
-    marginTop: 12,
-    paddingVertical: 12, // Increased vertical padding for a bigger block feel
-    paddingHorizontal: 24, // Increased horizontal padding
+    paddingVertical: 12,
+    paddingHorizontal: 24,
   },
   item: {
     flexDirection: 'row',
@@ -46,14 +51,17 @@ const styles = StyleSheet.create({
   },
   divider: {
     width: 1,
-    height: 18, // Taller divider to match increased size
-    backgroundColor: '#CBD5E0',
+    height: 18,
+    backgroundColor: 'rgba(255,255,255,0.5)',
     marginHorizontal: 20,
   },
   text: {
-    fontSize: 14, // Slightly larger text, still secondary to the main card
+    fontSize: 14,
     fontWeight: '500',
-    color: '#718096',
+    color: '#FFFFFF',
+    textShadowColor: 'rgba(0,0,0,0.2)', // helps legibility over the orange gradient
+    textShadowRadius: 2,
+    textShadowOffset: { width: 0, height: 1 },
   },
 });
 
