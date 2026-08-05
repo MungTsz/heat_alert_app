@@ -1,30 +1,36 @@
+// src/components/scene/ThermometerLayer.tsx
 import React from 'react';
-import { Group, RoundedRect, Circle } from '@shopify/react-native-skia';
-import { getHeatIndexInfo } from '../../utils/heatIndexUtils';
+import {
+  Group,
+  RoundedRect,
+  Circle,
+  Rect,
+  LinearGradient,
+  vec,
+} from '@shopify/react-native-skia';
 
 type Props = {
   x: number;
   topY: number;
-  groundY: number;
+  bottomY: number;
   temperatureCelsius: number;
 };
 
-const MIN_TEMP = 15; // scale reference: empty tube
-const MAX_TEMP = 46; // scale reference: full tube (matches your "Danger" threshold)
+const MIN_TEMP = 15;
+const MAX_TEMP = 46;
+const MERCURY_COLOR = '#E53935'; // fixed red, no longer tied to heat-level scale
 
 const ThermometerLayer: React.FC<Props> = ({
   x,
   topY,
-  groundY,
+  bottomY,
   temperatureCelsius,
 }) => {
-  const { color: mercuryColor } = getHeatIndexInfo(temperatureCelsius);
-
-  const bulbR = 16;
-  const tubeWidth = 20;
-  const bulbCy = groundY - bulbR;
-  const tubeTop = topY;
-  const tubeHeight = bulbCy - tubeTop;
+  const bulbR = 15;
+  const tubeWidth = 16;
+  const bulbCy = bottomY - bulbR;
+  const tubeHeight = bulbCy - topY;
+  const glassInset = 5;
 
   const fraction = Math.max(
     0,
@@ -32,55 +38,91 @@ const ThermometerLayer: React.FC<Props> = ({
   );
   const fillHeight = tubeHeight * fraction;
   const fillTopY = bulbCy - fillHeight;
-  const glassInset = 4;
+
+  const tickCount = 6;
+  const ticks = Array.from({ length: tickCount }).map((_, i) => {
+    const ty = topY + (tubeHeight / (tickCount - 1)) * i;
+    const isLong = i % 2 === 0;
+    return { ty, isLong };
+  });
 
   return (
     <Group>
-      {/* Glass casing */}
+      <Circle
+        cx={x + 2}
+        cy={bulbCy + 2}
+        r={bulbR + 3}
+        color="rgba(0,0,0,0.12)"
+      />
+
       <RoundedRect
         x={x - tubeWidth / 2}
-        y={tubeTop}
+        y={topY}
         width={tubeWidth}
         height={tubeHeight}
         r={tubeWidth / 2}
-        color="#F5F5F5"
+        color="#FFFFFF"
       />
-      <Circle cx={x} cy={bulbCy} r={bulbR} color="#F5F5F5" />
+      <Circle cx={x} cy={bulbCy} r={bulbR} color="#FFFFFF" />
 
-      {/* Mercury fill */}
+      {ticks.map((tick, i) => (
+        <Rect
+          key={`tick-${i}`}
+          x={x + tubeWidth / 2 - (tick.isLong ? 7 : 4)}
+          y={tick.ty}
+          width={tick.isLong ? 7 : 4}
+          height={1.5}
+          color="rgba(150,150,150,0.5)"
+        />
+      ))}
+
       <RoundedRect
         x={x - (tubeWidth - glassInset) / 2}
         y={fillTopY}
         width={tubeWidth - glassInset}
         height={bulbCy - fillTopY + (tubeWidth - glassInset) / 2}
         r={(tubeWidth - glassInset) / 2}
-        color={mercuryColor}
-      />
+      >
+        <LinearGradient
+          start={vec(x - tubeWidth / 2, fillTopY)}
+          end={vec(x + tubeWidth / 2, fillTopY)}
+          colors={[MERCURY_COLOR, MERCURY_COLOR, 'rgba(255,255,255,0.35)']}
+          positions={[0, 0.55, 1]}
+        />
+      </RoundedRect>
       <Circle
         cx={x}
         cy={bulbCy}
         r={bulbR - glassInset / 2}
-        color={mercuryColor}
+        color={MERCURY_COLOR}
       />
 
-      {/* Outline */}
       <RoundedRect
         x={x - tubeWidth / 2}
-        y={tubeTop}
+        y={topY}
         width={tubeWidth}
         height={tubeHeight}
         r={tubeWidth / 2}
-        color="#D8D8D8"
+        color="rgba(180,180,180,0.6)"
         style="stroke"
-        strokeWidth={2}
+        strokeWidth={1.5}
       />
       <Circle
         cx={x}
         cy={bulbCy}
         r={bulbR}
-        color="#D8D8D8"
+        color="rgba(180,180,180,0.6)"
         style="stroke"
-        strokeWidth={2}
+        strokeWidth={1.5}
+      />
+
+      <RoundedRect
+        x={x - tubeWidth / 2 + 2}
+        y={topY + 6}
+        width={2.5}
+        height={tubeHeight * 0.4}
+        r={1.5}
+        color="rgba(255,255,255,0.8)"
       />
     </Group>
   );

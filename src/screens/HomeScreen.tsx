@@ -1,17 +1,21 @@
 // src/screens/HomeScreen.tsx
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   StyleSheet,
   View,
   Text,
   ActivityIndicator,
   useWindowDimensions,
+  LayoutChangeEvent,
 } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedScrollHandler,
 } from 'react-native-reanimated';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from 'react-native-safe-area-context';
 import { MapPin } from 'lucide-react-native';
 import TextTicker from 'react-native-text-ticker';
 import CurrentWeatherInfo from '../components/CurrentWeatherInfo';
@@ -20,17 +24,17 @@ import MapScreen from './MapScreen';
 import { useLocation } from '../utils/useLocation';
 import { getHeatIndexInfo } from '../utils/heatIndexUtils';
 import HeatScene from '../components/scene/HeatScene';
+import { computeSceneLayout } from '../utils/sceneLayout';
 
 const LOCATION_BOX_WIDTH = 160;
+const MIN_GAP_BELOW_CHARACTER = 24; // guaranteed breathing room even on tall/short screens
 
 const HomeScreen = () => {
   const { width, height } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const { locationText, loading } = useLocation();
 
-  // Shared scroll position value
   const scrollY = useSharedValue(0);
-
-  // Scroll handler to track scroll distance on the UI thread
   const scrollHandler = useAnimatedScrollHandler(event => {
     scrollY.value = event.contentOffset.y;
   });
@@ -39,11 +43,30 @@ const HomeScreen = () => {
   const actualTemp = 36;
   const currentHumidity = 80;
 
-  const { classification, risk } = getHeatIndexInfo(heatIndexTemp);
+  const { classification } = getHeatIndexInfo(heatIndexTemp);
+  const layout = computeSceneLayout(width, height);
+
+  // Measure the actual rendered height of everything above the spacer,
+  // since the Skia canvas (character) and ScrollView content (text) are
+  // separate coordinate systems that don't automatically know about each other.
+  const [contentAboveHeight, setContentAboveHeight] = useState(0);
+
+  const onContentAboveLayout = useCallback((e: LayoutChangeEvent) => {
+    setContentAboveHeight(e.nativeEvent.layout.y + e.nativeEvent.layout.height);
+  }, []);
+
+  // Canvas Y=0 starts at the very top of the window; ScrollView content
+  // starts after the safe-area top inset. This converts layout.bottomY
+  // (character's feet, in canvas space) into ScrollView space.
+  const characterBottomInScrollSpace = layout.bottomY - insets.top;
+
+  const spacerHeight = Math.max(
+    characterBottomInScrollSpace - contentAboveHeight + MIN_GAP_BELOW_CHARACTER,
+    MIN_GAP_BELOW_CHARACTER,
+  );
 
   return (
     <View style={styles.mainContainer}>
-      {/* Background Skia Canvas receiving scrollY */}
       <View style={StyleSheet.absoluteFill}>
         <HeatScene
           width={width}
@@ -53,54 +76,60 @@ const HomeScreen = () => {
         />
       </View>
 
-      {/* Foreground UI */}
       <SafeAreaView style={styles.safeArea}>
         <Animated.ScrollView
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
           onScroll={scrollHandler}
-          scrollEventThrottle={16} // 60fps scroll updates
+          scrollEventThrottle={16}
         >
-          {/* Header Row */}
-          <View style={styles.headerRow}>
-            <Text style={styles.headerTitle} numberOfLines={1}>
-              Heat Index
-            </Text>
-            <View style={styles.locationContainer}>
-              <MapPin size={22} color="#FFFFFF" style={styles.locationIcon} />
-              <View style={styles.locationBox}>
-                {loading ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                ) : (
-                  <TextTicker
-                    style={styles.animatingText}
-                    duration={8000}
-                    loop
-                    bounce={false}
-                    repeatSpacer={40}
-                    marqueeDelay={1500}
-                    isInteraction={false}
-                  >
-                    {locationText}
-                  </TextTicker>
-                )}
+          <View onLayout={onContentAboveLayout}>
+            <View style={styles.headerRow}>
+              <Text style={styles.headerTitle} numberOfLines={1}>
+                Heat Index
+              </Text>
+              <View style={styles.locationContainer}>
+                <MapPin size={22} color="#FFFFFF" style={styles.locationIcon} />
+                <View style={styles.locationBox}>
+                  {loading ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <TextTicker
+                      style={styles.animatingText}
+                      duration={8000}
+                      loop
+                      bounce={false}
+                      repeatSpacer={40}
+                      marqueeDelay={1500}
+                      isInteraction={false}
+                    >
+                      {locationText}
+                    </TextTicker>
+                  )}
+                </View>
               </View>
+            </View>
+
+            <View
+              style={[
+                styles.heatInfoContainer,
+                { marginLeft: width * 0.06, marginTop: 20 },
+              ]}
+            >
+              <Text style={styles.feelsLikeTitle}>Feels Like</Text>
+              <Text style={styles.temperatureText} numberOfLines={1}>
+                {heatIndexTemp}°
+              </Text>
+              <Text style={styles.classificationText} numberOfLines={1}>
+                {classification}
+              </Text>
             </View>
           </View>
 
-          {/* Floating Heat Info Text */}
-          <View style={styles.heatInfoContainer}>
-            <Text style={styles.feelsLikeTitle}>Feels Like</Text>
-            <Text style={styles.temperatureText}>{heatIndexTemp}°</Text>
-            <Text style={styles.classificationText}>{classification}</Text>
-            {risk ? (
-              <Text style={styles.advisoryText} numberOfLines={2}>
-                {risk}
-              </Text>
-            ) : null}
-          </View>
+          {/* Dynamically sized so the character's feet always clear this
+              spacer before the weather pill begins — no more overlap. */}
+          <View style={{ height: spacerHeight }} />
 
-          {/* Weather Cards */}
           <CurrentWeatherInfo
             temperature={actualTemp}
             humidity={currentHumidity}
@@ -133,7 +162,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 20,
     gap: 8,
   },
   headerTitle: {
@@ -167,13 +196,11 @@ const styles = StyleSheet.create({
     textShadowRadius: 3,
   },
   heatInfoContainer: {
-    alignItems: 'flex-start',
-    marginTop: 10,
-    marginBottom: 200,
-    paddingLeft: 16,
+    justifyContent: 'center',
+    marginTop: 20,
   },
   feelsLikeTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
     color: '#FFFFFF',
     textShadowColor: 'rgba(0,0,0,0.2)',
@@ -181,7 +208,7 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 1 },
   },
   temperatureText: {
-    fontSize: 84,
+    fontSize: 58,
     fontWeight: 'bold',
     color: '#FFFFFF',
     includeFontPadding: false,
@@ -190,19 +217,9 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 2 },
   },
   classificationText: {
-    fontSize: 24,
+    fontSize: 21,
     fontWeight: '700',
     color: '#FFFFFF',
-    textShadowColor: 'rgba(0,0,0,0.2)',
-    textShadowRadius: 4,
-    textShadowOffset: { width: 0, height: 1 },
-  },
-  advisoryText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: 'rgba(255,255,255,0.95)',
-    marginTop: 4,
-    maxWidth: '65%',
     textShadowColor: 'rgba(0,0,0,0.2)',
     textShadowRadius: 4,
     textShadowOffset: { width: 0, height: 1 },
