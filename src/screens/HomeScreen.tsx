@@ -25,14 +25,20 @@ import { useLocation } from '../utils/useLocation';
 import { getHeatIndexInfo } from '../utils/heatIndexUtils';
 import HeatScene from '../components/scene/HeatScene';
 import { computeSceneLayout } from '../utils/sceneLayout';
+import { useForecastData } from '../hooks/useForecastData';
 
 const LOCATION_BOX_WIDTH = 160;
 const MIN_GAP_BELOW_CHARACTER = 24; // guaranteed breathing room even on tall/short screens
+const FALLBACK_LAT = 22.3375;
+const FALLBACK_LNG = 114.263;
 
 const HomeScreen = () => {
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
-  const { locationText, loading } = useLocation();
+  const { locationText, loading, coords } = useLocation();
+  const { days: forecastDays } = useForecastData(
+    coords ?? { latitude: FALLBACK_LAT, longitude: FALLBACK_LNG },
+  );
 
   const scrollY = useSharedValue(0);
   const scrollHandler = useAnimatedScrollHandler(event => {
@@ -118,7 +124,7 @@ const HomeScreen = () => {
             >
               <Text style={styles.feelsLikeTitle}>Feels Like</Text>
               <Text style={styles.temperatureText} numberOfLines={1}>
-                {heatIndexTemp}°
+                {heatIndexTemp}°C
               </Text>
               <Text style={styles.classificationText} numberOfLines={1}>
                 {classification}
@@ -139,7 +145,7 @@ const HomeScreen = () => {
             <MapScreen />
           </View>
 
-          <DailyHeatForecastCard />
+          <DailyHeatForecastCard days={forecastDays} />
         </Animated.ScrollView>
       </SafeAreaView>
     </View>
@@ -208,13 +214,10 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 1 },
   },
   temperatureText: {
-    fontSize: 58,
+    fontSize: 50,
     fontWeight: 'bold',
     color: '#FFFFFF',
     includeFontPadding: false,
-    textShadowColor: 'rgba(0,0,0,0.25)',
-    textShadowRadius: 6,
-    textShadowOffset: { width: 0, height: 2 },
   },
   classificationText: {
     fontSize: 21,

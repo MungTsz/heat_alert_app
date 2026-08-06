@@ -14,7 +14,7 @@ const CurrentWeatherInfo: React.FC<Props> = ({ temperature, humidity }) => {
       <View style={styles.content}>
         <View style={styles.item}>
           <Thermometer size={16} color="#FFFFFF" />
-          <Text style={styles.text}>Temp: {temperature}°C</Text>
+          <Text style={styles.text}>Temperature: {temperature}°C</Text>
         </View>
 
         <View style={styles.divider} />

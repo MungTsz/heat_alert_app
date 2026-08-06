@@ -1,6 +1,13 @@
 // src/components/DailyHeatForecastCard.tsx
-import React from 'react';
-import { View, Text, StyleSheet, Dimensions, ScrollView } from 'react-native';
+import React, { useState, useMemo } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Dimensions,
+  ScrollView,
+  TouchableOpacity,
+} from 'react-native';
 import Svg, {
   Rect,
   Line,
@@ -11,42 +18,23 @@ import Svg, {
   ClipPath,
   G,
 } from 'react-native-svg';
+import { DayForecast } from '../data/forecast/types';
+import { generateMockDays } from '../data/forecast/mockForecastProvider';
 
-// Global Layout Settings
 const SCREEN_WIDTH = Dimensions.get('window').width - 40;
 const SVG_HEIGHT = 220;
-const Y_AXIS_WIDTH = 35; // Space for the fixed Y-axis
-const CHART_PADDING_HORIZONTAL = 15; // Inner padding so dots don't clip at the edges
+const Y_AXIS_WIDTH = 35;
+const CHART_PADDING_HORIZONTAL = 15;
 const PADDING_BOTTOM = 25;
 const PADDING_TOP = 15;
 
-// Y-Axis scale limits in °C
 const MIN_TEMP = 15;
 const MAX_TEMP = 50;
 
-export interface ForecastPoint {
-  time: string;
-  heatIndex: number;
-}
-
 interface Props {
-  forecastData?: ForecastPoint[];
-  currentTimeIndex?: number;
+  days?: DayForecast[];
 }
 
-// Timeframe: 07:00 to 19:00 (7-7)
-const DEFAULT_DATA: ForecastPoint[] = [
-  { time: '07:00', heatIndex: 23.5 },
-  { time: '09:00', heatIndex: 31.2 },
-  { time: '11:00', heatIndex: 38.0 },
-  { time: '13:00', heatIndex: 44.5 },
-  { time: '15:00', heatIndex: 35.2 },
-  { time: '17:00', heatIndex: 27.0 },
-  { time: '19:00', heatIndex: 21.0 },
-];
-
-// Single source of truth for Zones, Point Colors, and Legend
-// Ordered from highest temperature to lowest for accurate threshold matching
 const HEAT_ZONES = [
   { min: 43, max: 50, color: '#DF7C8D', label: 'Extremely Hot' },
   { min: 35, max: 43, color: '#E99066', label: 'Very Hot' },
@@ -55,24 +43,41 @@ const HEAT_ZONES = [
   { min: 15, max: 20, color: '#87C693', label: 'Neutral' },
 ];
 
-// The boundary temperatures for the 5 dotted grid lines
 const GRID_LINES = [20, 28, 35, 43, 50];
 
-export const DailyHeatForecastCard: React.FC<Props> = ({
-  forecastData = DEFAULT_DATA,
-  currentTimeIndex = 3, // Defaults around 13:00
-}) => {
-  // Dynamic Scroll Width Calculations (Exactly 5 points visible in the window)
+const DEFAULT_CENTER = { latitude: 22.3375, longitude: 114.263 };
+
+export const DailyHeatForecastCard: React.FC<Props> = ({ days }) => {
+  const resolvedDays = useMemo(
+    () => days ?? generateMockDays(DEFAULT_CENTER),
+    [days],
+  );
+  const [selectedDayIndex, setSelectedDayIndex] = useState(0);
+  const activeDay = resolvedDays[selectedDayIndex];
+  const forecastData = activeDay?.points ?? [];
+
+  const currentTimeIndex = useMemo(() => {
+    if (!activeDay?.isToday) return undefined;
+    const now = Date.now();
+    return forecastData.reduce(
+      (closestIdx, p, idx) =>
+        Math.abs(p.timestamp - now) <
+        Math.abs(forecastData[closestIdx].timestamp - now)
+          ? idx
+          : closestIdx,
+      0,
+    );
+  }, [activeDay, forecastData]);
+
   const VISIBLE_POINTS = 5;
   const WINDOW_WIDTH = SCREEN_WIDTH - Y_AXIS_WIDTH;
   const VISIBLE_GRAPH_WIDTH = WINDOW_WIDTH - CHART_PADDING_HORIZONTAL * 2;
   const STEP = VISIBLE_GRAPH_WIDTH / (VISIBLE_POINTS - 1);
 
-  const GRAPH_WIDTH = STEP * (forecastData.length - 1);
+  const GRAPH_WIDTH = STEP * Math.max(forecastData.length - 1, 1);
   const SCROLL_SVG_WIDTH = GRAPH_WIDTH + CHART_PADDING_HORIZONTAL * 2;
   const GRAPH_HEIGHT = SVG_HEIGHT - PADDING_TOP - PADDING_BOTTOM;
 
-  // Coordinate Helpers
   const getY = (temp: number) => {
     const clampedTemp = Math.min(Math.max(temp, MIN_TEMP), MAX_TEMP);
     const percentage = (clampedTemp - MIN_TEMP) / (MAX_TEMP - MIN_TEMP);
@@ -81,17 +86,16 @@ export const DailyHeatForecastCard: React.FC<Props> = ({
 
   const getX = (index: number) => CHART_PADDING_HORIZONTAL + index * STEP;
 
-  // Helper to determine dot color based on the zone it falls in
   const getPointColor = (temp: number) => {
     const matchedZone = HEAT_ZONES.find(zone => temp >= zone.min);
-    return matchedZone ? matchedZone.color : '#87C693'; // Defaults to Neutral if below 15
+    return matchedZone ? matchedZone.color : '#87C693';
   };
 
-  // Smooth Bezier Curve Generator
   const points = forecastData.map((d, i) => ({
     x: getX(i),
     y: getY(d.heatIndex),
   }));
+
   const generateSmoothPath = (pts: { x: number; y: number }[]) => {
     const smoothing = 0.2;
     const getCP = (
@@ -125,31 +129,49 @@ export const DailyHeatForecastCard: React.FC<Props> = ({
 
   return (
     <View style={styles.card}>
-      <Text style={styles.cardTitle}>Daylight Heat Index Forecast</Text>
+      <Text style={styles.cardTitle}>Hourly Heat Index Forecast</Text>
+
+      {/* Day tabs */}
+      <View style={styles.dayTabRow}>
+        {resolvedDays.map((day, i) => (
+          <TouchableOpacity
+            key={day.dayLabel + i}
+            style={[
+              styles.dayTab,
+              selectedDayIndex === i && styles.dayTabActive,
+            ]}
+            onPress={() => setSelectedDayIndex(i)}
+          >
+            <Text
+              style={[
+                styles.dayTabText,
+                selectedDayIndex === i && styles.dayTabTextActive,
+              ]}
+            >
+              {day.dayLabel}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
 
       <View style={styles.chartLayout}>
-        {/* 1. Fixed Y-Axis Container */}
         <View style={styles.yAxisContainer}>
           <Svg width={Y_AXIS_WIDTH} height={SVG_HEIGHT}>
-            {GRID_LINES.map(temp => {
-              const y = getY(temp);
-              return (
-                <SvgText
-                  key={`grid-label-${temp}`}
-                  x={Y_AXIS_WIDTH - 6}
-                  y={y + 4}
-                  fontSize="10"
-                  fill="#718096"
-                  textAnchor="end"
-                >
-                  {temp}°
-                </SvgText>
-              );
-            })}
+            {GRID_LINES.map(temp => (
+              <SvgText
+                key={`grid-label-${temp}`}
+                x={Y_AXIS_WIDTH - 6}
+                y={getY(temp) + 4}
+                fontSize="10"
+                fill="#718096"
+                textAnchor="end"
+              >
+                {temp}°
+              </SvgText>
+            ))}
           </Svg>
         </View>
 
-        {/* 2. Scrollable Chart Container */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -168,19 +190,17 @@ export const DailyHeatForecastCard: React.FC<Props> = ({
               </ClipPath>
             </Defs>
 
-            {/* 5 Distinct Background Color Zones */}
             <G clipPath="url(#chartClip)">
               {HEAT_ZONES.map((zone, idx) => {
                 const yTop = getY(zone.max);
                 const yBottom = getY(zone.min);
-                const zoneHeight = yBottom - yTop;
                 return (
                   <Rect
                     key={`zone-${idx}`}
                     x={0}
                     y={yTop}
                     width={SCROLL_SVG_WIDTH}
-                    height={zoneHeight}
+                    height={yBottom - yTop}
                     fill={zone.color}
                     fillOpacity={0.15}
                   />
@@ -188,7 +208,6 @@ export const DailyHeatForecastCard: React.FC<Props> = ({
               })}
             </G>
 
-            {/* 5 Dotted Grey Grid Lines */}
             {GRID_LINES.map(temp => (
               <Line
                 key={`grid-line-${temp}`}
@@ -202,7 +221,6 @@ export const DailyHeatForecastCard: React.FC<Props> = ({
               />
             ))}
 
-            {/* Main Smooth Trend Line */}
             <Path
               d={linePath}
               stroke="#5A9E6F"
@@ -211,22 +229,18 @@ export const DailyHeatForecastCard: React.FC<Props> = ({
               strokeLinecap="round"
             />
 
-            {/* Interactive Data Points Mapping with Zone Colors */}
-            {forecastData.map((point, index) => {
-              return (
-                <Circle
-                  key={`point-${index}`}
-                  cx={getX(index)}
-                  cy={getY(point.heatIndex)}
-                  r="4.5"
-                  fill={getPointColor(point.heatIndex)}
-                  stroke="#FFFFFF"
-                  strokeWidth="1.5"
-                />
-              );
-            })}
+            {forecastData.map((point, index) => (
+              <Circle
+                key={`point-${index}`}
+                cx={getX(index)}
+                cy={getY(point.heatIndex)}
+                r="4.5"
+                fill={getPointColor(point.heatIndex)}
+                stroke="#FFFFFF"
+                strokeWidth="1.5"
+              />
+            ))}
 
-            {/* Current Time Cursor Line (Red Dotted) */}
             {currentTimeIndex !== undefined &&
               currentTimeIndex < forecastData.length && (
                 <Line
@@ -241,7 +255,6 @@ export const DailyHeatForecastCard: React.FC<Props> = ({
                 />
               )}
 
-            {/* X-Axis Time Labels */}
             {forecastData.map((point, index) => (
               <SvgText
                 key={`x-label-${index}`}
@@ -258,19 +271,13 @@ export const DailyHeatForecastCard: React.FC<Props> = ({
         </ScrollView>
       </View>
 
-      {/* Dynamic Legend */}
       <View style={styles.legendRow}>
-        {/* Reversing the HEAT_ZONES array so Neutral starts on the left */}
-        {[...HEAT_ZONES].reverse().map((zone, idx) => {
-          return (
-            <View key={idx} style={styles.legendItem}>
-              <View
-                style={[styles.legendDot, { backgroundColor: zone.color }]}
-              />
-              <Text style={styles.legendText}>{zone.label}</Text>
-            </View>
-          );
-        })}
+        {[...HEAT_ZONES].reverse().map((zone, idx) => (
+          <View key={idx} style={styles.legendItem}>
+            <View style={[styles.legendDot, { backgroundColor: zone.color }]} />
+            <Text style={styles.legendText}>{zone.label}</Text>
+          </View>
+        ))}
       </View>
     </View>
   );
@@ -292,7 +299,29 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#2D3748',
-    marginBottom: 8,
+    marginBottom: 10,
+  },
+  dayTabRow: {
+    flexDirection: 'row',
+    marginBottom: 12,
+    gap: 8,
+  },
+  dayTab: {
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+    borderRadius: 16,
+    backgroundColor: '#F0F0F0',
+  },
+  dayTabActive: {
+    backgroundColor: '#E99066',
+  },
+  dayTabText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#718096',
+  },
+  dayTabTextActive: {
+    color: '#FFFFFF',
   },
   chartLayout: {
     flexDirection: 'row',

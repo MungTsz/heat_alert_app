@@ -5,10 +5,8 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import HomeScreen from './src/screens/HomeScreen';
 import CommunityScreen from './src/screens/CommunityScreen';
 import FloatingNavBar, { TabName } from './src/components/FloatingNavBar';
-
-const SettingsScreen = () => (
-  <View style={{ flex: 1, backgroundColor: '#F5F5F5' }} />
-);
+import SettingsScreen from './src/screens/SettingsScreen';
+import HeatAlertEngine from './src/components/HeatAlertEngine';
 
 const App = () => {
   const [activeTab, setActiveTab] = useState<TabName>('HeatIndex');
@@ -26,6 +24,7 @@ const App = () => {
 
   return (
     <SafeAreaProvider>
+      <HeatAlertEngine />
       <View style={styles.container}>
         {renderScreen()}
         <FloatingNavBar activeTab={activeTab} onTabChange={setActiveTab} />
