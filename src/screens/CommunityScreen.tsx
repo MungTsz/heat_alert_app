@@ -15,6 +15,8 @@ import { idwInterpolate } from '../utils/idw';
 import { distanceMiles } from '../utils/distance';
 import HouseCard from '../components/HouseCard';
 import AddHouseModal from '../components/AddHouseModal';
+import HouseMapModal from '../components/HouseMapModal';
+import { HouseEntry } from '../types/house';
 
 const FALLBACK_LAT = 22.3375;
 const FALLBACK_LNG = 114.263;
@@ -23,6 +25,7 @@ const CommunityScreen = () => {
   const { coords } = useLocation();
   const { houses, addHouse, removeHouse } = useHouseList();
   const [modalVisible, setModalVisible] = useState(false);
+  const [selectedHouse, setSelectedHouse] = useState<HouseEntry | null>(null);
 
   const center = coords ?? { latitude: FALLBACK_LAT, longitude: FALLBACK_LNG };
   const { points } = useHeatData(center);
@@ -33,7 +36,6 @@ const CommunityScreen = () => {
     value: p.temperature,
   }));
 
-  // Compute each house's heat index + distance, then sort hottest-first (matches your reference)
   const rankedHouses = useMemo(() => {
     return houses
       .map(house => ({
@@ -58,6 +60,10 @@ const CommunityScreen = () => {
     longitude: number,
   ) => {
     addHouse({ label, address, latitude, longitude });
+  };
+
+  const handleCardPress = (house: HouseEntry) => {
+    setSelectedHouse(house);
   };
 
   return (
@@ -88,6 +94,7 @@ const CommunityScreen = () => {
               label={item.label}
               temperature={item.temperature}
               distance={item.distance}
+              onPress={() => handleCardPress(item)}
               onRemove={() => removeHouse(item.id)}
             />
           )}
@@ -98,6 +105,12 @@ const CommunityScreen = () => {
         visible={modalVisible}
         onClose={() => setModalVisible(false)}
         onAdd={handleAdd}
+      />
+
+      <HouseMapModal
+        visible={selectedHouse !== null}
+        house={selectedHouse}
+        onClose={() => setSelectedHouse(null)}
       />
     </SafeAreaView>
   );

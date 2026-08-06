@@ -17,6 +17,7 @@ import {
 import CharacterLayer from './CharacterLayer';
 import ThermometerLayer from './ThermometerLayer';
 import { computeSceneLayout } from '../../utils/sceneLayout';
+import { getHeatIndexInfo } from '../../utils/heatIndexUtils';
 
 type Props = {
   width: number;
@@ -43,15 +44,20 @@ const HeatScene: React.FC<Props> = ({
 
   const layout = computeSceneLayout(width, height);
 
+  // The ONLY source of background color — no other constant/hardcoded
+  // orange/yellow value exists anywhere in this file.
+  const { color: levelColor } = getHeatIndexInfo(temperatureCelsius);
+
   return (
     <Canvas style={{ flex: 1 }}>
-      {/* Background: orange -> yellow (halfway point) -> white (bottom half) */}
+      {/* Single heat-level color, solid for the top half, fading to pure white
+          by the vertical midpoint. Exactly two colors: levelColor and #FFFFFF. */}
       <Rect x={0} y={0} width={width} height={height}>
         <LinearGradient
           start={vec(0, 0)}
           end={vec(0, height)}
-          colors={['#FF7A00', '#FFD23F', '#FFFFFF']}
-          positions={[0, 0.5, 1]}
+          colors={[levelColor, '#FFFFFF']}
+          positions={[0, 1]}
         />
       </Rect>
 
@@ -65,7 +71,6 @@ const HeatScene: React.FC<Props> = ({
           temperatureCelsius={temperatureCelsius}
         />
 
-        {/* Unchanged — same component, same props */}
         <CharacterLayer
           width={width}
           height={height}

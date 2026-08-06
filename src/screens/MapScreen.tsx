@@ -14,12 +14,7 @@ import { useIdwOverlayImage } from '../hooks/useIdwOverlayImage';
 import { idwInterpolate, valueToPinColor } from '../utils/idw';
 import MapModeToggle from '../components/MapModeToggle';
 import HeatPin from '../components/HeatPin';
-import { MapType } from 'react-native-maps';
 import { Navigation } from 'lucide-react-native';
-
-const CURRENT_MAP_TYPE: MapType = 'hybrid';
-// const CURRENT_MAP_TYPE: MapType = 'standard';
-// const CURRENT_MAP_TYPE: MapType = 'satellite';
 
 const FALLBACK_LAT = 22.3375;
 const FALLBACK_LNG = 114.263;
@@ -30,19 +25,35 @@ type SelectedPoint = {
   temperature: number;
 };
 
-const MapScreen = () => {
+type Coordinates = {
+  latitude: number;
+  longitude: number;
+};
+
+type Props = {
+  // When provided, the map centers on this fixed point instead of the
+  // device's live GPS location — used by HouseMapModal to show a specific
+  // monitored address. The 📍 recenter button still returns to this point.
+  overrideCenter?: Coordinates;
+  // Hides the mode toggle for the compact popup use-case (optional)
+  showModeToggle?: boolean;
+};
+
+const MapScreen = ({ overrideCenter, showModeToggle = true }: Props) => {
   const { coords } = useLocation();
   const [isSpatial, setIsSpatial] = useState<boolean>(true);
   const mapRef = useRef<MapView>(null);
 
-  const center = coords ?? { latitude: FALLBACK_LAT, longitude: FALLBACK_LNG };
+  // Priority: explicit override > live GPS > fallback constant
+  const center = overrideCenter ??
+    coords ?? { latitude: FALLBACK_LAT, longitude: FALLBACK_LNG };
   const { points, loading } = useHeatData(center);
 
   const initialRegion: Region = {
     latitude: center.latitude,
     longitude: center.longitude,
-    latitudeDelta: 0.05,
-    longitudeDelta: 0.05,
+    latitudeDelta: 0.03,
+    longitudeDelta: 0.03,
   };
 
   const [region, setRegion] = useState<Region>(initialRegion);
@@ -63,7 +74,6 @@ const MapScreen = () => {
   const east = region.longitude + Math.abs(region.longitudeDelta) / 2;
   const west = region.longitude - Math.abs(region.longitudeDelta) / 2;
 
-  // react-native-maps expects [northEast, southWest]
   const overlayBounds: [[number, number], [number, number]] = [
     [north, east],
     [south, west],
@@ -73,21 +83,8 @@ const MapScreen = () => {
     const temperature = Math.round(
       idwInterpolate(latitude, longitude, weightedPoints),
     );
-    console.log(
-      'Tapped:',
-      latitude.toFixed(4),
-      longitude.toFixed(4),
-      '-> temp:',
-      temperature,
-    );
     setSelectedPoint({ latitude, longitude, temperature });
   };
-
-  useEffect(() => {
-    if (coords && weightedPoints.length > 0 && !selectedPoint) {
-      placeMarkerAt(coords.latitude, coords.longitude);
-    }
-  }, [coords, weightedPoints.length]);
 
   const handleMapPress = (event: MapPressEvent) => {
     const { latitude, longitude } = event.nativeEvent.coordinate;
@@ -99,12 +96,19 @@ const MapScreen = () => {
     placeMarkerAt(coordinate.latitude, coordinate.longitude);
   };
 
+  // Show a marker at the center point as soon as heat data is ready
+  useEffect(() => {
+    if (weightedPoints.length > 0 && !selectedPoint) {
+      placeMarkerAt(center.latitude, center.longitude);
+    }
+  }, [center.latitude, center.longitude, weightedPoints.length]);
+
+  // 📍 button -> jump back to the relevant center (override point, or live GPS)
   const recenter = () => {
-    if (!coords) return;
-    placeMarkerAt(coords.latitude, coords.longitude);
+    placeMarkerAt(center.latitude, center.longitude);
     mapRef.current?.animateToRegion({
-      latitude: coords.latitude,
-      longitude: coords.longitude,
+      latitude: center.latitude,
+      longitude: center.longitude,
       latitudeDelta: 0.03,
       longitudeDelta: 0.03,
     });
@@ -115,13 +119,12 @@ const MapScreen = () => {
       <MapView
         ref={mapRef}
         provider={PROVIDER_GOOGLE}
-        mapType={CURRENT_MAP_TYPE}
         style={StyleSheet.absoluteFill}
         initialRegion={initialRegion}
         onRegionChangeComplete={setRegion}
         onPress={handleMapPress}
         onPoiClick={handlePoiClick}
-        showsUserLocation
+        showsUserLocation={!overrideCenter} // only show the blue GPS dot on the main map
         showsMyLocationButton={false}
       >
         {isSpatial && overlayImageUri && (
@@ -153,12 +156,14 @@ const MapScreen = () => {
         )}
       </MapView>
 
-      <View style={styles.topBar}>
-        <MapModeToggle isSpatial={isSpatial} onToggle={setIsSpatial} />
-      </View>
+      {showModeToggle && (
+        <View style={styles.topBar}>
+          <MapModeToggle isSpatial={isSpatial} onToggle={setIsSpatial} />
+        </View>
+      )}
 
       <TouchableOpacity style={styles.locateButton} onPress={recenter}>
-        <Navigation size={20} color="#4589f0" style={styles.locateIcon} />
+        <Navigation size={20} color="#2B7A9E" fill="#2B7A9E" />
       </TouchableOpacity>
 
       {loading && (
@@ -185,7 +190,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     elevation: 5,
   },
-  locateIcon: {},
+  locateIcon: { fontSize: 20 },
   loadingBadge: {
     position: 'absolute',
     bottom: 30,
