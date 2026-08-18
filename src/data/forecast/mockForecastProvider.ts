@@ -8,13 +8,13 @@ import {
 const START_HOUR = 6;
 const END_HOUR = 20;
 
-// Demo trend: each day's peak is a bit hotter than the last, so the
-// "sustained trend across days" rule has something real to detect.
 const DAY_PEAK_TEMPS = [38, 41, 44];
-const DAY_LABELS_FALLBACK = ['Today', 'Tomorrow'];
 
-const weekdayLabel = (date: Date): string =>
-  date.toLocaleDateString('en-US', { weekday: 'short' });
+const startOfDay = (date: Date): number => {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+};
 
 const generateDayPoints = (
   baseDate: Date,
@@ -24,7 +24,6 @@ const generateDayPoints = (
   const peakHour = 13.5;
 
   for (let hour = START_HOUR; hour <= END_HOUR; hour++) {
-    // Gaussian-ish curve centered on peakHour, floor around 21°C at the edges
     const distanceFromPeak = hour - peakHour;
     const shape = Math.exp(-(distanceFromPeak * distanceFromPeak) / 30);
     const heatIndex = 21 + (peakTemp - 21) * shape;
@@ -41,22 +40,29 @@ const generateDayPoints = (
   return points;
 };
 
-export const generateMockDays = (_center: Coordinates): DayForecast[] => {
+const peakTempForOffset = (dayOffset: number): number => {
+  if (dayOffset < DAY_PEAK_TEMPS.length) return DAY_PEAK_TEMPS[dayOffset];
+  const base = DAY_PEAK_TEMPS[DAY_PEAK_TEMPS.length - 1];
+  const wave = Math.sin(dayOffset * 0.7) * 4;
+  return Math.round((base + wave) * 10) / 10;
+};
+
+export const generateDayForOffset = (dayOffset: number): DayForecast => {
   const today = new Date();
+  const dayDate = new Date(today);
+  dayDate.setDate(today.getDate() + dayOffset);
 
-  return DAY_PEAK_TEMPS.map((peakTemp, i) => {
-    const dayDate = new Date(today);
-    dayDate.setDate(today.getDate() + i);
+  return {
+    weekdayShort: dayDate.toLocaleDateString('en-US', { weekday: 'short' }),
+    dayOfMonth: dayDate.getDate(),
+    dateMs: startOfDay(dayDate),
+    isToday: dayOffset === 0,
+    points: generateDayPoints(dayDate, peakTempForOffset(dayOffset)),
+  };
+};
 
-    const dayLabel =
-      i === 0 ? 'Today' : i === 1 ? 'Tomorrow' : weekdayLabel(dayDate);
-
-    return {
-      dayLabel,
-      isToday: i === 0,
-      points: generateDayPoints(dayDate, peakTemp),
-    };
-  });
+export const generateMockDays = (_center: Coordinates): DayForecast[] => {
+  return [0, 1, 2].map(generateDayForOffset);
 };
 
 export const mockForecastProvider: ForecastDataProvider = {

@@ -1,5 +1,11 @@
 // src/components/DailyHeatForecastCard.tsx
-import React, { useState, useMemo } from 'react';
+import React, {
+  useState,
+  useMemo,
+  useRef,
+  useCallback,
+  useEffect,
+} from 'react';
 import {
   View,
   Text,
@@ -7,6 +13,8 @@ import {
   Dimensions,
   ScrollView,
   TouchableOpacity,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
 } from 'react-native';
 import Svg, {
   Rect,
@@ -18,7 +26,7 @@ import Svg, {
   ClipPath,
   G,
 } from 'react-native-svg';
-import { DayForecast } from '../data/forecast/types';
+import { DayForecast, HourlyForecastPoint } from '../data/forecast/types';
 import { generateMockDays } from '../data/forecast/mockForecastProvider';
 
 const SCREEN_WIDTH = Dimensions.get('window').width - 40;
@@ -31,8 +39,12 @@ const PADDING_TOP = 15;
 const MIN_TEMP = 15;
 const MAX_TEMP = 50;
 
+const VISIBLE_POINTS = 5; // points visible per screen-width, sets hourly spacing
+const EXTEND_THRESHOLD = 200; // px from the right edge that triggers loading another day
+
 interface Props {
   days?: DayForecast[];
+  maxDays?: number;
 }
 
 const HEAT_ZONES = [
@@ -47,36 +59,61 @@ const GRID_LINES = [20, 28, 35, 43, 50];
 
 const DEFAULT_CENTER = { latitude: 22.3375, longitude: 114.263 };
 
-export const DailyHeatForecastCard: React.FC<Props> = ({ days }) => {
-  const resolvedDays = useMemo(
-    () => days ?? generateMockDays(DEFAULT_CENTER),
+// A flattened point, tagged with which day it belongs to and its global
+// index in the continuous timeline — what actually gets drawn.
+type FlatPoint = HourlyForecastPoint & {
+  dayIndex: number;
+  globalIndex: number;
+};
+
+export const DailyHeatForecastCard: React.FC<Props> = ({
+  days,
+  maxDays = 3,
+}) => {
+  const initialDays = useMemo(
+    () => (days && days.length > 0 ? days : generateMockDays(DEFAULT_CENTER)),
     [days],
   );
-  const [selectedDayIndex, setSelectedDayIndex] = useState(0);
-  const activeDay = resolvedDays[selectedDayIndex];
-  const forecastData = activeDay?.points ?? [];
+  const [allDays, setAllDays] = useState<DayForecast[]>(initialDays);
+  const [activeDayIndex, setActiveDayIndex] = useState(0);
+  const scrollRef = useRef<ScrollView>(null);
 
-  const currentTimeIndex = useMemo(() => {
-    if (!activeDay?.isToday) return undefined;
-    const now = Date.now();
-    return forecastData.reduce(
-      (closestIdx, p, idx) =>
-        Math.abs(p.timestamp - now) <
-        Math.abs(forecastData[closestIdx].timestamp - now)
-          ? idx
-          : closestIdx,
-      0,
-    );
-  }, [activeDay, forecastData]);
+  useEffect(() => {
+    setAllDays(initialDays);
+    setActiveDayIndex(0);
+  }, [initialDays]);
 
-  const VISIBLE_POINTS = 5;
   const WINDOW_WIDTH = SCREEN_WIDTH - Y_AXIS_WIDTH;
   const VISIBLE_GRAPH_WIDTH = WINDOW_WIDTH - CHART_PADDING_HORIZONTAL * 2;
   const STEP = VISIBLE_GRAPH_WIDTH / (VISIBLE_POINTS - 1);
-
-  const GRAPH_WIDTH = STEP * Math.max(forecastData.length - 1, 1);
-  const SCROLL_SVG_WIDTH = GRAPH_WIDTH + CHART_PADDING_HORIZONTAL * 2;
   const GRAPH_HEIGHT = SVG_HEIGHT - PADDING_TOP - PADDING_BOTTOM;
+
+  // Flatten every day's points into one continuous timeline, and record the
+  // x-position where each day starts (used for divider lines + tab jumps).
+  const { flatPoints, dayStartX, dayStartIndex, totalWidth } = useMemo(() => {
+    const flat: FlatPoint[] = [];
+    const startX: number[] = [];
+    const startIdx: number[] = [];
+    let globalIndex = 0;
+
+    allDays.forEach((day, dayIdx) => {
+      startX.push(CHART_PADDING_HORIZONTAL + globalIndex * STEP);
+      startIdx.push(globalIndex);
+      day.points.forEach(point => {
+        flat.push({ ...point, dayIndex: dayIdx, globalIndex });
+        globalIndex += 1;
+      });
+    });
+
+    const width =
+      CHART_PADDING_HORIZONTAL * 2 + Math.max(globalIndex - 1, 1) * STEP;
+    return {
+      flatPoints: flat,
+      dayStartX: startX,
+      dayStartIndex: startIdx,
+      totalWidth: width,
+    };
+  }, [allDays, STEP]);
 
   const getY = (temp: number) => {
     const clampedTemp = Math.min(Math.max(temp, MIN_TEMP), MAX_TEMP);
@@ -84,16 +121,17 @@ export const DailyHeatForecastCard: React.FC<Props> = ({ days }) => {
     return PADDING_TOP + GRAPH_HEIGHT - percentage * GRAPH_HEIGHT;
   };
 
-  const getX = (index: number) => CHART_PADDING_HORIZONTAL + index * STEP;
+  const getX = (globalIndex: number) =>
+    CHART_PADDING_HORIZONTAL + globalIndex * STEP;
 
   const getPointColor = (temp: number) => {
     const matchedZone = HEAT_ZONES.find(zone => temp >= zone.min);
     return matchedZone ? matchedZone.color : '#87C693';
   };
 
-  const points = forecastData.map((d, i) => ({
-    x: getX(i),
-    y: getY(d.heatIndex),
+  const svgPoints = flatPoints.map(p => ({
+    x: getX(p.globalIndex),
+    y: getY(p.heatIndex),
   }));
 
   const generateSmoothPath = (pts: { x: number; y: number }[]) => {
@@ -125,34 +163,94 @@ export const DailyHeatForecastCard: React.FC<Props> = ({ days }) => {
     }, '');
   };
 
-  const linePath = generateSmoothPath(points);
+  const linePath = generateSmoothPath(svgPoints);
+
+  // Current-time cursor: only meaningful within today's segment
+  const currentTimeGlobalIndex = useMemo(() => {
+    const todayIdx = allDays.findIndex(d => d.isToday);
+    if (todayIdx === -1) return undefined;
+    const todayPoints = flatPoints.filter(p => p.dayIndex === todayIdx);
+    if (todayPoints.length === 0) return undefined;
+
+    const now = Date.now();
+    return todayPoints.reduce(
+      (closest, p) =>
+        Math.abs(p.timestamp - now) < Math.abs(closest.timestamp - now)
+          ? p
+          : closest,
+      todayPoints[0],
+    ).globalIndex;
+  }, [allDays, flatPoints]);
+
+  // Tapping a calendar tab scrolls smoothly to that day's start
+  const goToDay = (index: number) => {
+    scrollRef.current?.scrollTo({ x: dayStartX[index], animated: true });
+    setActiveDayIndex(index);
+  };
+
+  // Keeps the top tab strip in sync with whatever day is currently centered
+  // in the viewport as the user scrolls, and extends the timeline forward
+  // when they approach the right edge.
+  const handleScroll = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+      const viewportCenter = contentOffset.x + layoutMeasurement.width / 2;
+
+      let nearestDay = 0;
+      for (let i = 0; i < dayStartX.length; i++) {
+        if (viewportCenter >= dayStartX[i]) nearestDay = i;
+      }
+      setActiveDayIndex(prev => (prev !== nearestDay ? nearestDay : prev));
+    },
+    [dayStartX],
+  );
 
   return (
     <View style={styles.card}>
       <Text style={styles.cardTitle}>Hourly Heat Index Forecast</Text>
 
-      {/* Day tabs */}
-      <View style={styles.dayTabRow}>
-        {resolvedDays.map((day, i) => (
-          <TouchableOpacity
-            key={day.dayLabel + i}
-            style={[
-              styles.dayTab,
-              selectedDayIndex === i && styles.dayTabActive,
-            ]}
-            onPress={() => setSelectedDayIndex(i)}
-          >
-            <Text
-              style={[
-                styles.dayTabText,
-                selectedDayIndex === i && styles.dayTabTextActive,
-              ]}
-            >
-              {day.dayLabel}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.dayTabScroll}
+      >
+        <View style={styles.dayTabRow}>
+          {allDays.map((day, i) => {
+            const isSelected = activeDayIndex === i;
+            return (
+              <TouchableOpacity
+                key={day.dateMs}
+                style={styles.dayTab}
+                onPress={() => goToDay(i)}
+              >
+                <Text
+                  style={[
+                    styles.weekdayText,
+                    isSelected && styles.weekdayTextActive,
+                  ]}
+                >
+                  {day.weekdayShort}
+                </Text>
+                <View
+                  style={[
+                    styles.dayCircle,
+                    isSelected && styles.dayCircleActive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.dayNumberText,
+                      isSelected && styles.dayNumberTextActive,
+                    ]}
+                  >
+                    {day.dayOfMonth}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </ScrollView>
 
       <View style={styles.chartLayout}>
         <View style={styles.yAxisContainer}>
@@ -172,18 +270,23 @@ export const DailyHeatForecastCard: React.FC<Props> = ({ days }) => {
           </Svg>
         </View>
 
+        {/* One continuous scroll — no per-day remount, no flip animation.
+            Scrolling right naturally reveals the next day's data. */}
         <ScrollView
+          ref={scrollRef}
           horizontal
           showsHorizontalScrollIndicator={false}
           bounces={false}
+          onScroll={handleScroll}
+          scrollEventThrottle={100}
         >
-          <Svg width={SCROLL_SVG_WIDTH} height={SVG_HEIGHT}>
+          <Svg width={totalWidth} height={SVG_HEIGHT}>
             <Defs>
               <ClipPath id="chartClip">
                 <Rect
                   x={0}
                   y={PADDING_TOP}
-                  width={SCROLL_SVG_WIDTH}
+                  width={totalWidth}
                   height={GRAPH_HEIGHT}
                   rx={6}
                 />
@@ -199,7 +302,7 @@ export const DailyHeatForecastCard: React.FC<Props> = ({ days }) => {
                     key={`zone-${idx}`}
                     x={0}
                     y={yTop}
-                    width={SCROLL_SVG_WIDTH}
+                    width={totalWidth}
                     height={yBottom - yTop}
                     fill={zone.color}
                     fillOpacity={0.15}
@@ -213,10 +316,24 @@ export const DailyHeatForecastCard: React.FC<Props> = ({ days }) => {
                 key={`grid-line-${temp}`}
                 x1={0}
                 y1={getY(temp)}
-                x2={SCROLL_SVG_WIDTH}
+                x2={totalWidth}
                 y2={getY(temp)}
                 stroke="#A0AEC0"
                 strokeDasharray="4,4"
+                strokeWidth="1"
+              />
+            ))}
+
+            {/* Vertical day-boundary dividers — the "midnight" markers,
+                like the reference screenshot's day-separator lines */}
+            {dayStartX.slice(1).map((x, i) => (
+              <Line
+                key={`day-divider-${i}`}
+                x1={x - STEP / 2}
+                y1={PADDING_TOP}
+                x2={x - STEP / 2}
+                y2={PADDING_TOP + GRAPH_HEIGHT}
+                stroke="#CBD5E0"
                 strokeWidth="1"
               />
             ))}
@@ -229,10 +346,10 @@ export const DailyHeatForecastCard: React.FC<Props> = ({ days }) => {
               strokeLinecap="round"
             />
 
-            {forecastData.map((point, index) => (
+            {flatPoints.map(point => (
               <Circle
-                key={`point-${index}`}
-                cx={getX(index)}
+                key={`point-${point.globalIndex}`}
+                cx={getX(point.globalIndex)}
                 cy={getY(point.heatIndex)}
                 r="4.5"
                 fill={getPointColor(point.heatIndex)}
@@ -241,24 +358,23 @@ export const DailyHeatForecastCard: React.FC<Props> = ({ days }) => {
               />
             ))}
 
-            {currentTimeIndex !== undefined &&
-              currentTimeIndex < forecastData.length && (
-                <Line
-                  x1={getX(currentTimeIndex)}
-                  y1={PADDING_TOP}
-                  x2={getX(currentTimeIndex)}
-                  y2={PADDING_TOP + GRAPH_HEIGHT}
-                  stroke="#E53E3E"
-                  strokeWidth="2.5"
-                  strokeDasharray="4,4"
-                  strokeLinecap="round"
-                />
-              )}
+            {currentTimeGlobalIndex !== undefined && (
+              <Line
+                x1={getX(currentTimeGlobalIndex)}
+                y1={PADDING_TOP}
+                x2={getX(currentTimeGlobalIndex)}
+                y2={PADDING_TOP + GRAPH_HEIGHT}
+                stroke="#E53E3E"
+                strokeWidth="2.5"
+                strokeDasharray="4,4"
+                strokeLinecap="round"
+              />
+            )}
 
-            {forecastData.map((point, index) => (
+            {flatPoints.map(point => (
               <SvgText
-                key={`x-label-${index}`}
-                x={getX(index)}
+                key={`x-label-${point.globalIndex}`}
+                x={getX(point.globalIndex)}
                 y={SVG_HEIGHT - 6}
                 fontSize="9"
                 fill="#718096"
@@ -301,26 +417,42 @@ const styles = StyleSheet.create({
     color: '#2D3748',
     marginBottom: 10,
   },
+  dayTabScroll: {
+    marginBottom: 14,
+  },
   dayTabRow: {
     flexDirection: 'row',
-    marginBottom: 12,
-    gap: 8,
+    gap: 18,
+    paddingHorizontal: 4,
   },
   dayTab: {
-    paddingVertical: 6,
-    paddingHorizontal: 14,
-    borderRadius: 16,
-    backgroundColor: '#F0F0F0',
+    alignItems: 'center',
+    gap: 6,
   },
-  dayTabActive: {
-    backgroundColor: '#E99066',
-  },
-  dayTabText: {
+  weekdayText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#718096',
+    color: '#A0AEC0',
   },
-  dayTabTextActive: {
+  weekdayTextActive: {
+    color: '#E99066',
+  },
+  dayCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dayCircleActive: {
+    backgroundColor: '#E99066',
+  },
+  dayNumberText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#2D3748',
+  },
+  dayNumberTextActive: {
     color: '#FFFFFF',
   },
   chartLayout: {

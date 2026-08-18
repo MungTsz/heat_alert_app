@@ -1,11 +1,13 @@
 export type HourlyForecastPoint = {
   timestamp: number;
-  time: string; // "07:00"
+  time: string;
   heatIndex: number;
 };
 
 export type DayForecast = {
-  dayLabel: string; // "Today", "Tomorrow", "Wed"
+  weekdayShort: string; // "Mon", "Tue", etc.
+  dayOfMonth: number; // 18, 19, etc.
+  dateMs: number;
   isToday: boolean;
   points: HourlyForecastPoint[];
 };
