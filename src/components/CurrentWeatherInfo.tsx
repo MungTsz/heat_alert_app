@@ -59,9 +59,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     color: '#FFFFFF',
-    textShadowColor: 'rgba(0,0,0,0.2)', // helps legibility over the orange gradient
-    textShadowRadius: 2,
-    textShadowOffset: { width: 0, height: 1 },
   },
 });
 
