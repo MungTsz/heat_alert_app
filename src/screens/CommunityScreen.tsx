@@ -1,3 +1,4 @@
+// src/screens/CommunityScreen.tsx
 import React, { useMemo, useState } from 'react';
 import {
   View,
@@ -10,60 +11,94 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Plus } from 'lucide-react-native';
 import { useLocation } from '../utils/useLocation';
 import { useHeatData } from '../hooks/useHeatData';
-import { useHouseList } from '../hooks/useHouseList';
+import { useAqhiData } from '../hooks/useAqhiData';
+import { useBookmarkList } from '../hooks/useBookmarkList';
 import { idwInterpolate } from '../utils/idw';
 import { distanceMiles } from '../utils/distance';
-import HouseCard from '../components/HouseCard';
-import AddHouseModal from '../components/AddHouseModal';
-import HouseMapModal from '../components/HouseMapModal';
-import { HouseEntry } from '../types/house';
+import BookmarkCard from '../components/BookmarkCard';
+import AddBookmarkModal from '../components/AddBookmarkModal';
+import BookmarkMapModal from '../components/BookmarkMapModal';
+import { BookmarkEntry, BookmarkType } from '../types/bookmark';
 
 const FALLBACK_LAT = 22.3375;
 const FALLBACK_LNG = 114.263;
+const SKY_BLUE = '#BEE7FB';
 
 const CommunityScreen = () => {
   const { coords } = useLocation();
-  const { houses, addHouse, removeHouse } = useHouseList();
+  const { bookmarks, addBookmark, removeBookmark } = useBookmarkList();
   const [modalVisible, setModalVisible] = useState(false);
-  const [selectedHouse, setSelectedHouse] = useState<HouseEntry | null>(null);
+  const [selectedBookmark, setSelectedBookmark] =
+    useState<BookmarkEntry | null>(null);
 
   const center = coords ?? { latitude: FALLBACK_LAT, longitude: FALLBACK_LNG };
-  const { points } = useHeatData(center);
+  const { points: heatPoints } = useHeatData(center);
+  const { points: aqhiPoints } = useAqhiData(center);
 
-  const weightedPoints = points.map(p => ({
+  const weightedHeatPoints = heatPoints.map(p => ({
     latitude: p.latitude,
     longitude: p.longitude,
     value: p.temperature,
   }));
+  const weightedAqhiPoints = aqhiPoints.map(p => ({
+    latitude: p.latitude,
+    longitude: p.longitude,
+    value: p.aqhi,
+  }));
 
-  const rankedHouses = useMemo(() => {
-    return houses
-      .map(house => ({
-        ...house,
-        temperature: Math.round(
-          idwInterpolate(house.latitude, house.longitude, weightedPoints),
-        ),
-        distance: distanceMiles(
-          center.latitude,
-          center.longitude,
-          house.latitude,
-          house.longitude,
-        ),
-      }))
-      .sort((a, b) => b.temperature - a.temperature);
-  }, [houses, weightedPoints, center.latitude, center.longitude]);
+  const rankedBookmarks = useMemo(() => {
+    return (
+      bookmarks
+        .map(bookmark => {
+          const temperature = Math.round(
+            idwInterpolate(
+              bookmark.latitude,
+              bookmark.longitude,
+              weightedHeatPoints,
+            ),
+          );
+          const aqhi = Math.round(
+            idwInterpolate(
+              bookmark.latitude,
+              bookmark.longitude,
+              weightedAqhiPoints,
+            ),
+          );
+          return {
+            ...bookmark,
+            temperature,
+            aqhi,
+            distance: distanceMiles(
+              center.latitude,
+              center.longitude,
+              bookmark.latitude,
+              bookmark.longitude,
+            ),
+          };
+        })
+        // Rank by whichever metric is proportionally more severe on its own scale
+        .sort((a, b) => {
+          const scoreA = Math.max(a.temperature / 50, a.aqhi / 11);
+          const scoreB = Math.max(b.temperature / 50, b.aqhi / 11);
+          return scoreB - scoreA;
+        })
+    );
+  }, [
+    bookmarks,
+    weightedHeatPoints,
+    weightedAqhiPoints,
+    center.latitude,
+    center.longitude,
+  ]);
 
   const handleAdd = (
     label: string,
     address: string,
     latitude: number,
     longitude: number,
+    type: BookmarkType,
   ) => {
-    addHouse({ label, address, latitude, longitude });
-  };
-
-  const handleCardPress = (house: HouseEntry) => {
-    setSelectedHouse(house);
+    addBookmark({ label, address, latitude, longitude, type });
   };
 
   return (
@@ -78,39 +113,41 @@ const CommunityScreen = () => {
         </TouchableOpacity>
       </View>
 
-      {rankedHouses.length === 0 ? (
+      {rankedBookmarks.length === 0 ? (
         <View style={styles.emptyState}>
           <Text style={styles.emptyText}>
-            No houses added yet. Tap + to start monitoring family or neighbors.
+            No bookmarks yet. Tap + to start monitoring a house or place.
           </Text>
         </View>
       ) : (
         <FlatList
-          data={rankedHouses}
+          data={rankedBookmarks}
           keyExtractor={item => item.id}
           contentContainerStyle={styles.listContent}
           renderItem={({ item }) => (
-            <HouseCard
+            <BookmarkCard
               label={item.label}
+              type={item.type}
               temperature={item.temperature}
+              aqhi={item.aqhi}
               distance={item.distance}
-              onPress={() => handleCardPress(item)}
-              onRemove={() => removeHouse(item.id)}
+              onPress={() => setSelectedBookmark(item)}
+              onRemove={() => removeBookmark(item.id)}
             />
           )}
         />
       )}
 
-      <AddHouseModal
+      <AddBookmarkModal
         visible={modalVisible}
         onClose={() => setModalVisible(false)}
         onAdd={handleAdd}
       />
 
-      <HouseMapModal
-        visible={selectedHouse !== null}
-        house={selectedHouse}
-        onClose={() => setSelectedHouse(null)}
+      <BookmarkMapModal
+        visible={selectedBookmark !== null}
+        bookmark={selectedBookmark}
+        onClose={() => setSelectedBookmark(null)}
       />
     </SafeAreaView>
   );
@@ -119,7 +156,7 @@ const CommunityScreen = () => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: SKY_BLUE,
   },
   header: {
     flexDirection: 'row',
@@ -132,7 +169,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 26,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#1A1A1A',
   },
   addButton: {
     width: 44,
@@ -141,7 +178,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#D9534F',
     alignItems: 'center',
     justifyContent: 'center',
-    elevation: 3,
   },
   listContent: {
     paddingHorizontal: 20,
@@ -154,7 +190,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 40,
   },
   emptyText: {
-    color: '#999',
+    color: '#3A3A3A',
     fontSize: 14,
     textAlign: 'center',
     lineHeight: 20,
