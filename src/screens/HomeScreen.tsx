@@ -16,19 +16,26 @@ import {
   SafeAreaView,
   useSafeAreaInsets,
 } from 'react-native-safe-area-context';
-import { MapPin } from 'lucide-react-native';
+import { MapPin, User, Wind } from 'lucide-react-native';
 import TextTicker from 'react-native-text-ticker';
 import CurrentWeatherInfo from '../components/CurrentWeatherInfo';
 import DailyHeatForecastCard from '../components/DailyHeatForecastCard';
+import AqhiHourlyForecastChart from '../components/AqhiHourlyForecastChart';
+import HazardCard from '../components/HazardCard';
+import ForecastSheet from '../components/ForecastSheet';
 import MapScreen from './MapScreen';
 import { useLocation } from '../utils/useLocation';
 import { getHeatIndexInfo } from '../utils/heatIndexUtils';
+import { getAqhiTextColor, getAqhiInfo } from '../utils/aqhiUtils';
 import HeatScene from '../components/scene/HeatScene';
 import { computeSceneLayout } from '../utils/sceneLayout';
 import { useForecastData } from '../hooks/useForecastData';
+import { useAqhiForecastData } from '../hooks/useAqhiForecastData';
+import { useAqhiData } from '../hooks/useAqhiData';
+import { idwInterpolate } from '../utils/idw';
 
 const LOCATION_BOX_WIDTH = 160;
-const MIN_GAP_BELOW_CHARACTER = 24; // guaranteed breathing room even on tall/short screens
+const MIN_GAP_BELOW_CHARACTER = 24;
 const FALLBACK_LAT = 22.3375;
 const FALLBACK_LNG = 114.263;
 
@@ -36,8 +43,26 @@ const HomeScreen = () => {
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const { locationText, loading, coords } = useLocation();
-  const { days: forecastDays } = useForecastData(
-    coords ?? { latitude: FALLBACK_LAT, longitude: FALLBACK_LNG },
+
+  const effectiveCenter = coords ?? {
+    latitude: FALLBACK_LAT,
+    longitude: FALLBACK_LNG,
+  };
+
+  const { days: heatForecastDays } = useForecastData(effectiveCenter);
+  const { days: aqhiForecastDays } = useAqhiForecastData(effectiveCenter);
+  const { points: aqhiPoints } = useAqhiData(effectiveCenter);
+
+  const currentAqhi = Math.round(
+    idwInterpolate(
+      effectiveCenter.latitude,
+      effectiveCenter.longitude,
+      aqhiPoints.map(p => ({
+        latitude: p.latitude,
+        longitude: p.longitude,
+        value: p.aqhi,
+      })),
+    ),
   );
 
   const scrollY = useSharedValue(0);
@@ -49,27 +74,23 @@ const HomeScreen = () => {
   const actualTemp = 36;
   const currentHumidity = 80;
 
-  const { classification } = getHeatIndexInfo(heatIndexTemp);
+  const heatInfo = getHeatIndexInfo(heatIndexTemp);
+  const aqhiInfo = getAqhiInfo(currentAqhi);
   const layout = computeSceneLayout(width, height);
 
-  // Measure the actual rendered height of everything above the spacer,
-  // since the Skia canvas (character) and ScrollView content (text) are
-  // separate coordinate systems that don't automatically know about each other.
   const [contentAboveHeight, setContentAboveHeight] = useState(0);
-
   const onContentAboveLayout = useCallback((e: LayoutChangeEvent) => {
     setContentAboveHeight(e.nativeEvent.layout.y + e.nativeEvent.layout.height);
   }, []);
 
-  // Canvas Y=0 starts at the very top of the window; ScrollView content
-  // starts after the safe-area top inset. This converts layout.bottomY
-  // (character's feet, in canvas space) into ScrollView space.
   const characterBottomInScrollSpace = layout.bottomY - insets.top;
-
   const spacerHeight = Math.max(
     characterBottomInScrollSpace - contentAboveHeight + MIN_GAP_BELOW_CHARACTER,
     MIN_GAP_BELOW_CHARACTER,
   );
+
+  const [heatSheetOpen, setHeatSheetOpen] = useState(false);
+  const [aqhiSheetOpen, setAqhiSheetOpen] = useState(false);
 
   return (
     <View style={styles.mainContainer}>
@@ -78,6 +99,7 @@ const HomeScreen = () => {
           width={width}
           height={height}
           temperatureCelsius={heatIndexTemp}
+          aqhi={currentAqhi}
           scrollY={scrollY}
         />
       </View>
@@ -92,7 +114,7 @@ const HomeScreen = () => {
           <View onLayout={onContentAboveLayout}>
             <View style={styles.headerRow}>
               <Text style={styles.headerTitle} numberOfLines={1}>
-                Heat Index
+                Environment
               </Text>
               <View style={styles.locationContainer}>
                 <MapPin size={22} color="#FFFFFF" style={styles.locationIcon} />
@@ -115,26 +137,31 @@ const HomeScreen = () => {
                 </View>
               </View>
             </View>
-
-            <View
-              style={[
-                styles.heatInfoContainer,
-                { marginLeft: width * 0.06, marginTop: 20 },
-              ]}
-            >
-              <Text style={styles.feelsLikeTitle}>Feels Like</Text>
-              <Text style={styles.temperatureText} numberOfLines={1}>
-                {heatIndexTemp}°C
-              </Text>
-              <Text style={styles.classificationText} numberOfLines={1}>
-                {classification}
-              </Text>
-            </View>
           </View>
 
-          {/* Dynamically sized so the character's feet always clear this
-              spacer before the weather pill begins — no more overlap. */}
           <View style={{ height: spacerHeight }} />
+
+          {/* Equal-weight Heat Index and AQHI cards, both tappable */}
+          <View style={styles.hazardRow}>
+            // heat card:
+            <HazardCard
+              icon={<User size={18} color="#FFFFFF" />}
+              label="Feels Like..."
+              value={`${heatIndexTemp}°`}
+              classification={heatInfo.classification}
+              valueColor={heatInfo.color}
+              onPress={() => setHeatSheetOpen(true)}
+            />
+            // aqhi card:
+            <HazardCard
+              icon={<Wind size={18} color="#FFFFFF" />}
+              label="AQHI"
+              value={`${currentAqhi}`}
+              classification={aqhiInfo.classification}
+              valueColor={getAqhiTextColor(currentAqhi)} // dark, readable, still hazard-coded
+              onPress={() => setAqhiSheetOpen(true)}
+            />
+          </View>
 
           <CurrentWeatherInfo
             temperature={actualTemp}
@@ -144,26 +171,32 @@ const HomeScreen = () => {
           <View style={styles.mapContainer}>
             <MapScreen />
           </View>
-
-          <DailyHeatForecastCard days={forecastDays} />
         </Animated.ScrollView>
       </SafeAreaView>
+
+      <ForecastSheet
+        visible={heatSheetOpen}
+        title="Heat Index Forecast"
+        onClose={() => setHeatSheetOpen(false)}
+      >
+        <DailyHeatForecastCard days={heatForecastDays} />
+      </ForecastSheet>
+
+      <ForecastSheet
+        visible={aqhiSheetOpen}
+        title="AQHI Forecast"
+        onClose={() => setAqhiSheetOpen(false)}
+      >
+        <AqhiHourlyForecastChart days={aqhiForecastDays} />
+      </ForecastSheet>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  mainContainer: {
-    flex: 1,
-    backgroundColor: '#F5F5F5',
-  },
-  safeArea: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 20,
-    paddingBottom: 140,
-  },
+  mainContainer: { flex: 1, backgroundColor: '#F5F5F5' },
+  safeArea: { flex: 1 },
+  scrollContent: { padding: 20, paddingBottom: 140 },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -180,14 +213,8 @@ const styles = StyleSheet.create({
     textShadowRadius: 4,
     textShadowOffset: { width: 0, height: 1 },
   },
-  locationContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  locationIcon: {
-    marginRight: 6,
-    flexShrink: 0,
-  },
+  locationContainer: { flexDirection: 'row', alignItems: 'center' },
+  locationIcon: { marginRight: 6, flexShrink: 0 },
   locationBox: {
     width: LOCATION_BOX_WIDTH,
     height: 24,
@@ -201,31 +228,10 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0,0,0,0.2)',
     textShadowRadius: 3,
   },
-  heatInfoContainer: {
-    justifyContent: 'center',
-    marginTop: 20,
-  },
-  feelsLikeTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    textShadowColor: 'rgba(0,0,0,0.2)',
-    textShadowRadius: 4,
-    textShadowOffset: { width: 0, height: 1 },
-  },
-  temperatureText: {
-    fontSize: 50,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    includeFontPadding: false,
-  },
-  classificationText: {
-    fontSize: 21,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    textShadowColor: 'rgba(0,0,0,0.2)',
-    textShadowRadius: 4,
-    textShadowOffset: { width: 0, height: 1 },
+  hazardRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 12,
   },
   mapContainer: {
     height: 380,

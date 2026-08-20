@@ -1,8 +1,9 @@
+// src/components/HeatAlertEngine.tsx
 import { useCallback, useEffect } from 'react';
 import { useLocation } from '../utils/useLocation';
 import { useHeatData } from '../hooks/useHeatData';
 import { useForecastData } from '../hooks/useForecastData';
-import { useHouseList } from '../hooks/useHouseList';
+import { useBookmarkList } from '../hooks/useBookmarkList';
 import { useNotificationSettings } from '../hooks/useNotificationSettings';
 import { idwInterpolate } from '../utils/idw';
 import {
@@ -19,13 +20,12 @@ import { registerHeatAlertTrigger } from '../services/heatAlertBus';
 import { HeatAlert } from '../types/alerts';
 
 const FALLBACK_CENTER = { latitude: 22.3375, longitude: 114.263 };
-const CHECK_INTERVAL_MS = 5 * 60 * 1000; // every 5 min while the app is running
+const CHECK_INTERVAL_MS = 5 * 60 * 1000;
 
-// Renders nothing — mount once near the root of the app.
 const HeatAlertEngine = () => {
   const { coords } = useLocation();
   const { settings, loading: settingsLoading } = useNotificationSettings();
-  const { houses } = useHouseList();
+  const { bookmarks } = useBookmarkList();
 
   const center = coords ?? FALLBACK_CENTER;
   const { points } = useHeatData(center);
@@ -72,14 +72,14 @@ const HeatAlertEngine = () => {
       if (sustainedAlert) alerts.push(sustainedAlert);
     }
 
-    const housesWithTemp = houses.map(h => ({
-      id: h.id,
-      label: h.label,
+    const bookmarksWithTemp = bookmarks.map(b => ({
+      id: b.id,
+      label: b.label,
       temperature: Math.round(
-        idwInterpolate(h.latitude, h.longitude, weightedPoints),
+        idwInterpolate(b.latitude, b.longitude, weightedPoints),
       ),
     }));
-    alerts.push(...evaluateCommunityThresholds(housesWithTemp, settings));
+    alerts.push(...evaluateCommunityThresholds(bookmarksWithTemp, settings));
 
     await deliverNewAlerts(alerts);
   }, [
@@ -87,7 +87,7 @@ const HeatAlertEngine = () => {
     settings,
     points,
     days,
-    houses,
+    bookmarks,
     center.latitude,
     center.longitude,
   ]);
