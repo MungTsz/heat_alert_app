@@ -1,5 +1,6 @@
+// src/utils/renderIdwBitmap.ts
 import { Skia, TileMode } from '@shopify/react-native-skia';
-import { idwInterpolate, valueToColor, WeightedPoint } from './idw';
+import { idwInterpolate, WeightedPoint } from './idw';
 
 type Region = {
   latitude: number;
@@ -8,9 +9,12 @@ type Region = {
   longitudeDelta: number;
 };
 
+// colorFn lets any hazard (heat, AQHI, future ones) reuse this same renderer
+// — it just needs to map a numeric value to an rgba() string.
 export const renderIdwBitmap = (
   points: WeightedPoint[],
   region: Region,
+  colorFn: (value: number, alpha: number) => string,
   gridResolution: number = 45,
   canvasSize: number = 360,
   blurSigma: number = 3,
@@ -40,11 +44,10 @@ export const renderIdwBitmap = (
 
   for (let i = 0; i < gridResolution; i++) {
     for (let j = 0; j < gridResolution; j++) {
-      // i=0 row should be the NORTH edge (top of image), so we go top-down as lat decreases
       const lat = maxLat - (i / gridResolution) * (maxLat - minLat);
       const lng = minLng + (j / gridResolution) * (maxLng - minLng);
-      const temp = idwInterpolate(lat, lng, points);
-      const color = valueToColor(temp, 0.9); // near-opaque cells; overlay's own opacity prop handles final transparency
+      const value = idwInterpolate(lat, lng, points);
+      const color = colorFn(value, 0.9);
 
       const cellPaint = Skia.Paint();
       cellPaint.setColor(Skia.Color(color));

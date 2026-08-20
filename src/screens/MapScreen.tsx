@@ -1,6 +1,6 @@
 // src/screens/MapScreen.tsx
 import React, { useEffect, useRef, useState } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity } from 'react-native';
+import { StyleSheet, View, TouchableOpacity } from 'react-native';
 import MapView, {
   Marker,
   Overlay,
@@ -8,13 +8,16 @@ import MapView, {
   Region,
   MapPressEvent,
 } from 'react-native-maps';
+import { Navigation } from 'lucide-react-native';
 import { useLocation } from '../utils/useLocation';
 import { useHeatData } from '../hooks/useHeatData';
+import { useAqhiData } from '../hooks/useAqhiData';
 import { useIdwOverlayImage } from '../hooks/useIdwOverlayImage';
-import { idwInterpolate, valueToPinColor } from '../utils/idw';
-import MapModeToggle from '../components/MapModeToggle';
-import HeatPin from '../components/HeatPin';
-import { Navigation } from 'lucide-react-native';
+import { idwInterpolate, valueToColor } from '../utils/idw';
+import { valueToAqhiColor } from '../utils/aqhiUtils';
+import MapLayerPicker, { MapLayer } from '../components/MapLayerPicker';
+import DualStatPin from '../components/DualStatPin';
+import { MapPin } from 'lucide-react-native';
 
 const FALLBACK_LAT = 22.3375;
 const FALLBACK_LNG = 114.263;
@@ -23,6 +26,7 @@ type SelectedPoint = {
   latitude: number;
   longitude: number;
   temperature: number;
+  aqhi: number;
 };
 
 type Coordinates = {
@@ -31,23 +35,19 @@ type Coordinates = {
 };
 
 type Props = {
-  // When provided, the map centers on this fixed point instead of the
-  // device's live GPS location — used by HouseMapModal to show a specific
-  // monitored address. The 📍 recenter button still returns to this point.
   overrideCenter?: Coordinates;
-  // Hides the mode toggle for the compact popup use-case (optional)
-  showModeToggle?: boolean;
+  showModeToggle?: boolean; // kept for backward compatibility; hides the layer picker entirely if false
 };
 
 const MapScreen = ({ overrideCenter, showModeToggle = true }: Props) => {
   const { coords } = useLocation();
-  const [isSpatial, setIsSpatial] = useState<boolean>(true);
+  const [mapLayer, setMapLayer] = useState<MapLayer>('default');
   const mapRef = useRef<MapView>(null);
 
-  // Priority: explicit override > live GPS > fallback constant
   const center = overrideCenter ??
     coords ?? { latitude: FALLBACK_LAT, longitude: FALLBACK_LNG };
-  const { points, loading } = useHeatData(center);
+  const { points: heatPoints, loading: heatLoading } = useHeatData(center);
+  const { points: aqhiPoints, loading: aqhiLoading } = useAqhiData(center);
 
   const initialRegion: Region = {
     latitude: center.latitude,
@@ -61,19 +61,32 @@ const MapScreen = ({ overrideCenter, showModeToggle = true }: Props) => {
     null,
   );
 
-  const weightedPoints = points.map(p => ({
+  const weightedHeatPoints = heatPoints.map(p => ({
     latitude: p.latitude,
     longitude: p.longitude,
     value: p.temperature,
   }));
+  const weightedAqhiPoints = aqhiPoints.map(p => ({
+    latitude: p.latitude,
+    longitude: p.longitude,
+    value: p.aqhi,
+  }));
 
-  const overlayImageUri = useIdwOverlayImage(weightedPoints, region);
+  const heatOverlayUri = useIdwOverlayImage(
+    weightedHeatPoints,
+    region,
+    valueToColor,
+  );
+  const aqhiOverlayUri = useIdwOverlayImage(
+    weightedAqhiPoints,
+    region,
+    valueToAqhiColor,
+  );
 
   const north = region.latitude + Math.abs(region.latitudeDelta) / 2;
   const south = region.latitude - Math.abs(region.latitudeDelta) / 2;
   const east = region.longitude + Math.abs(region.longitudeDelta) / 2;
   const west = region.longitude - Math.abs(region.longitudeDelta) / 2;
-
   const overlayBounds: [[number, number], [number, number]] = [
     [north, east],
     [south, west],
@@ -81,9 +94,12 @@ const MapScreen = ({ overrideCenter, showModeToggle = true }: Props) => {
 
   const placeMarkerAt = (latitude: number, longitude: number) => {
     const temperature = Math.round(
-      idwInterpolate(latitude, longitude, weightedPoints),
+      idwInterpolate(latitude, longitude, weightedHeatPoints),
     );
-    setSelectedPoint({ latitude, longitude, temperature });
+    const aqhi = Math.round(
+      idwInterpolate(latitude, longitude, weightedAqhiPoints),
+    );
+    setSelectedPoint({ latitude, longitude, temperature, aqhi });
   };
 
   const handleMapPress = (event: MapPressEvent) => {
@@ -96,14 +112,21 @@ const MapScreen = ({ overrideCenter, showModeToggle = true }: Props) => {
     placeMarkerAt(coordinate.latitude, coordinate.longitude);
   };
 
-  // Show a marker at the center point as soon as heat data is ready
   useEffect(() => {
-    if (weightedPoints.length > 0 && !selectedPoint) {
+    if (
+      weightedHeatPoints.length > 0 &&
+      weightedAqhiPoints.length > 0 &&
+      !selectedPoint
+    ) {
       placeMarkerAt(center.latitude, center.longitude);
     }
-  }, [center.latitude, center.longitude, weightedPoints.length]);
+  }, [
+    center.latitude,
+    center.longitude,
+    weightedHeatPoints.length,
+    weightedAqhiPoints.length,
+  ]);
 
-  // 📍 button -> jump back to the relevant center (override point, or live GPS)
   const recenter = () => {
     placeMarkerAt(center.latitude, center.longitude);
     mapRef.current?.animateToRegion({
@@ -124,12 +147,19 @@ const MapScreen = ({ overrideCenter, showModeToggle = true }: Props) => {
         onRegionChangeComplete={setRegion}
         onPress={handleMapPress}
         onPoiClick={handlePoiClick}
-        showsUserLocation={!overrideCenter} // only show the blue GPS dot on the main map
+        showsUserLocation={!overrideCenter}
         showsMyLocationButton={false}
       >
-        {isSpatial && overlayImageUri && (
+        {mapLayer === 'heat' && heatOverlayUri && (
           <Overlay
-            image={{ uri: overlayImageUri }}
+            image={{ uri: heatOverlayUri }}
+            bounds={overlayBounds}
+            opacity={0.45}
+          />
+        )}
+        {mapLayer === 'aqhi' && aqhiOverlayUri && (
+          <Overlay
+            image={{ uri: aqhiOverlayUri }}
             bounds={overlayBounds}
             opacity={0.45}
           />
@@ -148,9 +178,9 @@ const MapScreen = ({ overrideCenter, showModeToggle = true }: Props) => {
             zIndex={3}
             tracksViewChanges={true}
           >
-            <HeatPin
+            <DualStatPin
               temperature={selectedPoint.temperature}
-              color={valueToPinColor(selectedPoint.temperature)}
+              aqhi={selectedPoint.aqhi}
             />
           </Marker>
         )}
@@ -158,19 +188,13 @@ const MapScreen = ({ overrideCenter, showModeToggle = true }: Props) => {
 
       {showModeToggle && (
         <View style={styles.topBar}>
-          <MapModeToggle isSpatial={isSpatial} onToggle={setIsSpatial} />
+          <MapLayerPicker layer={mapLayer} onChange={setMapLayer} />
         </View>
       )}
 
       <TouchableOpacity style={styles.locateButton} onPress={recenter}>
-        <Navigation size={20} color="#2B7A9E" fill="#2B7A9E" />
+        <Navigation size={20} color="#FFFFFF" fill="#FFFFFF" />
       </TouchableOpacity>
-
-      {loading && (
-        <View style={styles.loadingBadge}>
-          <Text style={styles.loadingText}>Loading heat data...</Text>
-        </View>
-      )}
     </View>
   );
 };
@@ -185,22 +209,11 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#2B7A9E', // solid color background, so the white icon reads clearly
     alignItems: 'center',
     justifyContent: 'center',
     elevation: 5,
   },
-  locateIcon: { fontSize: 20 },
-  loadingBadge: {
-    position: 'absolute',
-    bottom: 30,
-    alignSelf: 'center',
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-  },
-  loadingText: { color: '#fff', fontSize: 13 },
 });
 
 export default MapScreen;

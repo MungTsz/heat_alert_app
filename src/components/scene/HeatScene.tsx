@@ -16,6 +16,7 @@ import {
 } from 'react-native-reanimated';
 import CharacterLayer from './CharacterLayer';
 import ThermometerLayer from './ThermometerLayer';
+import AqhiHazeLayer from './AqhiHazeLayer';
 import { computeSceneLayout } from '../../utils/sceneLayout';
 import { getHeatIndexInfo } from '../../utils/heatIndexUtils';
 
@@ -23,6 +24,7 @@ type Props = {
   width: number;
   height: number;
   temperatureCelsius: number;
+  aqhi?: number; // optional so existing call sites without AQHI still compile
   scrollY?: SharedValue<number>;
 };
 
@@ -30,6 +32,7 @@ const HeatScene: React.FC<Props> = ({
   width,
   height,
   temperatureCelsius,
+  aqhi = 0,
   scrollY,
 }) => {
   const blurAmount = useDerivedValue(() => {
@@ -44,14 +47,10 @@ const HeatScene: React.FC<Props> = ({
 
   const layout = computeSceneLayout(width, height);
 
-  // The ONLY source of background color — no other constant/hardcoded
-  // orange/yellow value exists anywhere in this file.
   const { color: levelColor } = getHeatIndexInfo(temperatureCelsius);
 
   return (
     <Canvas style={{ flex: 1 }}>
-      {/* Single heat-level color, solid for the top half, fading to pure white
-          by the vertical midpoint. Exactly two colors: levelColor and #FFFFFF. */}
       <Rect x={0} y={0} width={width} height={height}>
         <LinearGradient
           start={vec(0, 0)}
@@ -60,6 +59,10 @@ const HeatScene: React.FC<Props> = ({
           positions={[0, 1]}
         />
       </Rect>
+
+      {/* AQHI haze — sits above the sky gradient, below the thermometer/character,
+          so it reads as "in the air" rather than on top of the UI elements. */}
+      <AqhiHazeLayer width={width} height={height} aqhi={aqhi} />
 
       <Group>
         <Blur blur={blurAmount} />
@@ -75,6 +78,7 @@ const HeatScene: React.FC<Props> = ({
           width={width}
           height={height}
           horizonY={layout.horizonY}
+          aqhi={aqhi}
         />
       </Group>
     </Canvas>
