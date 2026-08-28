@@ -1,5 +1,5 @@
 // src/components/AqhiHourlyForecastChart.tsx
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -7,17 +7,43 @@ import {
   Dimensions,
   TouchableOpacity,
 } from 'react-native';
-import Svg, { Rect, Line, Text as SvgText } from 'react-native-svg';
+import Svg, {
+  Rect,
+  Line,
+  Path,
+  Circle,
+  Text as SvgText,
+  Defs,
+  ClipPath,
+  G,
+} from 'react-native-svg';
 import { AqhiDayForecast } from '../data/aqhiForecast/types';
-import { getAqhiInfo, formatAqhiValue } from '../utils/aqhiUtils';
+import { formatAqhiValue } from '../utils/aqhiUtils';
 
 const SCREEN_WIDTH = Dimensions.get('window').width - 72;
-const SVG_HEIGHT = 220;
-const Y_AXIS_WIDTH = 22;
-const PADDING_TOP = 30; // extra room for the tap-tooltip
-const PADDING_BOTTOM = 25;
-const MIN_AQHI = 1;
-const MAX_AQHI = 10;
+const SVG_HEIGHT = 260;
+const Y_AXIS_WIDTH = 26;
+const PADDING_TOP = 15;
+const PADDING_BOTTOM = 30;
+const MIN_AQHI = 0;
+const MAX_AQHI = 11; // top band is "10+"
+
+// Fixed EPD severity bands — background zones, not per-point colors
+const BANDS = [
+  { min: 0, max: 3, color: '#4CAF33' }, // Low
+  { min: 3, max: 6, color: '#F2C300' }, // Moderate
+  { min: 6, max: 7, color: '#E8242A' }, // High
+  { min: 7, max: 10, color: '#8D4A3C' }, // Very High
+  { min: 10, max: 11, color: '#000000' }, // Serious ("10+")
+];
+
+const LEGEND = [
+  { label: 'Low', range: '1  2  3', color: '#4CAF33' },
+  { label: 'Moderate', range: '4  5  6', color: '#F2C300' },
+  { label: 'High', range: '7', color: '#E8242A' },
+  { label: 'Very High', range: '8  9  10', color: '#8D4A3C' },
+  { label: 'Serious', range: '10+', color: '#000000' },
+];
 
 type Props = { days: AqhiDayForecast[] };
 
@@ -31,17 +57,47 @@ const AqhiHourlyForecastChart: React.FC<Props> = ({ days }) => {
 
   const GRAPH_WIDTH = SCREEN_WIDTH - Y_AXIS_WIDTH;
   const GRAPH_HEIGHT = SVG_HEIGHT - PADDING_TOP - PADDING_BOTTOM;
-  // Bars always fill the exact available width — no fixed per-hour spacing,
-  // so a day with fewer points still spans edge-to-edge, no empty gap.
-  const slotWidth = GRAPH_WIDTH / Math.max(points.length, 1);
-  const barWidth = slotWidth * 0.6;
+  const slotWidth = GRAPH_WIDTH / Math.max(points.length - 1, 1);
 
   const getY = (val: number) => {
     const c = Math.min(Math.max(val, MIN_AQHI), MAX_AQHI);
     const pct = (c - MIN_AQHI) / (MAX_AQHI - MIN_AQHI);
     return PADDING_TOP + GRAPH_HEIGHT - pct * GRAPH_HEIGHT;
   };
-  const getBarX = (i: number) => i * slotWidth + (slotWidth - barWidth) / 2;
+  const getX = (i: number) => i * slotWidth;
+
+  const linePath = useMemo(() => {
+    return points.reduce((acc, p, i) => {
+      const cmd = i === 0 ? 'M' : 'L';
+      return `${acc} ${cmd} ${getX(i)},${getY(p.aqhi)}`;
+    }, '');
+  }, [points, slotWidth]);
+
+  const formatHourLabel = (hour24: number): string => {
+    if (hour24 === 0) return '12AM';
+    if (hour24 === 12) return '12NN';
+    if (hour24 < 12) return `${hour24}AM`;
+    return `${hour24 - 12}PM`;
+  };
+
+  const labelIndices = points
+    .map((p, i) => ({ hour: parseInt(p.time.split(':')[0], 10), i }))
+    .filter(({ hour }) => hour % 4 === 0)
+    .map(({ i }) => i);
+
+  // Vertical "now" line — only meaningful on today's tab
+  const nowIndex = useMemo(() => {
+    if (!activeDay?.isToday) return null;
+    const now = Date.now();
+    return points.reduce(
+      (closestIdx, p, idx) =>
+        Math.abs(p.timestamp - now) <
+        Math.abs(points[closestIdx].timestamp - now)
+          ? idx
+          : closestIdx,
+      0,
+    );
+  }, [activeDay, points]);
 
   const gridValues = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
   const selectedPoint =
@@ -49,6 +105,8 @@ const AqhiHourlyForecastChart: React.FC<Props> = ({ days }) => {
 
   return (
     <View>
+      <Text style={styles.title}>AQHI</Text>
+
       <View style={styles.dayTabRow}>
         {days.map((day, i) => {
           const isSelected = activeDayIndex === i;
@@ -94,108 +152,144 @@ const AqhiHourlyForecastChart: React.FC<Props> = ({ days }) => {
               x={Y_AXIS_WIDTH - 6}
               y={getY(v) + 4}
               fontSize="10"
-              fill="#718096"
+              fill="#333"
               textAnchor="end"
             >
               {v}
             </SvgText>
           ))}
+          <SvgText
+            x={Y_AXIS_WIDTH - 6}
+            y={getY(11) + 4}
+            fontSize="9"
+            fill="#333"
+            textAnchor="end"
+          >
+            10+
+          </SvgText>
         </Svg>
 
         <Svg width={GRAPH_WIDTH} height={SVG_HEIGHT}>
-          {gridValues.map(v => (
+          <Defs>
+            <ClipPath id="aqhiChartClip">
+              <Rect
+                x={0}
+                y={PADDING_TOP}
+                width={GRAPH_WIDTH}
+                height={GRAPH_HEIGHT}
+              />
+            </ClipPath>
+          </Defs>
+
+          {/* Fixed EPD color bands, full width, behind everything */}
+          <G clipPath="url(#aqhiChartClip)">
+            {BANDS.map((band, idx) => (
+              <Rect
+                key={idx}
+                x={0}
+                y={getY(band.max)}
+                width={GRAPH_WIDTH}
+                height={getY(band.min) - getY(band.max)}
+                fill={band.color}
+                opacity={band.color === '#000000' ? 0.85 : 0.55}
+              />
+            ))}
+          </G>
+
+          {/* Now marker */}
+          {nowIndex !== null && (
             <Line
-              key={v}
-              x1={0}
-              y1={getY(v)}
-              x2={GRAPH_WIDTH}
-              y2={getY(v)}
-              stroke="#E2E8F0"
-              strokeWidth="1"
+              x1={getX(nowIndex)}
+              y1={PADDING_TOP}
+              x2={getX(nowIndex)}
+              y2={PADDING_TOP + GRAPH_HEIGHT}
+              stroke="#1A1A1A"
+              strokeWidth={2}
+            />
+          )}
+
+          {/* Connecting line, matching the reference's gray line */}
+          <Path
+            d={linePath}
+            stroke="#FFFFFF"
+            strokeWidth={3}
+            fill="none"
+            strokeLinejoin="round"
+          />
+          <Path
+            d={linePath}
+            stroke="#888888"
+            strokeWidth={1.5}
+            fill="none"
+            strokeLinejoin="round"
+          />
+
+          {points.map((p, i) => (
+            <Circle
+              key={`dot-${i}`}
+              cx={getX(i)}
+              cy={getY(p.aqhi)}
+              r={selectedHourIndex === i ? 6 : 4}
+              fill="#FFFFFF"
+              stroke="#888888"
+              strokeWidth={1.5}
+              onPress={() => setSelectedHourIndex(i)}
             />
           ))}
 
-          {points.map((p, i) => {
-            const { color } = getAqhiInfo(p.aqhi);
-            const barTop = getY(p.aqhi);
-            const barBottom = getY(MIN_AQHI);
-            const isSelected = selectedHourIndex === i;
-            return (
-              <Rect
-                key={`bar-${i}`}
-                x={getBarX(i)}
-                y={barTop}
-                width={barWidth}
-                height={Math.max(barBottom - barTop, 2)}
-                fill={color}
-                stroke={isSelected ? '#333' : 'none'}
-                strokeWidth={isSelected ? 1.5 : 0}
-                rx={2}
-                onPress={() => setSelectedHourIndex(i)}
-              />
-            );
-          })}
-
-          {/* Tooltip: shows the exact value above the tapped bar */}
           {selectedPoint && selectedHourIndex !== null && (
             <SvgText
-              x={getBarX(selectedHourIndex) + barWidth / 2}
-              y={getY(selectedPoint.aqhi) - 8}
-              fontSize="12"
+              x={getX(selectedHourIndex)}
+              y={getY(selectedPoint.aqhi) - 12}
+              fontSize="13"
               fontWeight="bold"
-              fill="#222"
+              fill="#000"
               textAnchor="middle"
             >
               {formatAqhiValue(selectedPoint.aqhi)}
             </SvgText>
           )}
 
-          {points.map((p, i) => (
-            <SvgText
-              key={`t-${i}`}
-              x={getBarX(i) + barWidth / 2}
-              y={SVG_HEIGHT - 6}
-              fontSize="9"
-              fill="#718096"
-              textAnchor="middle"
-            >
-              {p.time}
-            </SvgText>
-          ))}
+          {labelIndices.map(i => {
+            const hour24 = parseInt(points[i].time.split(':')[0], 10);
+            return (
+              <SvgText
+                key={`label-${i}`}
+                x={getX(i)}
+                y={SVG_HEIGHT - 10}
+                fontSize="9"
+                fill="#333"
+                textAnchor="middle"
+              >
+                {formatHourLabel(hour24)}
+              </SvgText>
+            );
+          })}
         </Svg>
       </View>
 
       <View style={styles.legendRow}>
-        <View style={styles.legendItem}>
-          <View style={[styles.legendDot, { backgroundColor: '#4CAF33' }]} />
-          <Text style={styles.legendText}>Low</Text>
-        </View>
-        <View style={styles.legendItem}>
-          <View style={[styles.legendDot, { backgroundColor: '#F2E500' }]} />
-          <Text style={styles.legendText}>Moderate</Text>
-        </View>
-        <View style={styles.legendItem}>
-          <View style={[styles.legendDot, { backgroundColor: '#F79420' }]} />
-          <Text style={styles.legendText}>Moderate</Text>
-        </View>
-        <View style={styles.legendItem}>
-          <View style={[styles.legendDot, { backgroundColor: '#E8242A' }]} />
-          <Text style={styles.legendText}>High</Text>
-        </View>
-        <View style={styles.legendItem}>
-          <View style={[styles.legendDot, { backgroundColor: '#8D4A3C' }]} />
-          <Text style={styles.legendText}>Very High</Text>
-        </View>
-        <View style={styles.legendItem}>
-          <View style={[styles.legendDot, { backgroundColor: '#000000' }]} />
-          <Text style={styles.legendText}>Serious</Text>
-        </View>
+        {LEGEND.map(item => (
+          <View key={item.label} style={styles.legendItem}>
+            <View
+              style={[styles.legendSwatch, { backgroundColor: item.color }]}
+            />
+            <Text style={styles.legendLabel}>{item.label}</Text>
+            <Text style={styles.legendRange}>{item.range}</Text>
+          </View>
+        ))}
       </View>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
+  title: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#2D3748',
+    marginBottom: 10,
+  },
   dayTabRow: {
     flexDirection: 'row',
     gap: 18,
@@ -219,15 +313,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'center',
-    gap: 10,
-    marginTop: 12,
-    paddingTop: 8,
+    gap: 12,
+    marginTop: 16,
+    paddingTop: 10,
     borderTopWidth: 1,
     borderTopColor: '#EDF2F7',
   },
-  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  legendDot: { width: 7, height: 7, borderRadius: 3.5 },
-  legendText: { fontSize: 9, fontWeight: '600', color: '#4A5568' },
+  legendItem: { alignItems: 'center', width: 60 },
+  legendSwatch: { width: 24, height: 14, borderRadius: 2, marginBottom: 3 },
+  legendLabel: { fontSize: 9, fontWeight: '700', color: '#333' },
+  legendRange: { fontSize: 8, color: '#666', marginTop: 1 },
 });
 
 export default AqhiHourlyForecastChart;
