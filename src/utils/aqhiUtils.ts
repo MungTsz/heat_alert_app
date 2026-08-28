@@ -4,17 +4,69 @@ export interface AqhiInfo {
   color: string;
 }
 
-// Real HK AQHI bands: 1-3 Low, 4-6 Moderate, 7 High, 8-10 Very High, 10+ Serious
-export const getAqhiInfo = (aqhi: number): AqhiInfo => {
-  if (aqhi >= 11) return { classification: 'Serious', color: '#7B1E3D' };
-  if (aqhi >= 8) return { classification: 'Very High', color: '#D9534F' };
-  if (aqhi >= 7) return { classification: 'High', color: '#E99066' };
-  if (aqhi >= 4) return { classification: 'Moderate', color: '#F4D97A' };
-  return { classification: 'Low', color: '#87C693' };
+// Per-value color, matching the official HK AQHI legend exactly rather than
+// a banded approximation — each integer 1-10 (and 11 for "10+") has its own shade.
+const AQHI_COLOR_BY_VALUE: Record<number, string> = {
+  1: '#4CAF33',
+  2: '#4CAF33',
+  3: '#4CAF33',
+  4: '#F2E500',
+  5: '#F79420',
+  6: '#F79420',
+  7: '#E8242A',
+  8: '#8D4A3C',
+  9: '#8D4A3C',
+  10: '#4A2E2A',
+  11: '#000000', // "10+"
 };
 
-// Matches getAqhiInfo's bands, but returns an rgba() string with adjustable
-// alpha — needed for the overlay renderer, which shares this shape with heat's.
+const AQHI_CLASSIFICATION_BY_VALUE: Record<number, string> = {
+  1: 'Low',
+  2: 'Low',
+  3: 'Low',
+  4: 'Moderate',
+  5: 'Moderate',
+  6: 'Moderate',
+  7: 'High',
+  8: 'Very High',
+  9: 'Very High',
+  10: 'Very High',
+  11: 'Serious',
+};
+
+const clampAqhiValue = (aqhi: number): number => {
+  const rounded = Math.round(aqhi);
+  return Math.max(1, Math.min(11, rounded));
+};
+
+export const getAqhiInfo = (aqhi: number): AqhiInfo => {
+  const v = clampAqhiValue(aqhi);
+  return {
+    classification: AQHI_CLASSIFICATION_BY_VALUE[v],
+    color: AQHI_COLOR_BY_VALUE[v],
+  };
+};
+
+export const getAqhiTextColor = (aqhi: number): string => {
+  const v = clampAqhiValue(aqhi);
+  // Darkened variants for text-on-light-background legibility, keeping the
+  // same hue family as the official color per value.
+  const textColors: Record<number, string> = {
+    1: '#2E7D1F',
+    2: '#2E7D1F',
+    3: '#2E7D1F',
+    4: '#9C9200',
+    5: '#B36A15',
+    6: '#B36A15',
+    7: '#A81A1F',
+    8: '#5F3329',
+    9: '#5F3329',
+    10: '#2E1C1A',
+    11: '#000000',
+  };
+  return textColors[v];
+};
+
 export const valueToAqhiColor = (aqhi: number, alpha: number = 0.9): string => {
   const { color } = getAqhiInfo(aqhi);
   const r = parseInt(color.slice(1, 3), 16);
@@ -23,10 +75,8 @@ export const valueToAqhiColor = (aqhi: number, alpha: number = 0.9): string => {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 };
 
-export const getAqhiTextColor = (aqhi: number): string => {
-  if (aqhi >= 11) return '#7B1E3D';
-  if (aqhi >= 8) return '#B23A2E';
-  if (aqhi >= 7) return '#C56A2E';
-  if (aqhi >= 4) return '#9A7A0F'; // darkened from the pastel yellow for contrast
-  return '#3E7A47';
+// "10+" display label, matching the legend's own notation for the top value
+export const formatAqhiValue = (aqhi: number): string => {
+  const v = clampAqhiValue(aqhi);
+  return v >= 11 ? '10+' : v.toString();
 };

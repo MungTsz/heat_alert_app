@@ -2,9 +2,9 @@
 import { ViewStyle, TextStyle } from 'react-native';
 
 export const glassCardStyle: ViewStyle = {
-  backgroundColor: 'rgba(255,255,255,0.18)', // lighter, cleaner glass — was dark gray
+  backgroundColor: 'rgba(70, 78, 88, 0.42)', // more opaque gray — improves text contrast
   borderWidth: 0.5,
-  borderColor: 'rgba(255,255,255,0.35)',
+  borderColor: 'rgba(255,255,255,0.25)',
   borderRadius: 16,
 };
 

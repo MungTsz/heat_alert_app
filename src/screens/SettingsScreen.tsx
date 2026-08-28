@@ -1,3 +1,4 @@
+// src/screens/SettingsScreen.tsx
 import React from 'react';
 import {
   View,
@@ -7,18 +8,25 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MapPin, CheckCircle2, XCircle } from 'lucide-react-native';
+import {
+  MapPin,
+  CheckCircle2,
+  XCircle,
+  Thermometer,
+  Wind,
+} from 'lucide-react-native';
 import SettingsSection from '../components/SettingsSection';
 import SettingsToggleRow from '../components/SettingsToggleRow';
 import { useNotificationSettings } from '../hooks/useNotificationSettings';
 import { useLocationPermissionStatus } from '../hooks/useLocationPermissionStatus';
+import { useMapSettings } from '../hooks/useMapSettings';
 import { HEAT_LEVELS_ORDERED } from '../types/settings';
 import { getHeatIndexInfo } from '../utils/heatIndexUtils';
+import { getAqhiInfo } from '../utils/aqhiUtils';
 import { sendTestNotification } from '../services/notificationService';
 import { runHeatAlertCheckNow } from '../services/heatAlertBus';
+import { AqhiLevel } from '../types/settings';
 
-// Rough representative Celsius value per level, just to pull a matching
-// color from getHeatIndexInfo for each row's accent dot — purely visual.
 const LEVEL_SAMPLE_TEMP: Record<string, number> = {
   Neutral: 20,
   'Very Warm': 28,
@@ -26,6 +34,16 @@ const LEVEL_SAMPLE_TEMP: Record<string, number> = {
   'Very Hot': 42,
   'Extremely Hot': 56,
 };
+
+// AQHI thresholds use the real 1-11 severity bands, grouped into named
+// levels for the toggle UI, mirroring how heat's levels work.
+const AQHI_LEVEL_GROUPS: { label: AqhiLevel; sampleValue: number }[] = [
+  { label: 'Low', sampleValue: 2 },
+  { label: 'Moderate', sampleValue: 5 },
+  { label: 'High', sampleValue: 7 },
+  { label: 'Very High', sampleValue: 9 },
+  { label: 'Serious', sampleValue: 11 },
+];
 
 const SettingsScreen = () => {
   const {
@@ -36,23 +54,24 @@ const SettingsScreen = () => {
   } = useNotificationSettings();
   const { granted, requestPermission, openAppSettings } =
     useLocationPermissionStatus();
+  const { settings: mapSettings, update: updateMapSettings } = useMapSettings();
 
   const [checking, setChecking] = React.useState(false);
+  const [activeIndexTab, setActiveIndexTab] = React.useState<'heat' | 'aqhi'>(
+    'heat',
+  );
 
   const handleRunCheckNow = async () => {
     setChecking(true);
     const ran = await runHeatAlertCheckNow();
     setChecking(false);
-    if (!ran) {
-      console.log('Engine not ready yet — try again in a moment.');
-    }
+    if (!ran) console.log('Engine not ready yet — try again in a moment.');
   };
+
   const handleLocationToggle = async (value: boolean) => {
     if (value) {
       await requestPermission();
     } else {
-      // Android has no programmatic "revoke" API — direct the user to
-      // system Settings if they want to turn it off.
       openAppSettings();
     }
   };
@@ -62,30 +81,103 @@ const SettingsScreen = () => {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <Text style={styles.headerTitle}>Settings</Text>
 
+        {/* Index selector card — pick which index's thresholds to edit below */}
         <SettingsSection
           title="ALERT THRESHOLDS"
-          subtitle="Choose which heat index levels send you a notification"
+          subtitle="Choose which levels send a notification, per index"
         >
-          {HEAT_LEVELS_ORDERED.map((level, i) => {
-            const { color } = getHeatIndexInfo(LEVEL_SAMPLE_TEMP[level]);
-            return (
-              <View key={level}>
-                <View style={styles.levelRowWrapper}>
-                  <View style={[styles.levelDot, { backgroundColor: color }]} />
-                  <View style={styles.levelRowContent}>
-                    <SettingsToggleRow
-                      label={level}
-                      value={settings.alertLevels[level]}
-                      onValueChange={value => toggleAlertLevel(level, value)}
-                    />
+          <View style={styles.indexTabRow}>
+            <TouchableOpacity
+              style={[
+                styles.indexTab,
+                activeIndexTab === 'heat' && styles.indexTabActive,
+              ]}
+              onPress={() => setActiveIndexTab('heat')}
+            >
+              <Thermometer
+                size={16}
+                color={activeIndexTab === 'heat' ? '#fff' : '#666'}
+              />
+              <Text
+                style={[
+                  styles.indexTabText,
+                  activeIndexTab === 'heat' && styles.indexTabTextActive,
+                ]}
+              >
+                Heat Index
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.indexTab,
+                activeIndexTab === 'aqhi' && styles.indexTabActive,
+              ]}
+              onPress={() => setActiveIndexTab('aqhi')}
+            >
+              <Wind
+                size={16}
+                color={activeIndexTab === 'aqhi' ? '#fff' : '#666'}
+              />
+              <Text
+                style={[
+                  styles.indexTabText,
+                  activeIndexTab === 'aqhi' && styles.indexTabTextActive,
+                ]}
+              >
+                AQHI
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {activeIndexTab === 'heat'
+            ? HEAT_LEVELS_ORDERED.map((level, i) => {
+                const { color } = getHeatIndexInfo(LEVEL_SAMPLE_TEMP[level]);
+                return (
+                  <View key={level}>
+                    <View style={styles.levelRowWrapper}>
+                      <View
+                        style={[styles.levelDot, { backgroundColor: color }]}
+                      />
+                      <View style={styles.levelRowContent}>
+                        <SettingsToggleRow
+                          label={level}
+                          value={settings.alertLevels[level]}
+                          onValueChange={value =>
+                            toggleAlertLevel(level, value)
+                          }
+                        />
+                      </View>
+                    </View>
+                    {i < HEAT_LEVELS_ORDERED.length - 1 && (
+                      <View style={styles.divider} />
+                    )}
                   </View>
-                </View>
-                {i < HEAT_LEVELS_ORDERED.length - 1 && (
-                  <View style={styles.divider} />
-                )}
-              </View>
-            );
-          })}
+                );
+              })
+            : AQHI_LEVEL_GROUPS.map((group, i) => {
+                const { color } = getAqhiInfo(group.sampleValue);
+                return (
+                  <View key={group.label}>
+                    <View style={styles.levelRowWrapper}>
+                      <View
+                        style={[styles.levelDot, { backgroundColor: color }]}
+                      />
+                      <View style={styles.levelRowContent}>
+                        <SettingsToggleRow
+                          label={group.label}
+                          value={!!settings.aqhiAlertLevels?.[group.label]}
+                          onValueChange={value =>
+                            toggleAlertLevel(group.label, value, 'aqhi')
+                          }
+                        />
+                      </View>
+                    </View>
+                    {i < AQHI_LEVEL_GROUPS.length - 1 && (
+                      <View style={styles.divider} />
+                    )}
+                  </View>
+                );
+              })}
         </SettingsSection>
 
         <SettingsSection
@@ -100,10 +192,42 @@ const SettingsScreen = () => {
           />
           <View style={styles.divider} />
           <SettingsToggleRow
-            label="Community Houses"
-            description="Alert me about houses I'm monitoring"
+            label="Community Bookmarks"
+            description="Alert me about places I'm monitoring"
             value={settings.notifyBookmarkedLocations}
             onValueChange={setNotifyBookmarkedLocations}
+          />
+        </SettingsSection>
+
+        <SettingsSection title="MAP DISPLAY">
+          {(['standard', 'satellite', 'terrain'] as const).map(type => (
+            <TouchableOpacity
+              key={type}
+              style={styles.mapTypeRow}
+              onPress={() =>
+                updateMapSettings({ ...mapSettings, mapType: type })
+              }
+            >
+              <Text style={styles.mapTypeLabel}>
+                {type === 'standard'
+                  ? 'Default'
+                  : type === 'satellite'
+                  ? 'Satellite'
+                  : 'Terrain'}
+              </Text>
+              {mapSettings.mapType === type && (
+                <Text style={styles.mapTypeCheck}>✓</Text>
+              )}
+            </TouchableOpacity>
+          ))}
+          <View style={styles.divider} />
+          <SettingsToggleRow
+            label="3D Buildings"
+            description="Show raised building outlines"
+            value={mapSettings.show3DBuildings}
+            onValueChange={v =>
+              updateMapSettings({ ...mapSettings, show3DBuildings: v })
+            }
           />
         </SettingsSection>
 
@@ -152,6 +276,7 @@ const SettingsScreen = () => {
             </TouchableOpacity>
           </View>
         </SettingsSection>
+
         <SettingsSection
           title="NOTIFICATION TESTING"
           subtitle="For development — trigger alerts manually"
@@ -179,80 +304,63 @@ const SettingsScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#F5F5F5',
-  },
-  scrollContent: {
-    padding: 20,
-    paddingBottom: 80,
-  },
+  safeArea: { flex: 1, backgroundColor: '#F5F5F5' },
+  scrollContent: { padding: 20, paddingBottom: 80 },
   headerTitle: {
     fontSize: 26,
     fontWeight: 'bold',
     color: '#333',
     marginBottom: 20,
   },
-  levelRowWrapper: {
+  indexTabRow: { flexDirection: 'row', gap: 8, marginBottom: 14 },
+  indexTab: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: '#F0F0F0',
   },
-  levelDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    marginRight: 10,
+  indexTabActive: { backgroundColor: '#D9534F' },
+  indexTabText: { fontSize: 13, fontWeight: '700', color: '#666' },
+  indexTabTextActive: { color: '#fff' },
+  levelRowWrapper: { flexDirection: 'row', alignItems: 'center' },
+  levelDot: { width: 10, height: 10, borderRadius: 5, marginRight: 10 },
+  levelRowContent: { flex: 1 },
+  divider: { height: 1, backgroundColor: '#EEE' },
+  mapTypeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
   },
-  levelRowContent: {
-    flex: 1,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: '#EEE',
-  },
+  mapTypeLabel: { fontSize: 15, color: '#333' },
+  mapTypeCheck: { color: '#D9534F', fontWeight: '700' },
   permissionRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 14,
     gap: 12,
   },
-  permissionTextContainer: {
-    flex: 1,
-  },
-  permissionLabel: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#333',
-  },
+  permissionTextContainer: { flex: 1 },
+  permissionLabel: { fontSize: 15, fontWeight: '600', color: '#333' },
   permissionStatusRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     marginTop: 2,
   },
-  permissionStatusText: {
-    fontSize: 12,
-    color: '#999',
-  },
+  permissionStatusText: { fontSize: 12, color: '#999' },
   permissionButton: {
     backgroundColor: '#D9534F',
     borderRadius: 8,
     paddingVertical: 8,
     paddingHorizontal: 14,
   },
-  permissionButtonText: {
-    color: '#fff',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  testButton: {
-    paddingVertical: 14,
-  },
-  testButtonText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#D9534F',
-  },
+  permissionButtonText: { color: '#fff', fontSize: 13, fontWeight: '600' },
+  testButton: { paddingVertical: 14 },
+  testButtonText: { fontSize: 15, fontWeight: '600', color: '#D9534F' },
 });
 
 export default SettingsScreen;

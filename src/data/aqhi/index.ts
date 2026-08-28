@@ -1,8 +1,11 @@
 import { mockAqhiProvider } from './mockAqhiProvider';
-// import { apiAqhiProvider } from './apiAqhiProvider'; // wire up when backend is ready
+import { apiAqhiProvider } from './apiAqhiProvider';
+import { isPraiseConfigured } from '../../config/praiseConfig';
 
 import { AqhiDataProvider } from './types';
 
-export const aqhiDataProvider: AqhiDataProvider = mockAqhiProvider;
+export const aqhiDataProvider: AqhiDataProvider = isPraiseConfigured()
+  ? apiAqhiProvider
+  : mockAqhiProvider;
 
 export * from './types';

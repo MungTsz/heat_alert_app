@@ -1,6 +1,6 @@
 // src/screens/MapScreen.tsx
 import React, { useEffect, useRef, useState } from 'react';
-import { StyleSheet, View, TouchableOpacity } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity } from 'react-native';
 import MapView, {
   Marker,
   Overlay,
@@ -9,6 +9,7 @@ import MapView, {
   MapPressEvent,
 } from 'react-native-maps';
 import { Navigation } from 'lucide-react-native';
+import Slider from '@react-native-community/slider';
 import { useLocation } from '../utils/useLocation';
 import { useHeatData } from '../hooks/useHeatData';
 import { useAqhiData } from '../hooks/useAqhiData';
@@ -17,7 +18,11 @@ import { idwInterpolate, valueToColor } from '../utils/idw';
 import { valueToAqhiColor } from '../utils/aqhiUtils';
 import MapLayerPicker, { MapLayer } from '../components/MapLayerPicker';
 import DualStatPin from '../components/DualStatPin';
-import { MapPin } from 'lucide-react-native';
+import { usePraiseAqhiTile } from '../hooks/usePraiseAqhiTile';
+import { isPraiseConfigured } from '../config/praiseConfig';
+import AqhiLegend from '../components/AqhiLegend';
+import { fetchPraisePointData, toHkTimestamp } from '../services/praiseApi';
+import { useMapSettings } from '../hooks/useMapSettings';
 
 const FALLBACK_LAT = 22.3375;
 const FALLBACK_LNG = 114.263;
@@ -36,18 +41,20 @@ type Coordinates = {
 
 type Props = {
   overrideCenter?: Coordinates;
-  showModeToggle?: boolean; // kept for backward compatibility; hides the layer picker entirely if false
+  showModeToggle?: boolean;
 };
 
 const MapScreen = ({ overrideCenter, showModeToggle = true }: Props) => {
   const { coords } = useLocation();
+  const { settings: mapSettings } = useMapSettings();
   const [mapLayer, setMapLayer] = useState<MapLayer>('default');
+  const [aqhiOpacity, setAqhiOpacity] = useState(0.55);
   const mapRef = useRef<MapView>(null);
 
   const center = overrideCenter ??
     coords ?? { latitude: FALLBACK_LAT, longitude: FALLBACK_LNG };
-  const { points: heatPoints, loading: heatLoading } = useHeatData(center);
-  const { points: aqhiPoints, loading: aqhiLoading } = useAqhiData(center);
+  const { points: heatPoints } = useHeatData(center);
+  const { points: aqhiPoints } = useAqhiData(center);
 
   const initialRegion: Region = {
     latitude: center.latitude,
@@ -83,6 +90,11 @@ const MapScreen = ({ overrideCenter, showModeToggle = true }: Props) => {
     valueToAqhiColor,
   );
 
+  const { tile: praiseAqhiTile } = usePraiseAqhiTile(
+    region,
+    mapLayer === 'aqhi' && isPraiseConfigured(),
+  );
+
   const north = region.latitude + Math.abs(region.latitudeDelta) / 2;
   const south = region.latitude - Math.abs(region.latitudeDelta) / 2;
   const east = region.longitude + Math.abs(region.longitudeDelta) / 2;
@@ -92,12 +104,41 @@ const MapScreen = ({ overrideCenter, showModeToggle = true }: Props) => {
     [south, west],
   ];
 
+  const fetchExactAqhiForPoint = async (
+    latitude: number,
+    longitude: number,
+  ) => {
+    if (!isPraiseConfigured()) return;
+    try {
+      const ts = toHkTimestamp();
+      const data = await fetchPraisePointData(latitude, longitude, ts, ts, [
+        'AQHIBN2024',
+        'AQHIBN',
+      ]);
+      const exactAqhi = data.AQHIBN2024?.[0] ?? data.AQHIBN?.[0];
+      if (typeof exactAqhi === 'number') {
+        setSelectedPoint(prev => {
+          if (
+            prev &&
+            prev.latitude === latitude &&
+            prev.longitude === longitude
+          ) {
+            return { ...prev, aqhi: exactAqhi };
+          }
+          return prev;
+        });
+      }
+    } catch (error) {
+      console.log('Failed to fetch exact AQHI for marker', error);
+    }
+  };
+
   const placeMarkerAt = (latitude: number, longitude: number) => {
     const temperature = Math.round(
       idwInterpolate(latitude, longitude, weightedHeatPoints),
     );
     const aqhi = Math.round(
-      idwInterpolate(latitude, longitude, weightedAqhiPoints),
+      idwInterpolate(latitude, longitude, weightedAqhiPoints, 2, 1),
     );
     setSelectedPoint({ latitude, longitude, temperature, aqhi });
   };
@@ -105,11 +146,13 @@ const MapScreen = ({ overrideCenter, showModeToggle = true }: Props) => {
   const handleMapPress = (event: MapPressEvent) => {
     const { latitude, longitude } = event.nativeEvent.coordinate;
     placeMarkerAt(latitude, longitude);
+    fetchExactAqhiForPoint(latitude, longitude);
   };
 
   const handlePoiClick = (event: any) => {
     const { coordinate } = event.nativeEvent;
     placeMarkerAt(coordinate.latitude, coordinate.longitude);
+    fetchExactAqhiForPoint(coordinate.latitude, coordinate.longitude);
   };
 
   useEffect(() => {
@@ -137,11 +180,22 @@ const MapScreen = ({ overrideCenter, showModeToggle = true }: Props) => {
     });
   };
 
+  const showRealAqhiTile =
+    mapLayer === 'aqhi' && isPraiseConfigured() && !!praiseAqhiTile;
+  const showFallbackAqhiOverlay =
+    mapLayer === 'aqhi' && !showRealAqhiTile && !!aqhiOverlayUri;
+  // Rounded to whole percent so the key only changes (and remounts the native
+  // overlay) on a meaningful step, not on every sub-pixel slider movement.
+  const opacityKeyStep = Math.round(aqhiOpacity * 20);
+
   return (
     <View style={styles.container}>
       <MapView
         ref={mapRef}
         provider={PROVIDER_GOOGLE}
+        mapType={mapSettings.mapType}
+        showsBuildings={mapSettings.show3DBuildings}
+        pitchEnabled={mapSettings.show3DBuildings}
         style={StyleSheet.absoluteFill}
         initialRegion={initialRegion}
         onRegionChangeComplete={setRegion}
@@ -157,11 +211,22 @@ const MapScreen = ({ overrideCenter, showModeToggle = true }: Props) => {
             opacity={0.45}
           />
         )}
-        {mapLayer === 'aqhi' && aqhiOverlayUri && (
+
+        {showRealAqhiTile && (
           <Overlay
-            image={{ uri: aqhiOverlayUri }}
+            key={`aqhi-real-${opacityKeyStep}`}
+            image={{ uri: praiseAqhiTile!.uri }}
+            bounds={praiseAqhiTile!.bounds}
+            opacity={aqhiOpacity}
+          />
+        )}
+
+        {showFallbackAqhiOverlay && (
+          <Overlay
+            key={`aqhi-fallback-${opacityKeyStep}`}
+            image={{ uri: aqhiOverlayUri! }}
             bounds={overlayBounds}
-            opacity={0.45}
+            opacity={aqhiOpacity}
           />
         )}
 
@@ -186,6 +251,29 @@ const MapScreen = ({ overrideCenter, showModeToggle = true }: Props) => {
         )}
       </MapView>
 
+      {mapLayer === 'aqhi' && (
+        <>
+          <View style={styles.legendContainerRight}>
+            <AqhiLegend />
+          </View>
+
+          <View style={styles.opacityControlFullWidth}>
+            <Text style={styles.opacityLabel}>
+              Layer opacity: {Math.round(aqhiOpacity * 100)}%
+            </Text>
+            <Slider
+              style={styles.opacitySliderFull}
+              minimumValue={0.1}
+              maximumValue={0.9}
+              value={aqhiOpacity}
+              onValueChange={setAqhiOpacity}
+              minimumTrackTintColor="#D9534F"
+              maximumTrackTintColor="#ccc"
+            />
+          </View>
+        </>
+      )}
+
       {showModeToggle && (
         <View style={styles.topBar}>
           <MapLayerPicker layer={mapLayer} onChange={setMapLayer} />
@@ -209,10 +297,36 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#2B7A9E', // solid color background, so the white icon reads clearly
+    backgroundColor: '#2B7A9E',
     alignItems: 'center',
     justifyContent: 'center',
     elevation: 5,
+  },
+  legendContainerRight: {
+    position: 'absolute',
+    top: 60,
+    right: 8,
+    bottom: 70,
+  },
+  opacityControlFullWidth: {
+    position: 'absolute',
+    bottom: 8,
+    left: 8,
+    right: 8,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+  },
+  opacityLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: -4,
+  },
+  opacitySliderFull: {
+    width: '100%',
+    height: 34,
   },
 });
 

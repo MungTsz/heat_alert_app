@@ -15,8 +15,11 @@ export const HEAT_LEVELS_ORDERED: HeatLevel[] = [
   'Extremely Hot',
 ];
 
+export type AqhiLevel = 'Low' | 'Moderate' | 'High' | 'Very High' | 'Serious';
+
 export type NotificationSettings = {
   alertLevels: Record<HeatLevel, boolean>;
+  aqhiAlertLevels: Record<AqhiLevel, boolean>; // NEW
   notifyCurrentLocation: boolean;
   notifyBookmarkedLocations: boolean;
 };
@@ -28,6 +31,13 @@ export const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
     Hot: true,
     'Very Hot': true,
     'Extremely Hot': true,
+  },
+  aqhiAlertLevels: {
+    Low: false,
+    Moderate: false,
+    High: true,
+    'Very High': true,
+    Serious: true,
   },
   notifyCurrentLocation: true,
   notifyBookmarkedLocations: true,

@@ -24,7 +24,7 @@ const DualStatPin: React.FC<Props> = ({ temperature, aqhi }) => {
         <Text style={styles.text}>AQHI {aqhi}</Text>
       </View>
 
-      <MapPin size={30} color="#2B7A9E" fill="#2B7A9E" strokeWidth={1.5} />
+      <MapPin size={42} color="#2B7A9E" fill="#2B7A9E" strokeWidth={1.5} />
     </View>
   );
 };

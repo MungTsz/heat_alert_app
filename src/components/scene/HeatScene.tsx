@@ -17,6 +17,7 @@ import {
 import CharacterLayer from './CharacterLayer';
 import ThermometerLayer from './ThermometerLayer';
 import AqhiHazeLayer from './AqhiHazeLayer';
+import CleanAirSparkleLayer from './CleanAirSparkleLayer';
 import { computeSceneLayout } from '../../utils/sceneLayout';
 import { getHeatIndexInfo } from '../../utils/heatIndexUtils';
 
@@ -24,8 +25,14 @@ type Props = {
   width: number;
   height: number;
   temperatureCelsius: number;
-  aqhi?: number; // optional so existing call sites without AQHI still compile
+  aqhi?: number;
   scrollY?: SharedValue<number>;
+};
+
+const getSkyColors = (): [string, string] => {
+  const hour = new Date().getHours();
+  const isDaytime = hour >= 6 && hour < 18;
+  return isDaytime ? ['#8FC1E8', '#FFFFFF'] : ['#1E3A5F', '#5D7A96'];
 };
 
 const HeatScene: React.FC<Props> = ({
@@ -46,8 +53,12 @@ const HeatScene: React.FC<Props> = ({
   });
 
   const layout = computeSceneLayout(width, height);
+  const [skyTop, skyBottom] = getSkyColors();
 
-  const { color: levelColor } = getHeatIndexInfo(temperatureCelsius);
+  const heatInfo = getHeatIndexInfo(temperatureCelsius);
+  const heatSevere = ['Very Hot', 'Extremely Hot'].includes(
+    heatInfo.classification,
+  );
 
   return (
     <Canvas style={{ flex: 1 }}>
@@ -55,14 +66,16 @@ const HeatScene: React.FC<Props> = ({
         <LinearGradient
           start={vec(0, 0)}
           end={vec(0, height)}
-          colors={[levelColor, '#FFFFFF']}
+          colors={[skyTop, skyBottom]}
           positions={[0, 1]}
         />
       </Rect>
 
-      {/* AQHI haze — sits above the sky gradient, below the thermometer/character,
-          so it reads as "in the air" rather than on top of the UI elements. */}
-      <AqhiHazeLayer width={width} height={height} aqhi={aqhi} />
+      {aqhi > 4 ? (
+        <AqhiHazeLayer width={width} height={height} aqhi={aqhi} />
+      ) : (
+        <CleanAirSparkleLayer width={width} height={height} />
+      )}
 
       <Group>
         <Blur blur={blurAmount} />
@@ -78,7 +91,10 @@ const HeatScene: React.FC<Props> = ({
           width={width}
           height={height}
           horizonY={layout.horizonY}
+          centerX={layout.characterCenterX}
+          petCx={layout.petCx}
           aqhi={aqhi}
+          heatSevere={heatSevere}
         />
       </Group>
     </Canvas>

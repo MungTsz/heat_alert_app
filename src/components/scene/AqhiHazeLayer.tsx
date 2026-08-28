@@ -16,10 +16,8 @@ type Props = {
   aqhi: number;
 };
 
-// Drifting haze density/opacity/blur all scale with AQHI severity — faint
-// gray-green at Low, thick orange-brown at High/Serious. Uses the same
-// color as the AQHI card/pin so the scene stays visually consistent with
-// the rest of the app.
+const MAX_PARTICLES = 8; // fixed count — always rendered, never conditional
+
 const AqhiHazeLayer: React.FC<Props> = ({ width, height, aqhi }) => {
   const driftProgress = useSharedValue(0);
 
@@ -32,45 +30,110 @@ const AqhiHazeLayer: React.FC<Props> = ({ width, height, aqhi }) => {
   }, []);
 
   const { color: aqhiColor } = getAqhiInfo(aqhi);
+  const intensity = Math.max(0, Math.min(1, (aqhi - 4) / 7)); // was (aqhi - 1) / 10
+  const baseOpacity = 0.14 + intensity * 0.34;
+  const blurAmount = 10 + intensity * 14;
+  // How many of the MAX_PARTICLES slots are actually "active" at this severity
+  const activeCount = 4 + Math.round(intensity * 4);
 
-  // Severity -> visual intensity mapping
-  const intensity = Math.max(0, Math.min(1, (aqhi - 1) / 10)); // 1-11 scale -> 0-1
-  const baseOpacity = 0.06 + intensity * 0.22; // faint at Low, noticeably hazy at Serious
-  const blurAmount = 8 + intensity * 10;
-  const particleCount = 4 + Math.round(intensity * 4); // more wisps as it gets worse
+  // Every slot's hook is always called — inactive slots just render at
+  // opacity 0, keeping hook count constant regardless of aqhi.
+  const p0 = useHazeParticle(
+    0,
+    width,
+    height,
+    driftProgress,
+    0 < activeCount ? baseOpacity : 0,
+  );
+  const p1 = useHazeParticle(
+    1,
+    width,
+    height,
+    driftProgress,
+    1 < activeCount ? baseOpacity : 0,
+  );
+  const p2 = useHazeParticle(
+    2,
+    width,
+    height,
+    driftProgress,
+    2 < activeCount ? baseOpacity : 0,
+  );
+  const p3 = useHazeParticle(
+    3,
+    width,
+    height,
+    driftProgress,
+    3 < activeCount ? baseOpacity : 0,
+  );
+  const p4 = useHazeParticle(
+    4,
+    width,
+    height,
+    driftProgress,
+    4 < activeCount ? baseOpacity : 0,
+  );
+  const p5 = useHazeParticle(
+    5,
+    width,
+    height,
+    driftProgress,
+    5 < activeCount ? baseOpacity : 0,
+  );
+  const p6 = useHazeParticle(
+    6,
+    width,
+    height,
+    driftProgress,
+    6 < activeCount ? baseOpacity : 0,
+  );
+  const p7 = useHazeParticle(
+    7,
+    width,
+    height,
+    driftProgress,
+    7 < activeCount ? baseOpacity : 0,
+  );
 
-  const particles = Array.from({ length: particleCount }).map((_, i) => {
-    const baseCx = (width / particleCount) * i + width * 0.06;
-    const baseCy = height * (0.12 + (i % 3) * 0.08);
-    const r = 46 + (i % 3) * 18;
-    const speedFactor = 0.6 + (i % 3) * 0.25; // slightly different drift speeds per wisp
-
-    const cx = useDerivedValue(() => {
-      // Loops smoothly left-to-right, wraps around past the right edge
-      const travel = driftProgress.value * speedFactor * (width * 1.4);
-      return ((baseCx + travel) % (width * 1.4)) - width * 0.2;
-    }, [driftProgress]);
-
-    return { cx, cy: baseCy, r, key: `haze-${i}` };
-  });
-
-  if (intensity < 0.03) return null; // essentially no haze at very Low AQHI
+  const particles = [p0, p1, p2, p3, p4, p5, p6, p7];
 
   return (
     <Group>
       <Blur blur={blurAmount} />
-      {particles.map(p => (
+      {particles.map((p, i) => (
         <Circle
-          key={p.key}
+          key={`haze-${i}`}
           cx={p.cx}
           cy={p.cy}
           r={p.r}
           color={aqhiColor}
-          opacity={baseOpacity}
+          opacity={p.opacity}
         />
       ))}
     </Group>
   );
 };
+
+// A single particle's animated x position — one hook, always called the
+// same number of times per render regardless of severity.
+function useHazeParticle(
+  index: number,
+  width: number,
+  height: number,
+  driftProgress: ReturnType<typeof useSharedValue<number>>,
+  opacity: number,
+) {
+  const baseCx = (width / MAX_PARTICLES) * index + width * 0.06;
+  const baseCy = height * (0.12 + (index % 3) * 0.08);
+  const r = 46 + (index % 3) * 18;
+  const speedFactor = 0.6 + (index % 3) * 0.25;
+
+  const cx = useDerivedValue(() => {
+    const travel = driftProgress.value * speedFactor * (width * 1.4);
+    return ((baseCx + travel) % (width * 1.4)) - width * 0.2;
+  }, [driftProgress]);
+
+  return { cx, cy: baseCy, r, opacity };
+}
 
 export default AqhiHazeLayer;

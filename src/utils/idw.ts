@@ -20,8 +20,9 @@ export const idwInterpolate = (
   targetLng: number,
   knownPoints: WeightedPoint[],
   power: number = 2,
+  fallback: number = 1,
 ): number => {
-  if (knownPoints.length === 0) return 25;
+  if (knownPoints.length === 0) return fallback;
 
   let weightedSum = 0;
   let weightTotal = 0;

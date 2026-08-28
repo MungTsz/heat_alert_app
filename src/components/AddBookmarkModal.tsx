@@ -20,6 +20,7 @@ import { GeocodeResult } from '../utils/geocode';
 import { useDebouncedAddressSuggestions } from '../hooks/useDebouncedAddressSuggestions';
 import { useLocation } from '../utils/useLocation';
 import { BookmarkType } from '../types/bookmark';
+import MapPickerModal from './MapPickerModal';
 
 type Props = {
   visible: boolean;
@@ -34,6 +35,7 @@ type Props = {
 };
 
 const AddBookmarkModal = ({ visible, onClose, onAdd }: Props) => {
+  const [pickerVisible, setPickerVisible] = useState(false);
   const insets = useSafeAreaInsets();
   const { locationText, coords, loading: locationLoading } = useLocation();
 
@@ -253,6 +255,30 @@ const AddBookmarkModal = ({ visible, onClose, onAdd }: Props) => {
               </View>
             )}
           </View>
+
+          <TouchableOpacity
+            style={styles.mapPickButton}
+            onPress={() => setPickerVisible(true)}
+          >
+            <Text style={styles.mapPickText}>Pick on map instead</Text>
+          </TouchableOpacity>
+
+          <MapPickerModal
+            visible={pickerVisible}
+            initialRegion={{
+              latitude: coords?.latitude ?? 22.3193,
+              longitude: coords?.longitude ?? 114.1694,
+              latitudeDelta: 0.02,
+              longitudeDelta: 0.02,
+            }}
+            onConfirm={(lat, lng, addr) => {
+              setAddress(addr);
+              setSelectedCoords({ latitude: lat, longitude: lng });
+              setHasUserEdited(true);
+              setPickerVisible(false);
+            }}
+            onCancel={() => setPickerVisible(false)}
+          />
 
           {showSuggestions && address.trim().length >= 3 && (
             <View style={styles.suggestionBox}>

@@ -143,7 +143,7 @@ const HomeScreen = () => {
 
           {/* Equal-weight Heat Index and AQHI cards, both tappable */}
           <View style={styles.hazardRow}>
-            // heat card:
+            {/* heat card */}
             <HazardCard
               icon={<User size={18} color="#FFFFFF" />}
               label="Feels Like..."
@@ -152,7 +152,7 @@ const HomeScreen = () => {
               valueColor={heatInfo.color}
               onPress={() => setHeatSheetOpen(true)}
             />
-            // aqhi card:
+            {/* aqhi card */}
             <HazardCard
               icon={<Wind size={18} color="#FFFFFF" />}
               label="AQHI"

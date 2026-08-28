@@ -28,6 +28,10 @@ export const useNotificationSettings = () => {
             ...DEFAULT_NOTIFICATION_SETTINGS.alertLevels,
             ...(parsed.alertLevels ?? {}),
           },
+          aqhiAlertLevels: {
+            ...DEFAULT_NOTIFICATION_SETTINGS.aqhiAlertLevels,
+            ...(parsed.aqhiAlertLevels ?? {}),
+          },
         });
       } else {
         setSettings(DEFAULT_NOTIFICATION_SETTINGS);
@@ -49,13 +53,23 @@ export const useNotificationSettings = () => {
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
   };
 
-  const toggleAlertLevel = (level: HeatLevel, value: boolean) => {
-    persist({
-      ...settings,
-      alertLevels: { ...settings.alertLevels, [level]: value },
-    });
+  const toggleAlertLevel = (
+    level: string,
+    value: boolean,
+    kind: 'heat' | 'aqhi' = 'heat',
+  ) => {
+    if (kind === 'aqhi') {
+      persist({
+        ...settings,
+        aqhiAlertLevels: { ...settings.aqhiAlertLevels, [level]: value },
+      });
+    } else {
+      persist({
+        ...settings,
+        alertLevels: { ...settings.alertLevels, [level]: value },
+      });
+    }
   };
-
   const setNotifyCurrentLocation = (value: boolean) => {
     persist({ ...settings, notifyCurrentLocation: value });
   };
