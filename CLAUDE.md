@@ -75,3 +75,21 @@ Shared domain types live in `src/types/` (`alerts.ts`, `bookmark.ts`, `settings.
 ## Path conventions
 
 No `@/` alias is configured — all imports use relative paths (`../../data/heat`, etc.).
+
+## Developer Principles & Code Guidelines
+
+1. **No Hardcoding & Highly Configurable**:
+   * Avoid hardcoding magically magic numbers, timing intervals, or UI constants.
+   * Store configurations in dedicated config/constants files or environment variables (`.env`) to ensure the codebase remains flexible for future features.
+
+2. **Single Source of Truth (SSOT)**:
+   * Maintain SSOT for all data models, states, and business logic. Do not duplicate domain types or state management logic across components.
+
+3. **Code Quality & Documentation**:
+   * Strictly follow React Native / TypeScript best practices.
+   * Write clear, expressive inline comments explaining **why** a non-obvious piece of logic exists (not just *what* it does).
+
+4. **Response Structure Requirement**:
+   * For **every response** involving code changes, you MUST explicitly state:
+     - **Where** to add/change (exact file paths and code details).
+     - **Why** to add/change (the rationale and how it aligns with the project architecture).
