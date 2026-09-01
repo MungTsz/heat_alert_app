@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   useWindowDimensions,
   LayoutChangeEvent,
+  TouchableOpacity,
 } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -16,13 +17,14 @@ import {
   SafeAreaView,
   useSafeAreaInsets,
 } from 'react-native-safe-area-context';
-import { MapPin, User, Wind } from 'lucide-react-native';
+import { MapPin, User, Wind, Maximize2 } from 'lucide-react-native';
 import TextTicker from 'react-native-text-ticker';
 import CurrentWeatherInfo from '../components/CurrentWeatherInfo';
 import DailyHeatForecastCard from '../components/DailyHeatForecastCard';
 import AqhiHourlyForecastChart from '../components/AqhiHourlyForecastChart';
 import HazardCard from '../components/HazardCard';
 import ForecastSheet from '../components/ForecastSheet';
+import FullscreenMapModal from '../components/FullscreenMapModal';
 import MapScreen from './MapScreen';
 import { useLocation } from '../utils/useLocation';
 import { getHeatIndexInfo } from '../utils/heatIndexUtils';
@@ -91,6 +93,7 @@ const HomeScreen = () => {
 
   const [heatSheetOpen, setHeatSheetOpen] = useState(false);
   const [aqhiSheetOpen, setAqhiSheetOpen] = useState(false);
+  const [mapFullscreen, setMapFullscreen] = useState(false);
 
   return (
     <View style={styles.mainContainer}>
@@ -170,9 +173,21 @@ const HomeScreen = () => {
 
           <View style={styles.mapContainer}>
             <MapScreen />
+            <TouchableOpacity
+              style={styles.expandMapButton}
+              onPress={() => setMapFullscreen(true)}
+            >
+              <Maximize2 size={18} color="#333" />
+            </TouchableOpacity>
           </View>
         </Animated.ScrollView>
       </SafeAreaView>
+
+      <FullscreenMapModal
+        visible={mapFullscreen}
+        center={effectiveCenter}
+        onClose={() => setMapFullscreen(false)}
+      />
 
       <ForecastSheet
         visible={heatSheetOpen}
@@ -238,6 +253,18 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     overflow: 'hidden',
     marginTop: 16,
+  },
+  expandMapButton: {
+    position: 'absolute',
+    top: 16,
+    left: 16,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 3,
   },
 });
 

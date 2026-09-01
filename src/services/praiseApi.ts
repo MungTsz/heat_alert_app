@@ -69,6 +69,30 @@ export type PraiseTilesResponse = {
   msg?: string;
 };
 
+export type PraiseMovieResponse = {
+  url: string;
+  vid: string;
+  status: number;
+  msg?: string;
+};
+
+export const fetchPraiseMovie = async (
+  vid: string,
+  region?: string,
+): Promise<PraiseMovieResponse> => {
+  const url = buildUrl({
+    todo: 'get_movie',
+    vid,
+    ...(region ? { region } : {}),
+  });
+  const response = await fetch(url);
+  const data = await response.json();
+  if (data.status !== 0) {
+    throw new Error(data.msg ?? 'PRAISE-HK get_movie call failed');
+  }
+  return data;
+};
+
 export const fetchPraiseTiles = async (
   pid: string,
   ts: string, // YYYYMMDDhh, HKT

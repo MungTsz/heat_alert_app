@@ -8,7 +8,7 @@ import MapView, {
   Region,
   MapPressEvent,
 } from 'react-native-maps';
-import { Navigation } from 'lucide-react-native';
+import { Navigation, Play } from 'lucide-react-native';
 import Slider from '@react-native-community/slider';
 import { useLocation } from '../utils/useLocation';
 import { useHeatData } from '../hooks/useHeatData';
@@ -21,6 +21,7 @@ import DualStatPin from '../components/DualStatPin';
 import { usePraiseAqhiTile } from '../hooks/usePraiseAqhiTile';
 import { isPraiseConfigured } from '../config/praiseConfig';
 import AqhiLegend from '../components/AqhiLegend';
+import AqhiForecastVideoModal from '../components/AqhiForecastVideoModal';
 import { fetchPraisePointData, toHkTimestamp } from '../services/praiseApi';
 import { useMapSettings } from '../hooks/useMapSettings';
 
@@ -42,13 +43,23 @@ type Coordinates = {
 type Props = {
   overrideCenter?: Coordinates;
   showModeToggle?: boolean;
+  enableForecastVideo?: boolean;
 };
 
-const MapScreen = ({ overrideCenter, showModeToggle = true }: Props) => {
+const MapScreen = ({
+  overrideCenter,
+  showModeToggle = true,
+  enableForecastVideo = false,
+}: Props) => {
   const { coords } = useLocation();
   const { settings: mapSettings } = useMapSettings();
   const [mapLayer, setMapLayer] = useState<MapLayer>('default');
-  const [aqhiOpacity, setAqhiOpacity] = useState(0.55);
+  const [videoModalVisible, setVideoModalVisible] = useState(false);
+
+  // 1. SPLIT STATES: One for the slider UI, one for the actual map overlay
+  const [sliderOpacity, setSliderOpacity] = useState(0.55);
+  const [mapOpacity, setMapOpacity] = useState(0.55);
+
   const mapRef = useRef<MapView>(null);
 
   const center = overrideCenter ??
@@ -184,9 +195,6 @@ const MapScreen = ({ overrideCenter, showModeToggle = true }: Props) => {
     mapLayer === 'aqhi' && isPraiseConfigured() && !!praiseAqhiTile;
   const showFallbackAqhiOverlay =
     mapLayer === 'aqhi' && !showRealAqhiTile && !!aqhiOverlayUri;
-  // Rounded to whole percent so the key only changes (and remounts the native
-  // overlay) on a meaningful step, not on every sub-pixel slider movement.
-  const opacityKeyStep = Math.round(aqhiOpacity * 20);
 
   return (
     <View style={styles.container}>
@@ -214,19 +222,20 @@ const MapScreen = ({ overrideCenter, showModeToggle = true }: Props) => {
 
         {showRealAqhiTile && (
           <Overlay
-            key={`aqhi-real-${opacityKeyStep}`}
+            // 2. FORCE REMOUNT: Use mapOpacity as the key so it only rebuilds when sliding finishes
+            key={`aqhi-real-${mapOpacity}`}
             image={{ uri: praiseAqhiTile!.uri }}
             bounds={praiseAqhiTile!.bounds}
-            opacity={aqhiOpacity}
+            opacity={mapOpacity}
           />
         )}
 
         {showFallbackAqhiOverlay && (
           <Overlay
-            key={`aqhi-fallback-${opacityKeyStep}`}
+            key={`aqhi-fallback-${mapOpacity}`}
             image={{ uri: aqhiOverlayUri! }}
             bounds={overlayBounds}
-            opacity={aqhiOpacity}
+            opacity={mapOpacity}
           />
         )}
 
@@ -259,18 +268,30 @@ const MapScreen = ({ overrideCenter, showModeToggle = true }: Props) => {
 
           <View style={styles.opacityControlFullWidth}>
             <Text style={styles.opacityLabel}>
-              Layer opacity: {Math.round(aqhiOpacity * 100)}%
+              Layer opacity: {Math.round(sliderOpacity * 100)}%
             </Text>
             <Slider
               style={styles.opacitySliderFull}
               minimumValue={0.1}
               maximumValue={0.9}
-              value={aqhiOpacity}
-              onValueChange={setAqhiOpacity}
+              step={0.1} // 3. ADD STEP: Prevents erratic micro-updates
+              value={sliderOpacity}
+              onValueChange={setSliderOpacity} // Updates UI smoothly while dragging
+              onSlidingComplete={setMapOpacity} // Updates the actual map overlay when user lets go
               minimumTrackTintColor="#D9534F"
               maximumTrackTintColor="#ccc"
             />
           </View>
+
+          {enableForecastVideo && isPraiseConfigured() && (
+            <TouchableOpacity
+              style={styles.playForecastButton}
+              onPress={() => setVideoModalVisible(true)}
+            >
+              <Play size={16} color="#FFFFFF" fill="#FFFFFF" />
+              <Text style={styles.playForecastText}>Play Forecast</Text>
+            </TouchableOpacity>
+          )}
         </>
       )}
 
@@ -283,6 +304,13 @@ const MapScreen = ({ overrideCenter, showModeToggle = true }: Props) => {
       <TouchableOpacity style={styles.locateButton} onPress={recenter}>
         <Navigation size={20} color="#FFFFFF" fill="#FFFFFF" />
       </TouchableOpacity>
+
+      {enableForecastVideo && (
+        <AqhiForecastVideoModal
+          visible={videoModalVisible}
+          onClose={() => setVideoModalVisible(false)}
+        />
+      )}
     </View>
   );
 };
@@ -327,6 +355,24 @@ const styles = StyleSheet.create({
   opacitySliderFull: {
     width: '100%',
     height: 34,
+  },
+  playForecastButton: {
+    position: 'absolute',
+    bottom: 64,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#2B7A9E',
+    borderRadius: 20,
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    elevation: 5,
+  },
+  playForecastText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
   },
 });
 
