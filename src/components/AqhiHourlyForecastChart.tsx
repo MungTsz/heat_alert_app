@@ -1,5 +1,5 @@
 // src/components/AqhiHourlyForecastChart.tsx
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -17,8 +17,18 @@ import Svg, {
   ClipPath,
   G,
 } from 'react-native-svg';
+import Animated, {
+  useSharedValue,
+  useAnimatedProps,
+  withRepeat,
+  withTiming,
+  interpolate,
+  Easing,
+} from 'react-native-reanimated';
 import { AqhiDayForecast } from '../data/aqhiForecast/types';
 import { formatAqhiValue } from '../utils/aqhiUtils';
+
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 const SCREEN_WIDTH = Dimensions.get('window').width - 72;
 const SVG_HEIGHT = 260;
@@ -85,7 +95,7 @@ const AqhiHourlyForecastChart: React.FC<Props> = ({ days }) => {
     .filter(({ hour }) => hour % 4 === 0)
     .map(({ i }) => i);
 
-  // Vertical "now" line — only meaningful on today's tab
+  // "Now" marker — only meaningful on today's tab
   const nowIndex = useMemo(() => {
     if (!activeDay?.isToday) return null;
     const now = Date.now();
@@ -98,6 +108,20 @@ const AqhiHourlyForecastChart: React.FC<Props> = ({ days }) => {
       0,
     );
   }, [activeDay, points]);
+
+  // Drives the pulsing halo behind the "now" dot — loops indefinitely
+  const pulseProgress = useSharedValue(0);
+  useEffect(() => {
+    pulseProgress.value = withRepeat(
+      withTiming(1, { duration: 1200, easing: Easing.inOut(Easing.ease) }),
+      -1,
+      true,
+    );
+  }, [pulseProgress]);
+  const haloAnimatedProps = useAnimatedProps(() => ({
+    r: interpolate(pulseProgress.value, [0, 1], [6, 13]),
+    opacity: interpolate(pulseProgress.value, [0, 1], [0.45, 0]),
+  }));
 
   const gridValues = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
   const selectedPoint =
@@ -194,19 +218,33 @@ const AqhiHourlyForecastChart: React.FC<Props> = ({ days }) => {
                 opacity={band.color === '#000000' ? 0.85 : 0.55}
               />
             ))}
-          </G>
 
-          {/* Now marker */}
-          {nowIndex !== null && (
-            <Line
-              x1={getX(nowIndex)}
-              y1={PADDING_TOP}
-              x2={getX(nowIndex)}
-              y2={PADDING_TOP + GRAPH_HEIGHT}
-              stroke="#1A1A1A"
-              strokeWidth={2}
-            />
-          )}
+            {/* History recedes visually behind the "now" point */}
+            {nowIndex !== null && (
+              <Rect
+                x={0}
+                y={PADDING_TOP}
+                width={getX(nowIndex)}
+                height={GRAPH_HEIGHT}
+                fill="#2D3748"
+                opacity={0.12}
+              />
+            )}
+
+            {/* Grid lines tying each x-axis label to its point */}
+            {labelIndices.map(i => (
+              <Line
+                key={`grid-${i}`}
+                x1={getX(i)}
+                y1={PADDING_TOP}
+                x2={getX(i)}
+                y2={PADDING_TOP + GRAPH_HEIGHT}
+                stroke="#718096"
+                strokeWidth={1}
+                opacity={0.25}
+              />
+            ))}
+          </G>
 
           {/* Connecting line, matching the reference's gray line */}
           <Path
@@ -237,13 +275,34 @@ const AqhiHourlyForecastChart: React.FC<Props> = ({ days }) => {
             />
           ))}
 
+          {/* "Now" marker: pulsing halo behind an enlarged solid dot */}
+          {nowIndex !== null && (
+            <>
+              <AnimatedCircle
+                cx={getX(nowIndex)}
+                cy={getY(points[nowIndex].aqhi)}
+                fill="#1A1A1A"
+                animatedProps={haloAnimatedProps}
+              />
+              <Circle
+                cx={getX(nowIndex)}
+                cy={getY(points[nowIndex].aqhi)}
+                r={7}
+                fill="#1A1A1A"
+                stroke="#FFFFFF"
+                strokeWidth={2}
+                onPress={() => setSelectedHourIndex(nowIndex)}
+              />
+            </>
+          )}
+
           {selectedPoint && selectedHourIndex !== null && (
             <SvgText
               x={getX(selectedHourIndex)}
               y={getY(selectedPoint.aqhi) - 12}
               fontSize="13"
               fontWeight="bold"
-              fill="#000"
+              fill="#d36565"
               textAnchor="middle"
             >
               {formatAqhiValue(selectedPoint.aqhi)}
@@ -252,6 +311,10 @@ const AqhiHourlyForecastChart: React.FC<Props> = ({ days }) => {
 
           {labelIndices.map(i => {
             const hour24 = parseInt(points[i].time.split(':')[0], 10);
+            // Edge labels are anchored inward so they never render past the
+            // chart's left/right bounds and get clipped (e.g. "12AM" at i=0).
+            const textAnchor =
+              i === 0 ? 'start' : i === points.length - 1 ? 'end' : 'middle';
             return (
               <SvgText
                 key={`label-${i}`}
@@ -259,7 +322,7 @@ const AqhiHourlyForecastChart: React.FC<Props> = ({ days }) => {
                 y={SVG_HEIGHT - 10}
                 fontSize="9"
                 fill="#333"
-                textAnchor="middle"
+                textAnchor={textAnchor}
               >
                 {formatHourLabel(hour24)}
               </SvgText>

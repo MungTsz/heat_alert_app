@@ -1,11 +1,13 @@
-// src/data/aqhiForecast/apiAqhiForecastProvider.ts
 import {
   AqhiForecastProvider,
   AqhiDayForecast,
   HourlyAqhiPoint,
   Coordinates,
 } from './types';
-import { fetchPraisePointData, toHkTimestamp } from '../../services/praiseApi';
+
+const START_HOUR = 6;
+const END_HOUR = 20;
+const DAY_PEAK_AQHI = [6, 7, 8];
 
 const startOfDay = (date: Date): number => {
   const d = new Date(date);
@@ -13,71 +15,59 @@ const startOfDay = (date: Date): number => {
   return d.getTime();
 };
 
-// Midnight of today, in Hong Kong time — this is what makes "today" include
-// the full 0:00-current-hour history, not just current-hour-forward.
-const startOfTodayHkDate = (): Date => {
-  const now = new Date();
-  const utcMs = now.getTime() + now.getTimezoneOffset() * 60000;
-  const hkNow = new Date(utcMs + 8 * 60 * 60 * 1000);
-  hkNow.setHours(0, 0, 0, 0);
-  return hkNow;
+const generateDayPoints = (
+  baseDate: Date,
+  peakAqhi: number,
+): HourlyAqhiPoint[] => {
+  const points: HourlyAqhiPoint[] = [];
+  const peakHour = 17;
+
+  for (let hour = START_HOUR; hour <= END_HOUR; hour++) {
+    const distanceFromPeak = hour - peakHour;
+    const shape = Math.exp(-(distanceFromPeak * distanceFromPeak) / 20);
+    const aqhi = 2 + (peakAqhi - 2) * shape;
+
+    const pointDate = new Date(baseDate);
+    pointDate.setHours(hour, 0, 0, 0);
+
+    points.push({
+      timestamp: pointDate.getTime(),
+      time: `${hour.toString().padStart(2, '0')}:00`,
+      aqhi: Math.round(aqhi * 10) / 10,
+    });
+  }
+  return points;
 };
 
-export const apiAqhiForecastProvider: AqhiForecastProvider = {
-  getForecast: async (center: Coordinates): Promise<AqhiDayForecast[]> => {
-    // t0 = start of today (HKT) instead of the current hour — pulls in
-    // today's past hours as well as the forecast ahead.
-    const t0Date = startOfTodayHkDate();
-    const t0 = toHkTimestamp(t0Date);
+export const generateAqhiDayForOffset = (
+  dayOffset: number,
+): AqhiDayForecast => {
+  const today = new Date();
+  const dayDate = new Date(today);
+  dayDate.setDate(today.getDate() + dayOffset);
+  const peak =
+    dayOffset < DAY_PEAK_AQHI.length
+      ? DAY_PEAK_AQHI[dayOffset]
+      : DAY_PEAK_AQHI[DAY_PEAK_AQHI.length - 1];
 
-    // t1 = 48 hours forward from NOW (not from t0), matching the API's own
-    // "48 hours forecast from current hour" ceiling — we're just also asking
-    // for the hours behind us today, not extending how far ahead we can see.
-    const t1End = new Date();
-    t1End.setHours(t1End.getHours() + 48);
-    const t1 = toHkTimestamp(t1End);
+  return {
+    weekdayShort: dayDate.toLocaleDateString('en-US', { weekday: 'short' }),
+    dayOfMonth: dayDate.getDate(),
+    dateMs: startOfDay(dayDate),
+    isToday: dayOffset === 0,
+    points: generateDayPoints(dayDate, peak),
+  };
+};
 
-    const data = await fetchPraisePointData(
-      center.latitude,
-      center.longitude,
-      t0,
-      t1,
-      ['AQHIBN2024'],
-    );
+export const generateMockAqhiDays = (
+  _center: Coordinates,
+): AqhiDayForecast[] => {
+  return [0, 1, 2].map(generateAqhiDayForOffset);
+};
 
-    const isots = data.isots ?? [];
-    const values = data.AQHIBN2024 ?? [];
-
-    const today = new Date();
-    const todayStart = startOfDay(today);
-
-    const dayMap = new Map<number, HourlyAqhiPoint[]>();
-
-    isots.forEach((iso: string, i: number) => {
-      const date = new Date(iso);
-      const dayKey = startOfDay(date);
-      const point: HourlyAqhiPoint = {
-        timestamp: date.getTime(),
-        time: `${date.getHours().toString().padStart(2, '0')}:00`,
-        aqhi: values[i],
-      };
-      if (!dayMap.has(dayKey)) dayMap.set(dayKey, []);
-      dayMap.get(dayKey)!.push(point);
-    });
-
-    const days: AqhiDayForecast[] = Array.from(dayMap.entries())
-      .sort(([a], [b]) => a - b)
-      .map(([dayKey, points]) => {
-        const date = new Date(dayKey);
-        return {
-          weekdayShort: date.toLocaleDateString('en-US', { weekday: 'short' }),
-          dayOfMonth: date.getDate(),
-          dateMs: dayKey,
-          isToday: dayKey === todayStart,
-          points,
-        };
-      });
-
-    return days;
+export const mockAqhiForecastProvider: AqhiForecastProvider = {
+  getForecast: async center => {
+    await new Promise<void>(resolve => setTimeout(() => resolve(), 300));
+    return generateMockAqhiDays(center);
   },
 };

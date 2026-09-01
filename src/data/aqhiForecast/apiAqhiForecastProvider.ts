@@ -13,13 +13,26 @@ const startOfDay = (date: Date): number => {
   return d.getTime();
 };
 
-// PRAISE-HK's get_data only provides 48 hours forecast from the current
-// hour — real data can't be padded into 3 days like the mock did. This
-// groups the flat 48-point response into however many calendar days it
-// actually spans (typically 2-3, depending on the current hour).
+// Midnight of today, in Hong Kong time — this is what makes "today" include
+// the full 0:00-current-hour history, not just current-hour-forward.
+const startOfTodayHkDate = (): Date => {
+  const now = new Date();
+  const utcMs = now.getTime() + now.getTimezoneOffset() * 60000;
+  const hkNow = new Date(utcMs + 8 * 60 * 60 * 1000);
+  hkNow.setHours(0, 0, 0, 0);
+  return hkNow;
+};
+
 export const apiAqhiForecastProvider: AqhiForecastProvider = {
   getForecast: async (center: Coordinates): Promise<AqhiDayForecast[]> => {
-    const t0 = toHkTimestamp();
+    // t0 = start of today (HKT) instead of the current hour — pulls in
+    // today's past hours as well as the forecast ahead.
+    const t0Date = startOfTodayHkDate();
+    const t0 = toHkTimestamp(t0Date);
+
+    // t1 = 48 hours forward from NOW (not from t0), matching the API's own
+    // "48 hours forecast from current hour" ceiling — we're just also asking
+    // for the hours behind us today, not extending how far ahead we can see.
     const t1End = new Date();
     t1End.setHours(t1End.getHours() + 48);
     const t1 = toHkTimestamp(t1End);
