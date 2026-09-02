@@ -23,13 +23,12 @@ export const evaluateCurrentThreshold = (
 
   const { classification } = getHeatIndexInfo(currentTemp);
   if (!isEnabled(settings, classification)) return null;
-  if (rank(classification) <= rank('Very Warm')) return null; // don't alert on mild levels even if toggled on accidentally
+  if (rank(classification) <= rank('Caution')) return null; // don't alert on mild levels even if toggled on accidentally
 
   const actionByLevel: Record<string, string> = {
-    Hot: 'Stay hydrated and take breaks in the shade.',
-    'Very Hot':
-      'Avoid outdoor activity where possible. Stay hydrated and cool.',
-    'Extremely Hot':
+    'Extreme Caution': 'Stay hydrated and take breaks in the shade.',
+    Danger: 'Avoid outdoor activity where possible. Stay hydrated and cool.',
+    'Extreme Danger':
       'Avoid outdoor activity now. If indoors, turn on air conditioning and stay hydrated.',
   };
 
@@ -67,7 +66,7 @@ export const evaluateUpcomingTrend = (
 
   if (rank(peakClass) <= rank(currentClass)) return null; // not actually rising
   if (!isEnabled(settings, peakClass)) return null;
-  if (rank(peakClass) <= rank('Very Warm')) return null;
+  if (rank(peakClass) <= rank('Caution')) return null;
 
   return {
     id: `upcoming-trend:${currentClass}->${peakClass}:${peakPoint.time}`,
@@ -96,7 +95,7 @@ export const evaluateSustainedTrend = (
   });
 
   const allHotOrWorse = dailyPeaks.every(
-    d => rank(d.classification) >= rank('Hot'),
+    d => rank(d.classification) >= rank('Extreme Caution'),
   );
   if (!allHotOrWorse) return null;
 
@@ -127,7 +126,7 @@ export const evaluateCommunityThresholds = (
   for (const house of housesWithTemp) {
     const { classification } = getHeatIndexInfo(house.temperature);
     if (!isEnabled(settings, classification)) continue;
-    if (rank(classification) <= rank('Very Warm')) continue;
+    if (rank(classification) <= rank('Caution')) continue;
 
     alerts.push({
       id: `community:${house.id}:${classification}`,

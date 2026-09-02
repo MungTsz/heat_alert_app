@@ -23,6 +23,15 @@ export const toHkTimestamp = (date: Date = new Date()): string => {
   return `${yyyy}${mm}${dd}${hh}`;
 };
 
+// Renders a toHkTimestamp() string (YYYYMMDDhh) as a wall-clock label, e.g.
+// "1:00PM" — used to show forecast frames as real times instead of "+Nh".
+export const formatHkTimestampLabel = (ts: string): string => {
+  const hour24 = parseInt(ts.slice(8, 10), 10);
+  const period = hour24 < 12 ? 'AM' : 'PM';
+  const hour12 = hour24 % 12 === 0 ? 12 : hour24 % 12;
+  return `${hour12}:00${period}`;
+};
+
 export type PraisePointDataResponse = {
   ts?: string[];
   isots?: string[];

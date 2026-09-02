@@ -1,20 +1,11 @@
 // src/components/DailyHeatForecastCard.tsx
-import React, {
-  useState,
-  useMemo,
-  useRef,
-  useCallback,
-  useEffect,
-} from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   Dimensions,
-  ScrollView,
   TouchableOpacity,
-  NativeSyntheticEvent,
-  NativeScrollEvent,
 } from 'react-native';
 import Svg, {
   Rect,
@@ -26,374 +17,335 @@ import Svg, {
   ClipPath,
   G,
 } from 'react-native-svg';
-import { DayForecast, HourlyForecastPoint } from '../data/forecast/types';
-import { generateMockDays } from '../data/forecast/mockForecastProvider';
+import Animated, {
+  useSharedValue,
+  useAnimatedProps,
+  withRepeat,
+  withTiming,
+  interpolate,
+  Easing,
+} from 'react-native-reanimated';
+import { DayForecast } from '../data/forecast/types';
+import { HEAT_INDEX_ZONES, fahrenheitToCelsius } from '../utils/heatIndexUtils';
 
-const SCREEN_WIDTH = Dimensions.get('window').width - 40;
-const SVG_HEIGHT = 220;
-const Y_AXIS_WIDTH = 35;
-const CHART_PADDING_HORIZONTAL = 15;
-const PADDING_BOTTOM = 25;
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+
+const SCREEN_WIDTH = Dimensions.get('window').width - 72;
+const SVG_HEIGHT = 260;
+const Y_AXIS_WIDTH = 30;
 const PADDING_TOP = 15;
+const PADDING_BOTTOM = 30;
 
+// Chart bounds in Celsius, with headroom below "Safe" and above "Extreme
+// Danger" so every zone's band is visible even at the axis edges.
 const MIN_TEMP = 15;
-const MAX_TEMP = 50;
+const MAX_TEMP = 55;
 
-const VISIBLE_POINTS = 5; // points visible per screen-width, sets hourly spacing
-const EXTEND_THRESHOLD = 200; // px from the right edge that triggers loading another day
+// Y-axis gridlines sit at each classification boundary (Fahrenheit thresholds
+// from HEAT_INDEX_ZONES, converted to Celsius) rather than round numbers, so
+// the axis labels line up with where the background bands actually change.
+const GRID_TEMPS = HEAT_INDEX_ZONES.slice(0, -1).map(
+  z => Math.round(fahrenheitToCelsius(z.minF) * 10) / 10,
+);
 
-interface Props {
-  days?: DayForecast[];
-  maxDays?: number;
-}
+type Props = { days: DayForecast[] };
 
-const HEAT_ZONES = [
-  { min: 43, max: 50, color: '#DF7C8D', label: 'Extremely Hot' },
-  { min: 35, max: 43, color: '#E99066', label: 'Very Hot' },
-  { min: 28, max: 35, color: '#F0B96D', label: 'Hot' },
-  { min: 20, max: 28, color: '#F4D97A', label: 'Very Warm' },
-  { min: 15, max: 20, color: '#87C693', label: 'Neutral' },
-];
-
-const GRID_LINES = [20, 28, 35, 43, 50];
-
-const DEFAULT_CENTER = { latitude: 22.3375, longitude: 114.263 };
-
-// A flattened point, tagged with which day it belongs to and its global
-// index in the continuous timeline — what actually gets drawn.
-type FlatPoint = HourlyForecastPoint & {
-  dayIndex: number;
-  globalIndex: number;
-};
-
-export const DailyHeatForecastCard: React.FC<Props> = ({
-  days,
-  maxDays = 3,
-}) => {
-  const initialDays = useMemo(
-    () => (days && days.length > 0 ? days : generateMockDays(DEFAULT_CENTER)),
-    [days],
-  );
-  const [allDays, setAllDays] = useState<DayForecast[]>(initialDays);
+const DailyHeatForecastCard: React.FC<Props> = ({ days }) => {
   const [activeDayIndex, setActiveDayIndex] = useState(0);
-  const scrollRef = useRef<ScrollView>(null);
+  const [selectedHourIndex, setSelectedHourIndex] = useState<number | null>(
+    null,
+  );
+  const activeDay = days[activeDayIndex];
+  const points = activeDay?.points ?? [];
 
-  useEffect(() => {
-    setAllDays(initialDays);
-    setActiveDayIndex(0);
-  }, [initialDays]);
-
-  const WINDOW_WIDTH = SCREEN_WIDTH - Y_AXIS_WIDTH;
-  const VISIBLE_GRAPH_WIDTH = WINDOW_WIDTH - CHART_PADDING_HORIZONTAL * 2;
-  const STEP = VISIBLE_GRAPH_WIDTH / (VISIBLE_POINTS - 1);
+  const GRAPH_WIDTH = SCREEN_WIDTH - Y_AXIS_WIDTH;
   const GRAPH_HEIGHT = SVG_HEIGHT - PADDING_TOP - PADDING_BOTTOM;
-
-  // Flatten every day's points into one continuous timeline, and record the
-  // x-position where each day starts (used for divider lines + tab jumps).
-  const { flatPoints, dayStartX, dayStartIndex, totalWidth } = useMemo(() => {
-    const flat: FlatPoint[] = [];
-    const startX: number[] = [];
-    const startIdx: number[] = [];
-    let globalIndex = 0;
-
-    allDays.forEach((day, dayIdx) => {
-      startX.push(CHART_PADDING_HORIZONTAL + globalIndex * STEP);
-      startIdx.push(globalIndex);
-      day.points.forEach(point => {
-        flat.push({ ...point, dayIndex: dayIdx, globalIndex });
-        globalIndex += 1;
-      });
-    });
-
-    const width =
-      CHART_PADDING_HORIZONTAL * 2 + Math.max(globalIndex - 1, 1) * STEP;
-    return {
-      flatPoints: flat,
-      dayStartX: startX,
-      dayStartIndex: startIdx,
-      totalWidth: width,
-    };
-  }, [allDays, STEP]);
+  const slotWidth = GRAPH_WIDTH / Math.max(points.length - 1, 1);
 
   const getY = (temp: number) => {
-    const clampedTemp = Math.min(Math.max(temp, MIN_TEMP), MAX_TEMP);
-    const percentage = (clampedTemp - MIN_TEMP) / (MAX_TEMP - MIN_TEMP);
-    return PADDING_TOP + GRAPH_HEIGHT - percentage * GRAPH_HEIGHT;
+    const c = Math.min(Math.max(temp, MIN_TEMP), MAX_TEMP);
+    const pct = (c - MIN_TEMP) / (MAX_TEMP - MIN_TEMP);
+    return PADDING_TOP + GRAPH_HEIGHT - pct * GRAPH_HEIGHT;
+  };
+  const getX = (i: number) => i * slotWidth;
+
+  const linePath = useMemo(() => {
+    return points.reduce((acc, p, i) => {
+      const cmd = i === 0 ? 'M' : 'L';
+      return `${acc} ${cmd} ${getX(i)},${getY(p.heatIndex)}`;
+    }, '');
+  }, [points, slotWidth]);
+
+  // Matches AqhiHourlyForecastChart's label format for a consistent x-axis
+  // style across both forecast charts.
+  const formatHourLabel = (hour24: number): string => {
+    if (hour24 === 0) return '12AM';
+    if (hour24 === 12) return '12NN';
+    if (hour24 < 12) return `${hour24}AM`;
+    return `${hour24 - 12}PM`;
   };
 
-  const getX = (globalIndex: number) =>
-    CHART_PADDING_HORIZONTAL + globalIndex * STEP;
+  const labelIndices = points
+    .map((p, i) => ({ hour: parseInt(p.time.split(':')[0], 10), i }))
+    .filter(({ hour }) => hour % 4 === 0)
+    .map(({ i }) => i);
 
-  const getPointColor = (temp: number) => {
-    const matchedZone = HEAT_ZONES.find(zone => temp >= zone.min);
-    return matchedZone ? matchedZone.color : '#87C693';
-  };
+  // "Now" marker — only meaningful on today's tab
+  const nowIndex = useMemo(() => {
+    if (!activeDay?.isToday) return null;
+    const now = Date.now();
+    return points.reduce(
+      (closestIdx, p, idx) =>
+        Math.abs(p.timestamp - now) <
+        Math.abs(points[closestIdx].timestamp - now)
+          ? idx
+          : closestIdx,
+      0,
+    );
+  }, [activeDay, points]);
 
-  const svgPoints = flatPoints.map(p => ({
-    x: getX(p.globalIndex),
-    y: getY(p.heatIndex),
+  // Drives the pulsing halo behind the "now" dot — loops indefinitely
+  const pulseProgress = useSharedValue(0);
+  useEffect(() => {
+    pulseProgress.value = withRepeat(
+      withTiming(1, { duration: 1200, easing: Easing.inOut(Easing.ease) }),
+      -1,
+      true,
+    );
+  }, [pulseProgress]);
+  const haloAnimatedProps = useAnimatedProps(() => ({
+    r: interpolate(pulseProgress.value, [0, 1], [6, 13]),
+    opacity: interpolate(pulseProgress.value, [0, 1], [0.45, 0]),
   }));
 
-  const generateSmoothPath = (pts: { x: number; y: number }[]) => {
-    const smoothing = 0.2;
-    const getCP = (
-      current: any,
-      previous: any,
-      next: any,
-      reverse: boolean,
-    ) => {
-      const p = previous || current;
-      const n = next || current;
-      const lengthX = n.x - p.x;
-      const lengthY = n.y - p.y;
-      const angle = Math.atan2(lengthY, lengthX) + (reverse ? Math.PI : 0);
-      const length =
-        Math.sqrt(Math.pow(lengthX, 2) + Math.pow(lengthY, 2)) * smoothing;
-      return {
-        x: current.x + Math.cos(angle) * length,
-        y: current.y + Math.sin(angle) * length,
-      };
-    };
-
-    return pts.reduce((acc, point, i, a) => {
-      if (i === 0) return `M ${point.x},${point.y}`;
-      const cps = getCP(a[i - 1], a[i - 2], point, false);
-      const cpe = getCP(point, a[i - 1], a[i + 1], true);
-      return `${acc} C ${cps.x},${cps.y} ${cpe.x},${cpe.y} ${point.x},${point.y}`;
-    }, '');
-  };
-
-  const linePath = generateSmoothPath(svgPoints);
-
-  // Current-time cursor: only meaningful within today's segment
-  const currentTimeGlobalIndex = useMemo(() => {
-    const todayIdx = allDays.findIndex(d => d.isToday);
-    if (todayIdx === -1) return undefined;
-    const todayPoints = flatPoints.filter(p => p.dayIndex === todayIdx);
-    if (todayPoints.length === 0) return undefined;
-
-    const now = Date.now();
-    return todayPoints.reduce(
-      (closest, p) =>
-        Math.abs(p.timestamp - now) < Math.abs(closest.timestamp - now)
-          ? p
-          : closest,
-      todayPoints[0],
-    ).globalIndex;
-  }, [allDays, flatPoints]);
-
-  // Tapping a calendar tab scrolls smoothly to that day's start
-  const goToDay = (index: number) => {
-    scrollRef.current?.scrollTo({ x: dayStartX[index], animated: true });
-    setActiveDayIndex(index);
-  };
-
-  // Keeps the top tab strip in sync with whatever day is currently centered
-  // in the viewport as the user scrolls, and extends the timeline forward
-  // when they approach the right edge.
-  const handleScroll = useCallback(
-    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-      const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
-      const viewportCenter = contentOffset.x + layoutMeasurement.width / 2;
-
-      let nearestDay = 0;
-      for (let i = 0; i < dayStartX.length; i++) {
-        if (viewportCenter >= dayStartX[i]) nearestDay = i;
-      }
-      setActiveDayIndex(prev => (prev !== nearestDay ? nearestDay : prev));
-    },
-    [dayStartX],
-  );
+  const selectedPoint =
+    selectedHourIndex !== null ? points[selectedHourIndex] : null;
 
   return (
     <View style={styles.card}>
-      <Text style={styles.cardTitle}>Hourly Heat Index Forecast</Text>
+      <Text style={styles.title}>Heat Index</Text>
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.dayTabScroll}
-      >
-        <View style={styles.dayTabRow}>
-          {allDays.map((day, i) => {
-            const isSelected = activeDayIndex === i;
-            return (
-              <TouchableOpacity
-                key={day.dateMs}
-                style={styles.dayTab}
-                onPress={() => goToDay(i)}
+      <View style={styles.dayTabRow}>
+        {days.map((day, i) => {
+          const isSelected = activeDayIndex === i;
+          return (
+            <TouchableOpacity
+              key={day.dateMs}
+              style={styles.dayTab}
+              onPress={() => {
+                setActiveDayIndex(i);
+                setSelectedHourIndex(null);
+              }}
+            >
+              <Text
+                style={[
+                  styles.weekdayText,
+                  isSelected && styles.weekdayTextActive,
+                ]}
+              >
+                {day.weekdayShort}
+              </Text>
+              <View
+                style={[styles.dayCircle, isSelected && styles.dayCircleActive]}
               >
                 <Text
                   style={[
-                    styles.weekdayText,
-                    isSelected && styles.weekdayTextActive,
+                    styles.dayNumberText,
+                    isSelected && styles.dayNumberTextActive,
                   ]}
                 >
-                  {day.weekdayShort}
+                  {day.dayOfMonth}
                 </Text>
-                <View
-                  style={[
-                    styles.dayCircle,
-                    isSelected && styles.dayCircleActive,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.dayNumberText,
-                      isSelected && styles.dayNumberTextActive,
-                    ]}
-                  >
-                    {day.dayOfMonth}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      </ScrollView>
+              </View>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
 
-      <View style={styles.chartLayout}>
-        <View style={styles.yAxisContainer}>
-          <Svg width={Y_AXIS_WIDTH} height={SVG_HEIGHT}>
-            {GRID_LINES.map(temp => (
-              <SvgText
-                key={`grid-label-${temp}`}
-                x={Y_AXIS_WIDTH - 6}
-                y={getY(temp) + 4}
-                fontSize="10"
-                fill="#718096"
-                textAnchor="end"
-              >
-                {temp}°
-              </SvgText>
-            ))}
-          </Svg>
-        </View>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+        <Svg width={Y_AXIS_WIDTH} height={SVG_HEIGHT}>
+          {GRID_TEMPS.map(temp => (
+            <SvgText
+              key={temp}
+              x={Y_AXIS_WIDTH - 6}
+              y={getY(temp) + 4}
+              fontSize="10"
+              fill="#333"
+              textAnchor="end"
+            >
+              {Math.round(temp)}°
+            </SvgText>
+          ))}
+        </Svg>
 
-        {/* One continuous scroll — no per-day remount, no flip animation.
-            Scrolling right naturally reveals the next day's data. */}
-        <ScrollView
-          ref={scrollRef}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          bounces={false}
-          onScroll={handleScroll}
-          scrollEventThrottle={100}
-        >
-          <Svg width={totalWidth} height={SVG_HEIGHT}>
-            <Defs>
-              <ClipPath id="chartClip">
+        <Svg width={GRAPH_WIDTH} height={SVG_HEIGHT}>
+          <Defs>
+            <ClipPath id="heatChartClip">
+              <Rect
+                x={0}
+                y={PADDING_TOP}
+                width={GRAPH_WIDTH}
+                height={GRAPH_HEIGHT}
+              />
+            </ClipPath>
+          </Defs>
+
+          {/* Classification bands, full width, behind everything */}
+          <G clipPath="url(#heatChartClip)">
+            {HEAT_INDEX_ZONES.map((zone, idx) => {
+              const maxC =
+                zone.maxF === Infinity
+                  ? MAX_TEMP
+                  : fahrenheitToCelsius(zone.maxF);
+              const minC =
+                zone.minF === -Infinity
+                  ? MIN_TEMP
+                  : fahrenheitToCelsius(zone.minF);
+              return (
                 <Rect
+                  key={idx}
                   x={0}
-                  y={PADDING_TOP}
-                  width={totalWidth}
-                  height={GRAPH_HEIGHT}
-                  rx={6}
+                  y={getY(maxC)}
+                  width={GRAPH_WIDTH}
+                  height={getY(minC) - getY(maxC)}
+                  fill={zone.color}
+                  opacity={0.55}
                 />
-              </ClipPath>
-            </Defs>
+              );
+            })}
 
-            <G clipPath="url(#chartClip)">
-              {HEAT_ZONES.map((zone, idx) => {
-                const yTop = getY(zone.max);
-                const yBottom = getY(zone.min);
-                return (
-                  <Rect
-                    key={`zone-${idx}`}
-                    x={0}
-                    y={yTop}
-                    width={totalWidth}
-                    height={yBottom - yTop}
-                    fill={zone.color}
-                    fillOpacity={0.15}
-                  />
-                );
-              })}
-            </G>
-
-            {GRID_LINES.map(temp => (
-              <Line
-                key={`grid-line-${temp}`}
-                x1={0}
-                y1={getY(temp)}
-                x2={totalWidth}
-                y2={getY(temp)}
-                stroke="#A0AEC0"
-                strokeDasharray="4,4"
-                strokeWidth="1"
-              />
-            ))}
-
-            {/* Vertical day-boundary dividers — the "midnight" markers,
-                like the reference screenshot's day-separator lines */}
-            {dayStartX.slice(1).map((x, i) => (
-              <Line
-                key={`day-divider-${i}`}
-                x1={x - STEP / 2}
-                y1={PADDING_TOP}
-                x2={x - STEP / 2}
-                y2={PADDING_TOP + GRAPH_HEIGHT}
-                stroke="#CBD5E0"
-                strokeWidth="1"
-              />
-            ))}
-
-            <Path
-              d={linePath}
-              stroke="#5A9E6F"
-              strokeWidth="2.5"
-              fill="none"
-              strokeLinecap="round"
-            />
-
-            {flatPoints.map(point => (
-              <Circle
-                key={`point-${point.globalIndex}`}
-                cx={getX(point.globalIndex)}
-                cy={getY(point.heatIndex)}
-                r="4.5"
-                fill={getPointColor(point.heatIndex)}
-                stroke="#FFFFFF"
-                strokeWidth="1.5"
-              />
-            ))}
-
-            {currentTimeGlobalIndex !== undefined && (
-              <Line
-                x1={getX(currentTimeGlobalIndex)}
-                y1={PADDING_TOP}
-                x2={getX(currentTimeGlobalIndex)}
-                y2={PADDING_TOP + GRAPH_HEIGHT}
-                stroke="#E53E3E"
-                strokeWidth="2.5"
-                strokeDasharray="4,4"
-                strokeLinecap="round"
+            {/* History recedes visually behind the "now" point */}
+            {nowIndex !== null && (
+              <Rect
+                x={0}
+                y={PADDING_TOP}
+                width={getX(nowIndex)}
+                height={GRAPH_HEIGHT}
+                fill="#2D3748"
+                opacity={0.12}
               />
             )}
 
-            {flatPoints.map(point => (
-              <SvgText
-                key={`x-label-${point.globalIndex}`}
-                x={getX(point.globalIndex)}
-                y={SVG_HEIGHT - 6}
-                fontSize="9"
-                fill="#718096"
-                textAnchor="middle"
-              >
-                {point.time}
-              </SvgText>
+            {/* Grid lines tying each x-axis label to its point */}
+            {labelIndices.map(i => (
+              <Line
+                key={`grid-${i}`}
+                x1={getX(i)}
+                y1={PADDING_TOP}
+                x2={getX(i)}
+                y2={PADDING_TOP + GRAPH_HEIGHT}
+                stroke="#718096"
+                strokeWidth={1}
+                opacity={0.25}
+              />
             ))}
-          </Svg>
-        </ScrollView>
+          </G>
+
+          {/* Connecting line, matching the AQHI chart's neutral gray line */}
+          <Path
+            d={linePath}
+            stroke="#FFFFFF"
+            strokeWidth={3}
+            fill="none"
+            strokeLinejoin="round"
+          />
+          <Path
+            d={linePath}
+            stroke="#888888"
+            strokeWidth={1.5}
+            fill="none"
+            strokeLinejoin="round"
+          />
+
+          {points.map((p, i) => (
+            <Circle
+              key={`dot-${i}`}
+              cx={getX(i)}
+              cy={getY(p.heatIndex)}
+              r={selectedHourIndex === i ? 6 : 4}
+              fill="#FFFFFF"
+              stroke="#888888"
+              strokeWidth={1.5}
+              onPress={() => setSelectedHourIndex(i)}
+            />
+          ))}
+
+          {/* "Now" marker: pulsing halo behind an enlarged solid dot */}
+          {nowIndex !== null && (
+            <>
+              <AnimatedCircle
+                cx={getX(nowIndex)}
+                cy={getY(points[nowIndex].heatIndex)}
+                fill="#0073df"
+                animatedProps={haloAnimatedProps}
+              />
+              <Circle
+                cx={getX(nowIndex)}
+                cy={getY(points[nowIndex].heatIndex)}
+                r={7}
+                fill="#0073df"
+                stroke="#FFFFFF"
+                strokeWidth={2}
+                onPress={() => setSelectedHourIndex(nowIndex)}
+              />
+            </>
+          )}
+
+          {selectedPoint && selectedHourIndex !== null && (
+            <SvgText
+              x={getX(selectedHourIndex)}
+              y={getY(selectedPoint.heatIndex) - 12}
+              fontSize="13"
+              fontWeight="bold"
+              fill="#d36565"
+              textAnchor="middle"
+            >
+              {Math.round(selectedPoint.heatIndex)}°C
+            </SvgText>
+          )}
+
+          {labelIndices.map(i => {
+            const hour24 = parseInt(points[i].time.split(':')[0], 10);
+            // Edge labels are anchored inward so they never render past the
+            // chart's left/right bounds and get clipped.
+            const textAnchor =
+              i === 0 ? 'start' : i === points.length - 1 ? 'end' : 'middle';
+            return (
+              <SvgText
+                key={`label-${i}`}
+                x={getX(i)}
+                y={SVG_HEIGHT - 10}
+                fontSize="9"
+                fill="#333"
+                textAnchor={textAnchor}
+              >
+                {formatHourLabel(hour24)}
+              </SvgText>
+            );
+          })}
+        </Svg>
       </View>
 
       <View style={styles.legendRow}>
-        {[...HEAT_ZONES].reverse().map((zone, idx) => (
-          <View key={idx} style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: zone.color }]} />
-            <Text style={styles.legendText}>{zone.label}</Text>
-          </View>
-        ))}
+        {[...HEAT_INDEX_ZONES].reverse().map(zone => {
+          const rangeLabel =
+            zone.minF === -Infinity
+              ? `<${Math.round(fahrenheitToCelsius(zone.maxF))}°C`
+              : zone.maxF === Infinity
+              ? `${Math.round(fahrenheitToCelsius(zone.minF))}°C+`
+              : `${Math.round(fahrenheitToCelsius(zone.minF))}-${Math.round(
+                  fahrenheitToCelsius(zone.maxF),
+                )}°C`;
+          return (
+            <View key={zone.classification} style={styles.legendItem}>
+              <View
+                style={[styles.legendSwatch, { backgroundColor: zone.color }]}
+              />
+              <Text style={styles.legendLabel}>{zone.classification}</Text>
+              <Text style={styles.legendRange}>{rangeLabel}</Text>
+            </View>
+          );
+        })}
       </View>
     </View>
   );
@@ -411,32 +363,21 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 4,
   },
-  cardTitle: {
+  title: {
     fontSize: 16,
     fontWeight: '700',
     color: '#2D3748',
     marginBottom: 10,
   },
-  dayTabScroll: {
-    marginBottom: 14,
-  },
   dayTabRow: {
     flexDirection: 'row',
     gap: 18,
     paddingHorizontal: 4,
+    marginBottom: 12,
   },
-  dayTab: {
-    alignItems: 'center',
-    gap: 6,
-  },
-  weekdayText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#A0AEC0',
-  },
-  weekdayTextActive: {
-    color: '#E99066',
-  },
+  dayTab: { alignItems: 'center', gap: 6 },
+  weekdayText: { fontSize: 12, fontWeight: '600', color: '#A0AEC0' },
+  weekdayTextActive: { color: '#F0741F' },
   dayCircle: {
     width: 34,
     height: 34,
@@ -444,51 +385,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  dayCircleActive: {
-    backgroundColor: '#E99066',
-  },
-  dayNumberText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#2D3748',
-  },
-  dayNumberTextActive: {
-    color: '#FFFFFF',
-  },
-  chartLayout: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  yAxisContainer: {
-    width: Y_AXIS_WIDTH,
-    height: SVG_HEIGHT,
-    backgroundColor: '#FFFFFF',
-    zIndex: 10,
-  },
+  dayCircleActive: { backgroundColor: '#F0741F' },
+  dayNumberText: { fontSize: 16, fontWeight: '700', color: '#2D3748' },
+  dayNumberTextActive: { color: '#FFFFFF' },
   legendRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 12,
-    paddingTop: 8,
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 12,
+    marginTop: 16,
+    paddingTop: 10,
     borderTopWidth: 1,
     borderTopColor: '#EDF2F7',
   },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-  },
-  legendDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-  },
-  legendText: {
-    fontSize: 9,
-    fontWeight: '600',
-    color: '#4A5568',
-  },
+  legendItem: { alignItems: 'center', width: 68 },
+  legendSwatch: { width: 24, height: 14, borderRadius: 2, marginBottom: 3 },
+  legendLabel: { fontSize: 9, fontWeight: '700', color: '#333' },
+  legendRange: { fontSize: 8, color: '#666', marginTop: 1 },
 });
 
 export default DailyHeatForecastCard;

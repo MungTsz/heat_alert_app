@@ -1,18 +1,18 @@
 // Matches the classification strings returned by getHeatIndexInfo exactly —
 // keep these in sync if heatIndexUtils.ts classification labels ever change.
 export type HeatLevel =
-  | 'Neutral'
-  | 'Very Warm'
-  | 'Hot'
-  | 'Very Hot'
-  | 'Extremely Hot';
+  | 'Safe'
+  | 'Caution'
+  | 'Extreme Caution'
+  | 'Danger'
+  | 'Extreme Danger';
 
 export const HEAT_LEVELS_ORDERED: HeatLevel[] = [
-  'Neutral',
-  'Very Warm',
-  'Hot',
-  'Very Hot',
-  'Extremely Hot',
+  'Safe',
+  'Caution',
+  'Extreme Caution',
+  'Danger',
+  'Extreme Danger',
 ];
 
 export type AqhiLevel = 'Low' | 'Moderate' | 'High' | 'Very High' | 'Serious';
@@ -26,11 +26,11 @@ export type NotificationSettings = {
 
 export const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
   alertLevels: {
-    Neutral: false,
-    'Very Warm': false,
-    Hot: true,
-    'Very Hot': true,
-    'Extremely Hot': true,
+    Safe: false,
+    Caution: false,
+    'Extreme Caution': true,
+    Danger: true,
+    'Extreme Danger': true,
   },
   aqhiAlertLevels: {
     Low: false,

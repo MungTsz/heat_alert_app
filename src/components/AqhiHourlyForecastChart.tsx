@@ -38,7 +38,9 @@ const PADDING_BOTTOM = 30;
 const MIN_AQHI = 0;
 const MAX_AQHI = 11; // top band is "10+"
 
-// Fixed EPD severity bands — background zones, not per-point colors
+// Fixed EPD severity bands — background zones, not per-point colors. This is
+// a deliberately independent, coarser 5-color palette for the chart backdrop,
+// separate from aqhiUtils' per-value gradient used by the map/legend/pins.
 const BANDS = [
   { min: 0, max: 3, color: '#4CAF33' }, // Low
   { min: 3, max: 6, color: '#F2C300' }, // Moderate
@@ -281,14 +283,14 @@ const AqhiHourlyForecastChart: React.FC<Props> = ({ days }) => {
               <AnimatedCircle
                 cx={getX(nowIndex)}
                 cy={getY(points[nowIndex].aqhi)}
-                fill="#1A1A1A"
+                fill="#0073df"
                 animatedProps={haloAnimatedProps}
               />
               <Circle
                 cx={getX(nowIndex)}
                 cy={getY(points[nowIndex].aqhi)}
                 r={7}
-                fill="#1A1A1A"
+                fill="#0073df"
                 stroke="#FFFFFF"
                 strokeWidth={2}
                 onPress={() => setSelectedHourIndex(nowIndex)}

@@ -5,16 +5,17 @@ export interface AqhiInfo {
 }
 
 // Per-value color, matching the official HK AQHI legend exactly rather than
-// a banded approximation — each integer 1-10 (and 11 for "10+") has its own shade.
-const AQHI_COLOR_BY_VALUE: Record<number, string> = {
-  1: '#4CAF33',
-  2: '#4CAF33',
-  3: '#4CAF33',
+// a banded approximation — each integer 1-10 (and 11 for "10+") has its own shade,
+// brightening toward the top of each band as it approaches the next classification.
+export const AQHI_COLOR_BY_VALUE: Record<number, string> = {
+  1: '#3E9C35',
+  2: '#6DBB3C',
+  3: '#9ED14E',
   4: '#F2E500',
-  5: '#F79420',
+  5: '#F7C400',
   6: '#F79420',
   7: '#E8242A',
-  8: '#8D4A3C',
+  8: '#B0452F',
   9: '#8D4A3C',
   10: '#4A2E2A',
   11: '#000000', // "10+"
@@ -52,14 +53,14 @@ export const getAqhiTextColor = (aqhi: number): string => {
   // Darkened variants for text-on-light-background legibility, keeping the
   // same hue family as the official color per value.
   const textColors: Record<number, string> = {
-    1: '#2E7D1F',
+    1: '#255E20',
     2: '#2E7D1F',
-    3: '#2E7D1F',
+    3: '#3F8F2A',
     4: '#9C9200',
-    5: '#B36A15',
+    5: '#A67D0A',
     6: '#B36A15',
     7: '#A81A1F',
-    8: '#5F3329',
+    8: '#7A3F30',
     9: '#5F3329',
     10: '#2E1C1A',
     11: '#000000',

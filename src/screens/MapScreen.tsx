@@ -29,7 +29,11 @@ import DualStatPin from '../components/DualStatPin';
 import { usePraiseAqhiTile } from '../hooks/usePraiseAqhiTile';
 import { isPraiseConfigured } from '../config/praiseConfig';
 import AqhiLegend from '../components/AqhiLegend';
-import { fetchPraisePointData, toHkTimestamp } from '../services/praiseApi';
+import {
+  fetchPraisePointData,
+  toHkTimestamp,
+  formatHkTimestampLabel,
+} from '../services/praiseApi';
 import { useMapSettings } from '../hooks/useMapSettings';
 
 const FORECAST_FRAME_INTERVAL_MS = 700;
@@ -412,7 +416,7 @@ const MapScreen = ({
                   ? 'Loading forecast…'
                   : forecastPlaying
                   ? activeFrame
-                    ? `+${activeFrame.hourOffset}h`
+                    ? formatHkTimestampLabel(activeFrame.ts)
                     : 'Stop'
                   : 'Play Forecast'}
               </Text>

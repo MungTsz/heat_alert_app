@@ -56,7 +56,7 @@ const HeatScene: React.FC<Props> = ({
   const [skyTop, skyBottom] = getSkyColors();
 
   const heatInfo = getHeatIndexInfo(temperatureCelsius);
-  const heatSevere = ['Very Hot', 'Extremely Hot'].includes(
+  const heatSevere = ['Danger', 'Extreme Danger'].includes(
     heatInfo.classification,
   );
 

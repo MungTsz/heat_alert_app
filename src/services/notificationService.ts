@@ -78,7 +78,7 @@ export const sendTestNotification = async () => {
   await displayAlert({
     id: 'test',
     category: 'current_threshold',
-    title: 'Test Alert: Very Hot (38°C)',
+    title: 'Test Alert: Extreme Caution (38°C)',
     body: 'This is a test notification. Real alerts will look like this.',
   });
 };

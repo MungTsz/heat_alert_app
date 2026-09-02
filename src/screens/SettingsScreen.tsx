@@ -28,11 +28,11 @@ import { runHeatAlertCheckNow } from '../services/heatAlertBus';
 import { AqhiLevel } from '../types/settings';
 
 const LEVEL_SAMPLE_TEMP: Record<string, number> = {
-  Neutral: 20,
-  'Very Warm': 28,
-  Hot: 33,
-  'Very Hot': 42,
-  'Extremely Hot': 56,
+  Safe: 25,
+  Caution: 30,
+  'Extreme Caution': 35,
+  Danger: 45,
+  'Extreme Danger': 55,
 };
 
 // AQHI thresholds use the real 1-11 severity bands, grouped into named
