@@ -1,0 +1,37 @@
+diff --git a/node_modules/react-native-maps/android/src/main/java/com/rnmaps/fabric/OverlayManager.java b/node_modules/react-native-maps/android/src/main/java/com/rnmaps/fabric/OverlayManager.java
+index e1fe2b3..4a9c6d9 100644
+--- a/node_modules/react-native-maps/android/src/main/java/com/rnmaps/fabric/OverlayManager.java
++++ b/node_modules/react-native-maps/android/src/main/java/com/rnmaps/fabric/OverlayManager.java
+@@ -90,8 +90,8 @@ public class OverlayManager extends ViewGroupManager<MapOverlay> implements RNMa
+ 
+     @Override
+     public void setOpacity(MapOverlay view, float value) {
+-        // todo report to google that it's not working / fix it
+-       // view.setTransparency(value);
++        // GroundOverlay's "transparency" is the inverse of "opacity" (0 = opaque, 1 = fully transparent).
++        view.setTransparency(1 - value);
+     }
+ 
+     @Override
+diff --git a/node_modules/react-native-maps/android/src/main/java/com/rnmaps/maps/MapOverlay.java b/node_modules/react-native-maps/android/src/main/java/com/rnmaps/maps/MapOverlay.java
+index f1dc4a8..a82251e 100644
+--- a/node_modules/react-native-maps/android/src/main/java/com/rnmaps/maps/MapOverlay.java
++++ b/node_modules/react-native-maps/android/src/main/java/com/rnmaps/maps/MapOverlay.java
+@@ -204,7 +204,7 @@ public class MapOverlay extends MapFeature {
+         options.positionFromBounds(bounds);
+         options.zIndex(zIndex);
+         options.bearing(bearing);
+-//        options.transparency(transparency);
++        options.transparency(transparency);
+         return options;
+     }
+ 
+@@ -241,7 +241,7 @@ public class MapOverlay extends MapFeature {
+         if (this.groundOverlay != null) {
+             this.groundOverlay.setVisible(true);
+             this.groundOverlay.setImage(this.bitmapDescriptor);
+-            //          this.groundOverlay.setTransparency(this.transparency);
++            this.groundOverlay.setTransparency(this.transparency);
+             this.groundOverlay.setClickable(this.tappable);
+         }
+     }

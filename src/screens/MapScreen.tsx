@@ -371,7 +371,11 @@ const MapScreen = ({
               ]}
               onPress={recenter}
             >
-              <Navigation size={fullscreen ? 24 : 20} color="#FFFFFF" fill="#FFFFFF" />
+              <Navigation
+                size={fullscreen ? 24 : 20}
+                color="#FFFFFF"
+                fill="#FFFFFF"
+              />
             </TouchableOpacity>
           </View>
 
@@ -418,13 +422,12 @@ const MapScreen = ({
       )}
 
       {showModeToggle && (
-        <View
-          style={[
-            styles.topBar,
-            fullscreen && { top: insets.top + 16 },
-          ]}
-        >
-          <MapLayerPicker layer={mapLayer} onChange={setMapLayer} large={fullscreen} />
+        <View style={[styles.topBar, fullscreen && { top: insets.top + 16 }]}>
+          <MapLayerPicker
+            layer={mapLayer}
+            onChange={setMapLayer}
+            large={fullscreen}
+          />
         </View>
       )}
 
@@ -439,7 +442,11 @@ const MapScreen = ({
           ]}
           onPress={recenter}
         >
-          <Navigation size={fullscreen ? 24 : 20} color="#FFFFFF" fill="#FFFFFF" />
+          <Navigation
+            size={fullscreen ? 24 : 20}
+            color="#FFFFFF"
+            fill="#FFFFFF"
+          />
         </TouchableOpacity>
       )}
     </View>

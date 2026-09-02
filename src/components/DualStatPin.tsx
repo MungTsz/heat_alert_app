@@ -18,7 +18,7 @@ const DualStatPin: React.FC<Props> = ({ temperature, aqhi }) => {
     <View style={styles.wrapper}>
       <View style={styles.pill}>
         <View style={[styles.dot, { backgroundColor: heatColor }]} />
-        <Text style={styles.text}>{temperature}°</Text>
+        <Text style={styles.text}>Feels Like {temperature}°</Text>
         <View style={styles.divider} />
         <View style={[styles.dot, { backgroundColor: aqhiColor }]} />
         <Text style={styles.text}>AQHI {aqhi}</Text>

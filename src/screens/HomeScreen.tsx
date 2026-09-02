@@ -34,6 +34,7 @@ import { computeSceneLayout } from '../utils/sceneLayout';
 import { useForecastData } from '../hooks/useForecastData';
 import { useAqhiForecastData } from '../hooks/useAqhiForecastData';
 import { useAqhiData } from '../hooks/useAqhiData';
+import { useCurrentWeather } from '../hooks/useCurrentWeather';
 import { idwInterpolate } from '../utils/idw';
 
 const LOCATION_BOX_WIDTH = 160;
@@ -72,9 +73,14 @@ const HomeScreen = () => {
     scrollY.value = event.contentOffset.y;
   });
 
-  const heatIndexTemp = 42;
-  const actualTemp = 36;
-  const currentHumidity = 80;
+  const { data: currentWeather } = useCurrentWeather();
+  const heatIndexTemp = currentWeather
+    ? Math.round(currentWeather.heatIndexC)
+    : 0;
+  const actualTemp = currentWeather ? Math.round(currentWeather.temperatureC) : 0;
+  const currentHumidity = currentWeather
+    ? Math.round(currentWeather.relativeHumidityPct)
+    : 0;
 
   const heatInfo = getHeatIndexInfo(heatIndexTemp);
   const aqhiInfo = getAqhiInfo(currentAqhi);
