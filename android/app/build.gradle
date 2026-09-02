@@ -101,7 +101,8 @@ android {
         versionCode 1
         versionName "1.0"
         manifestPlaceholders = [
-            googleMapsApiKey: project.env.get("GOOGLE_ANDROID_MAP_KEY")
+            googleMapsApiKey: project.env.get("GOOGLE_ANDROID_MAP_KEY"),
+            backgroundGeolocationLicense: project.env.get("BACKGROUND_GEOLOCATION_LICENSE")
         ]
     }
     signingConfigs {

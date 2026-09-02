@@ -4,17 +4,20 @@ import { View, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import HomeScreen from './src/screens/HomeScreen';
 import CommunityScreen from './src/screens/CommunityScreen';
+import ExposureScreen from './src/screens/ExposureScreen';
 import FloatingNavBar, { TabName } from './src/components/FloatingNavBar';
 import SettingsScreen from './src/screens/SettingsScreen';
 import HeatAlertEngine from './src/components/HeatAlertEngine';
 
 const App = () => {
-  const [activeTab, setActiveTab] = useState<TabName>('HeatIndex');
+  const [activeTab, setActiveTab] = useState<TabName>('Environment');
 
   const renderScreen = () => {
     switch (activeTab) {
-      case 'HeatIndex':
+      case 'Environment':
         return <HomeScreen />;
+      case 'Exposure':
+        return <ExposureScreen />;
       case 'Community':
         return <CommunityScreen />;
       case 'Settings':

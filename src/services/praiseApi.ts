@@ -99,3 +99,62 @@ export const fetchPraiseTiles = async (
   }
   return data;
 };
+
+// --- Exposure calculation (get_exposure_list) ---
+
+// Formats a Date as YYYYMMDDHHmmss in Hong Kong time (UTC+8) — the full
+// second-resolution timestamp get_exposure_list's `t` field expects, as
+// distinct from the hour-only format toHkTimestamp() produces above.
+export const toHkTimestampFull = (date: Date = new Date()): string => {
+  const utcMs = date.getTime() + date.getTimezoneOffset() * 60000;
+  const hkDate = new Date(utcMs + 8 * 60 * 60 * 1000);
+  const yyyy = hkDate.getFullYear();
+  const mm = (hkDate.getMonth() + 1).toString().padStart(2, '0');
+  const dd = hkDate.getDate().toString().padStart(2, '0');
+  const hh = hkDate.getHours().toString().padStart(2, '0');
+  const min = hkDate.getMinutes().toString().padStart(2, '0');
+  const ss = hkDate.getSeconds().toString().padStart(2, '0');
+  return `${yyyy}${mm}${dd}${hh}${min}${ss}`;
+};
+
+// [record_id, ts, pid, exposure, updatedInputRow] per result row.
+export type ExposureApiResultRow = [string, string, string, number, unknown];
+
+// NOTE: unlike get_data/get_mtiles above (simple GET query strings),
+// get_exposure_list's `data` param is a nested list-of-lists, so this is a
+// POST with a JSON body — but this has NOT been confirmed to work. Tested
+// live on 2026-09-02 against PRAISE_BASE_URL with the real PRAISE_API_KEY:
+// a positive-control get_data call (same base URL, same key) returned a
+// normal 200 with real data, but every get_exposure_list variant tried —
+// POST JSON, GET query string, `data` vs `indata`, nested JSON vs a
+// JSON-encoded string, form-encoded — returned an identical `400 {}`,
+// the same response a deliberately bogus `todo` value produces. That
+// strongly suggests get_exposure_list is not registered as a todo dispatch
+// value on this endpoint/key at all (a different service, or this key
+// isn't provisioned for it) — not just a request-shape guess to fix.
+// Confirm the real endpoint with whoever maintains the API doc before
+// relying on this (see src/data/exposure/index.ts, which stays on the mock
+// provider until then).
+export const fetchPraiseExposureList = async (
+  rows: unknown[],
+): Promise<ExposureApiResultRow[]> => {
+  const response = await fetch(PRAISE_CONFIG.baseUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      todo: 'get_exposure_list',
+      apikey: PRAISE_CONFIG.apiKey,
+      myid: PRAISE_CONFIG.myId,
+      data: rows,
+    }),
+  });
+  const data = await response.json();
+  if (!Array.isArray(data)) {
+    throw new Error(
+      typeof data?.msg === 'string'
+        ? data.msg
+        : 'PRAISE-HK get_exposure_list call failed',
+    );
+  }
+  return data as ExposureApiResultRow[];
+};

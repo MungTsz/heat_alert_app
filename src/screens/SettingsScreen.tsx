@@ -20,6 +20,7 @@ import SettingsToggleRow from '../components/SettingsToggleRow';
 import { useNotificationSettings } from '../hooks/useNotificationSettings';
 import { useLocationPermissionStatus } from '../hooks/useLocationPermissionStatus';
 import { useMapSettings } from '../hooks/useMapSettings';
+import { useExposureTrackingSettings } from '../hooks/useExposureTrackingSettings';
 import { HEAT_LEVELS_ORDERED } from '../types/settings';
 import { getHeatIndexInfo } from '../utils/heatIndexUtils';
 import { getAqhiInfo } from '../utils/aqhiUtils';
@@ -55,6 +56,8 @@ const SettingsScreen = () => {
   const { granted, requestPermission, openAppSettings } =
     useLocationPermissionStatus();
   const { settings: mapSettings, update: updateMapSettings } = useMapSettings();
+  const { enabled: exposureTrackingEnabled, setEnabled: setExposureTrackingEnabled } =
+    useExposureTrackingSettings();
 
   const [checking, setChecking] = React.useState(false);
   const [activeIndexTab, setActiveIndexTab] = React.useState<'heat' | 'aqhi'>(
@@ -228,6 +231,18 @@ const SettingsScreen = () => {
             onValueChange={v =>
               updateMapSettings({ ...mapSettings, show3DBuildings: v })
             }
+          />
+        </SettingsSection>
+
+        <SettingsSection
+          title="EXPOSURE TRACKING"
+          subtitle="Track my location in the background to show today's spatial-temporal exposure on the Exposure tab"
+        >
+          <SettingsToggleRow
+            label="Background Exposure Tracking"
+            description="Uses your location even when the app is closed"
+            value={exposureTrackingEnabled}
+            onValueChange={setExposureTrackingEnabled}
           />
         </SettingsSection>
 

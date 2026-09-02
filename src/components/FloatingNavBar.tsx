@@ -9,17 +9,17 @@ import {
   Platform,
   LayoutChangeEvent,
 } from 'react-native';
-import { Flame, Users, Settings } from 'lucide-react-native';
+import { Flame, Footprints, Users, Settings } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-export type TabName = 'HeatIndex' | 'Community' | 'Settings';
+export type TabName = 'Environment' | 'Exposure' | 'Community' | 'Settings';
 
 interface Props {
   activeTab: TabName;
   onTabChange: (tab: TabName) => void;
 }
 
-const TABS: TabName[] = ['HeatIndex', 'Community', 'Settings'];
+const TABS: TabName[] = ['Environment', 'Exposure', 'Community', 'Settings'];
 
 const FloatingNavBar: React.FC<Props> = ({ activeTab, onTabChange }) => {
   const insets = useSafeAreaInsets();
@@ -82,11 +82,17 @@ const FloatingNavBar: React.FC<Props> = ({ activeTab, onTabChange }) => {
             onPress={() => onTabChange(tab)}
             activeOpacity={0.8}
           >
-            {tab === 'HeatIndex' && (
+            {tab === 'Environment' && (
               <Flame
                 size={22}
                 color={isActive ? '#000000' : '#8E8E93'}
                 fill={isActive ? '#000000' : 'none'}
+              />
+            )}
+            {tab === 'Exposure' && (
+              <Footprints
+                size={22}
+                color={isActive ? '#000000' : '#8E8E93'}
               />
             )}
             {tab === 'Community' && (
@@ -100,7 +106,7 @@ const FloatingNavBar: React.FC<Props> = ({ activeTab, onTabChange }) => {
               <Settings size={22} color={isActive ? '#000000' : '#8E8E93'} />
             )}
             <Text style={[styles.label, isActive && styles.activeLabel]}>
-              {tab === 'HeatIndex' ? 'Heat Index' : tab}
+              {tab}
             </Text>
           </TouchableOpacity>
         );
