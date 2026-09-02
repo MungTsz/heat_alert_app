@@ -22,13 +22,17 @@ const FullscreenMapModal: React.FC<Props> = ({ visible, center, onClose }) => {
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <View style={styles.container}>
-        <MapScreen overrideCenter={center} enableForecastVideo />
+        <MapScreen
+          overrideCenter={center}
+          enableForecastPlayback
+          fullscreen
+        />
 
         <TouchableOpacity
           style={[styles.backButton, { top: insets.top + 16 }]}
           onPress={onClose}
         >
-          <ArrowLeft size={20} color="#333" />
+          <ArrowLeft size={26} color="#333" />
         </TouchableOpacity>
       </View>
     </Modal>
@@ -40,9 +44,9 @@ const styles = StyleSheet.create({
   backButton: {
     position: 'absolute',
     left: 16,
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 54,
+    height: 54,
+    borderRadius: 27,
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',

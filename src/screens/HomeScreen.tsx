@@ -17,7 +17,7 @@ import {
   SafeAreaView,
   useSafeAreaInsets,
 } from 'react-native-safe-area-context';
-import { MapPin, User, Wind, Maximize2 } from 'lucide-react-native';
+import { MapPin, User, Wind } from 'lucide-react-native';
 import TextTicker from 'react-native-text-ticker';
 import CurrentWeatherInfo from '../components/CurrentWeatherInfo';
 import DailyHeatForecastCard from '../components/DailyHeatForecastCard';
@@ -174,11 +174,10 @@ const HomeScreen = () => {
           <View style={styles.mapContainer}>
             <MapScreen />
             <TouchableOpacity
-              style={styles.expandMapButton}
+              style={StyleSheet.absoluteFill}
+              activeOpacity={0.9}
               onPress={() => setMapFullscreen(true)}
-            >
-              <Maximize2 size={18} color="#333" />
-            </TouchableOpacity>
+            />
           </View>
         </Animated.ScrollView>
       </SafeAreaView>
@@ -253,18 +252,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     overflow: 'hidden',
     marginTop: 16,
-  },
-  expandMapButton: {
-    position: 'absolute',
-    top: 16,
-    left: 16,
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 3,
   },
 });
 

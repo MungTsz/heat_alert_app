@@ -1,6 +1,12 @@
 // src/screens/MapScreen.tsx
 import React, { useEffect, useRef, useState } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity } from 'react-native';
+import {
+  StyleSheet,
+  View,
+  Text,
+  TouchableOpacity,
+  ActivityIndicator,
+} from 'react-native';
 import MapView, {
   Marker,
   Overlay,
@@ -8,12 +14,14 @@ import MapView, {
   Region,
   MapPressEvent,
 } from 'react-native-maps';
-import { Navigation, Play } from 'lucide-react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Navigation, Play, Square } from 'lucide-react-native';
 import Slider from '@react-native-community/slider';
 import { useLocation } from '../utils/useLocation';
 import { useHeatData } from '../hooks/useHeatData';
 import { useAqhiData } from '../hooks/useAqhiData';
 import { useIdwOverlayImage } from '../hooks/useIdwOverlayImage';
+import { useAqhiForecastTiles } from '../hooks/useAqhiForecastTiles';
 import { idwInterpolate, valueToColor } from '../utils/idw';
 import { valueToAqhiColor } from '../utils/aqhiUtils';
 import MapLayerPicker, { MapLayer } from '../components/MapLayerPicker';
@@ -21,9 +29,11 @@ import DualStatPin from '../components/DualStatPin';
 import { usePraiseAqhiTile } from '../hooks/usePraiseAqhiTile';
 import { isPraiseConfigured } from '../config/praiseConfig';
 import AqhiLegend from '../components/AqhiLegend';
-import AqhiForecastVideoModal from '../components/AqhiForecastVideoModal';
 import { fetchPraisePointData, toHkTimestamp } from '../services/praiseApi';
 import { useMapSettings } from '../hooks/useMapSettings';
+
+const FORECAST_FRAME_INTERVAL_MS = 700;
+const BOTTOM_ROW_HEIGHT = 58; // approx height of the opacity-bar/locate-button row, used to space things above it
 
 const FALLBACK_LAT = 22.3375;
 const FALLBACK_LNG = 114.263;
@@ -43,18 +53,22 @@ type Coordinates = {
 type Props = {
   overrideCenter?: Coordinates;
   showModeToggle?: boolean;
-  enableForecastVideo?: boolean;
+  enableForecastPlayback?: boolean;
+  fullscreen?: boolean;
 };
 
 const MapScreen = ({
   overrideCenter,
   showModeToggle = true,
-  enableForecastVideo = false,
+  enableForecastPlayback = false,
+  fullscreen = false,
 }: Props) => {
   const { coords } = useLocation();
   const { settings: mapSettings } = useMapSettings();
+  const insets = useSafeAreaInsets();
   const [mapLayer, setMapLayer] = useState<MapLayer>('default');
-  const [videoModalVisible, setVideoModalVisible] = useState(false);
+  const [forecastPlaying, setForecastPlaying] = useState(false);
+  const [frameIndex, setFrameIndex] = useState(0);
 
   // 1. SPLIT STATES: One for the slider UI, one for the actual map overlay
   const [sliderOpacity, setSliderOpacity] = useState(0.55);
@@ -103,8 +117,39 @@ const MapScreen = ({
 
   const { tile: praiseAqhiTile } = usePraiseAqhiTile(
     region,
-    mapLayer === 'aqhi' && isPraiseConfigured(),
+    mapLayer === 'aqhi' && isPraiseConfigured() && !forecastPlaying,
   );
+
+  // Fetches (and fully pre-caches) forecast frames as soon as the AQHI layer
+  // is up, well before the user taps Play — so playback starts instantly
+  // instead of stalling on network fetches for the first loop.
+  const { frames: forecastFrames, loading: forecastLoading } =
+    useAqhiForecastTiles(
+      region,
+      enableForecastPlayback && mapLayer === 'aqhi' && isPraiseConfigured(),
+    );
+  const forecastReady = !forecastLoading && forecastFrames.length > 0;
+
+  // Resets to the first frame whenever a fresh batch comes in (e.g. after panning)
+  useEffect(() => {
+    setFrameIndex(0);
+  }, [forecastFrames]);
+
+  useEffect(() => {
+    if (!forecastPlaying || forecastFrames.length === 0) return;
+    const interval = setInterval(() => {
+      setFrameIndex(prev => (prev + 1) % forecastFrames.length);
+    }, FORECAST_FRAME_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, [forecastPlaying, forecastFrames.length]);
+
+  const activeFrame = forecastPlaying ? forecastFrames[frameIndex] : undefined;
+
+  const toggleForecastPlayback = () => {
+    if (!forecastReady) return;
+    setForecastPlaying(prev => !prev);
+    setFrameIndex(0);
+  };
 
   const north = region.latitude + Math.abs(region.latitudeDelta) / 2;
   const south = region.latitude - Math.abs(region.latitudeDelta) / 2;
@@ -192,9 +237,15 @@ const MapScreen = ({
   };
 
   const showRealAqhiTile =
-    mapLayer === 'aqhi' && isPraiseConfigured() && !!praiseAqhiTile;
+    mapLayer === 'aqhi' &&
+    isPraiseConfigured() &&
+    !!praiseAqhiTile &&
+    !activeFrame;
   const showFallbackAqhiOverlay =
-    mapLayer === 'aqhi' && !showRealAqhiTile && !!aqhiOverlayUri;
+    mapLayer === 'aqhi' &&
+    !showRealAqhiTile &&
+    !activeFrame &&
+    !!aqhiOverlayUri;
 
   return (
     <View style={styles.container}>
@@ -239,6 +290,15 @@ const MapScreen = ({
           />
         )}
 
+        {mapLayer === 'aqhi' && activeFrame && (
+          <Overlay
+            key={`aqhi-forecast-${activeFrame.ts}`}
+            image={{ uri: activeFrame.uri }}
+            bounds={activeFrame.bounds}
+            opacity={mapOpacity}
+          />
+        )}
+
         {selectedPoint && (
           <Marker
             key={`marker-${selectedPoint.latitude.toFixed(
@@ -262,54 +322,125 @@ const MapScreen = ({
 
       {mapLayer === 'aqhi' && (
         <>
-          <View style={styles.legendContainerRight}>
+          <View
+            style={[
+              styles.legendContainerRight,
+              fullscreen && {
+                top: insets.top + 16 + 54 + 12,
+                bottom: insets.bottom + 16 + BOTTOM_ROW_HEIGHT + 16,
+              },
+            ]}
+          >
             <AqhiLegend />
           </View>
 
-          <View style={styles.opacityControlFullWidth}>
-            <Text style={styles.opacityLabel}>
-              Layer opacity: {Math.round(sliderOpacity * 100)}%
-            </Text>
-            <Slider
-              style={styles.opacitySliderFull}
-              minimumValue={0.1}
-              maximumValue={0.9}
-              step={0.1} // 3. ADD STEP: Prevents erratic micro-updates
-              value={sliderOpacity}
-              onValueChange={setSliderOpacity} // Updates UI smoothly while dragging
-              onSlidingComplete={setMapOpacity} // Updates the actual map overlay when user lets go
-              minimumTrackTintColor="#D9534F"
-              maximumTrackTintColor="#ccc"
-            />
+          <View
+            style={[
+              styles.bottomRow,
+              fullscreen
+                ? {
+                    bottom: insets.bottom + 16,
+                    left: 16,
+                    right: 16,
+                  }
+                : { bottom: 8, left: 8, right: 8 },
+            ]}
+          >
+            <View style={styles.opacityControl}>
+              <Text style={styles.opacityLabel}>
+                Layer opacity: {Math.round(sliderOpacity * 100)}%
+              </Text>
+              <Slider
+                style={styles.opacitySlider}
+                minimumValue={0.1}
+                maximumValue={0.9}
+                step={0.1} // 3. ADD STEP: Prevents erratic micro-updates
+                value={sliderOpacity}
+                onValueChange={setSliderOpacity} // Updates UI smoothly while dragging
+                onSlidingComplete={setMapOpacity} // Updates the actual map overlay when user lets go
+                minimumTrackTintColor="#D9534F"
+                maximumTrackTintColor="#ccc"
+              />
+            </View>
+
+            <TouchableOpacity
+              style={[
+                styles.locateButton,
+                styles.locateButtonInRow,
+                fullscreen && styles.locateButtonLarge,
+              ]}
+              onPress={recenter}
+            >
+              <Navigation size={fullscreen ? 24 : 20} color="#FFFFFF" fill="#FFFFFF" />
+            </TouchableOpacity>
           </View>
 
-          {enableForecastVideo && isPraiseConfigured() && (
+          {enableForecastPlayback && isPraiseConfigured() && (
             <TouchableOpacity
-              style={styles.playForecastButton}
-              onPress={() => setVideoModalVisible(true)}
+              style={[
+                styles.playForecastButton,
+                !forecastReady && styles.playForecastButtonDisabled,
+                fullscreen
+                  ? {
+                      bottom: insets.bottom + 16 + BOTTOM_ROW_HEIGHT + 16,
+                      paddingVertical: 14,
+                      paddingHorizontal: 22,
+                    }
+                  : { bottom: 64 },
+              ]}
+              onPress={toggleForecastPlayback}
+              disabled={!forecastReady}
             >
-              <Play size={16} color="#FFFFFF" fill="#FFFFFF" />
-              <Text style={styles.playForecastText}>Play Forecast</Text>
+              {!forecastReady ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : forecastPlaying ? (
+                <Square size={16} color="#FFFFFF" fill="#FFFFFF" />
+              ) : (
+                <Play size={16} color="#FFFFFF" fill="#FFFFFF" />
+              )}
+              <Text
+                style={[
+                  styles.playForecastText,
+                  fullscreen && { fontSize: 15 },
+                ]}
+              >
+                {!forecastReady
+                  ? 'Loading forecast…'
+                  : forecastPlaying
+                  ? activeFrame
+                    ? `+${activeFrame.hourOffset}h`
+                    : 'Stop'
+                  : 'Play Forecast'}
+              </Text>
             </TouchableOpacity>
           )}
         </>
       )}
 
       {showModeToggle && (
-        <View style={styles.topBar}>
-          <MapLayerPicker layer={mapLayer} onChange={setMapLayer} />
+        <View
+          style={[
+            styles.topBar,
+            fullscreen && { top: insets.top + 16 },
+          ]}
+        >
+          <MapLayerPicker layer={mapLayer} onChange={setMapLayer} large={fullscreen} />
         </View>
       )}
 
-      <TouchableOpacity style={styles.locateButton} onPress={recenter}>
-        <Navigation size={20} color="#FFFFFF" fill="#FFFFFF" />
-      </TouchableOpacity>
-
-      {enableForecastVideo && (
-        <AqhiForecastVideoModal
-          visible={videoModalVisible}
-          onClose={() => setVideoModalVisible(false)}
-        />
+      {mapLayer !== 'aqhi' && (
+        <TouchableOpacity
+          style={[
+            styles.locateButton,
+            fullscreen && [
+              styles.locateButtonLarge,
+              { bottom: insets.bottom + 16 },
+            ],
+          ]}
+          onPress={recenter}
+        >
+          <Navigation size={fullscreen ? 24 : 20} color="#FFFFFF" fill="#FFFFFF" />
+        </TouchableOpacity>
       )}
     </View>
   );
@@ -330,17 +461,30 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     elevation: 5,
   },
+  locateButtonInRow: {
+    position: 'relative',
+    bottom: 0,
+    right: 0,
+  },
+  locateButtonLarge: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+  },
   legendContainerRight: {
     position: 'absolute',
     top: 60,
     right: 8,
     bottom: 70,
   },
-  opacityControlFullWidth: {
+  bottomRow: {
     position: 'absolute',
-    bottom: 8,
-    left: 8,
-    right: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  opacityControl: {
+    flex: 1,
     backgroundColor: 'rgba(255,255,255,0.92)',
     borderRadius: 8,
     paddingHorizontal: 12,
@@ -352,13 +496,12 @@ const styles = StyleSheet.create({
     color: '#333',
     marginBottom: -4,
   },
-  opacitySliderFull: {
+  opacitySlider: {
     width: '100%',
     height: 34,
   },
   playForecastButton: {
     position: 'absolute',
-    bottom: 64,
     alignSelf: 'center',
     flexDirection: 'row',
     alignItems: 'center',
@@ -368,6 +511,9 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 18,
     elevation: 5,
+  },
+  playForecastButtonDisabled: {
+    backgroundColor: '#7A98A5',
   },
   playForecastText: {
     color: '#FFFFFF',

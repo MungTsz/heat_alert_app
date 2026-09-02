@@ -15,6 +15,7 @@ export type MapLayer = 'default' | 'heat' | 'aqhi';
 type Props = {
   layer: MapLayer;
   onChange: (layer: MapLayer) => void;
+  large?: boolean;
 };
 
 const OPTIONS: { key: MapLayer; label: string }[] = [
@@ -23,10 +24,11 @@ const OPTIONS: { key: MapLayer; label: string }[] = [
   { key: 'aqhi', label: 'AQHI layer' },
 ];
 
-const MapLayerPicker: React.FC<Props> = ({ layer, onChange }) => {
+const MapLayerPicker: React.FC<Props> = ({ layer, onChange, large = false }) => {
   const [open, setOpen] = useState(false);
   const [anchor, setAnchor] = useState({ top: 0, right: 0 });
   const buttonRef = useRef<View>(null);
+  const buttonSize = large ? 54 : 38;
 
   const openPicker = () => {
     // measureInWindow gives the button's real on-screen position, since the
@@ -41,8 +43,18 @@ const MapLayerPicker: React.FC<Props> = ({ layer, onChange }) => {
   return (
     <>
       <View ref={buttonRef} collapsable={false}>
-        <TouchableOpacity style={styles.iconButton} onPress={openPicker}>
-          <Layers size={18} color="#333" />
+        <TouchableOpacity
+          style={[
+            styles.iconButton,
+            {
+              width: buttonSize,
+              height: buttonSize,
+              borderRadius: buttonSize / 2,
+            },
+          ]}
+          onPress={openPicker}
+        >
+          <Layers size={large ? 26 : 18} color="#333" />
         </TouchableOpacity>
       </View>
 
@@ -54,25 +66,35 @@ const MapLayerPicker: React.FC<Props> = ({ layer, onChange }) => {
       >
         <Pressable style={styles.backdrop} onPress={() => setOpen(false)}>
           <View
-            style={[styles.dropdown, { top: anchor.top, right: anchor.right }]}
+            style={[
+              styles.dropdown,
+              large && styles.dropdownLarge,
+              { top: anchor.top, right: anchor.right },
+            ]}
           >
             {OPTIONS.map(option => {
               const isSelected = option.key === layer;
               return (
                 <TouchableOpacity
                   key={option.key}
-                  style={[styles.option, isSelected && styles.optionSelected]}
+                  style={[
+                    styles.option,
+                    large && styles.optionLarge,
+                    isSelected && styles.optionSelected,
+                  ]}
                   onPress={() => {
                     onChange(option.key);
                     setOpen(false);
                   }}
                 >
                   {isSelected ? (
-                    <Check size={14} color="#D9534F" />
+                    <Check size={large ? 18 : 14} color="#D9534F" />
                   ) : (
                     <View style={styles.checkSpacer} />
                   )}
-                  <Text style={styles.optionText}>{option.label}</Text>
+                  <Text style={[styles.optionText, large && styles.optionTextLarge]}>
+                    {option.label}
+                  </Text>
                 </TouchableOpacity>
               );
             })}
@@ -85,9 +107,6 @@ const MapLayerPicker: React.FC<Props> = ({ layer, onChange }) => {
 
 const styles = StyleSheet.create({
   iconButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
@@ -105,12 +124,20 @@ const styles = StyleSheet.create({
     borderColor: '#E2E2E2',
     overflow: 'hidden',
   },
+  dropdownLarge: {
+    width: 190,
+    borderRadius: 14,
+  },
   option: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     paddingVertical: 10,
     paddingHorizontal: 12,
+  },
+  optionLarge: {
+    paddingVertical: 15,
+    paddingHorizontal: 16,
   },
   optionSelected: {
     backgroundColor: '#F5F5F5',
@@ -121,6 +148,9 @@ const styles = StyleSheet.create({
   optionText: {
     fontSize: 13,
     color: '#222',
+  },
+  optionTextLarge: {
+    fontSize: 16,
   },
 });
 
