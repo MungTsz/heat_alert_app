@@ -1,13 +1,17 @@
 // src/services/praiseApi.ts
 import { PRAISE_CONFIG } from '../config/praiseConfig';
+import { ExposureRequestRow } from '../types/exposure';
 
-const buildUrl = (params: Record<string, string>): string => {
+const buildUrl = (
+  params: Record<string, string>,
+  baseUrl: string = PRAISE_CONFIG.baseUrl,
+): string => {
   const query = new URLSearchParams({
     ...params,
     apikey: PRAISE_CONFIG.apiKey,
     myid: PRAISE_CONFIG.myId,
   });
-  return `${PRAISE_CONFIG.baseUrl}?${query.toString()}`;
+  return `${baseUrl}?${query.toString()}`;
 };
 
 // Formats a Date as YYYYMMDDhh in Hong Kong time (UTC+8) — matches the
@@ -117,44 +121,31 @@ export const toHkTimestampFull = (date: Date = new Date()): string => {
   return `${yyyy}${mm}${dd}${hh}${min}${ss}`;
 };
 
-// [record_id, ts, pid, exposure, updatedInputRow] per result row.
-export type ExposureApiResultRow = [string, string, string, number, unknown];
+export type ExposureCalcResponse = {
+  exposure: [string, string, number][]; // [t, pid, exposure_value]
+};
 
-// NOTE: unlike get_data/get_mtiles above (simple GET query strings),
-// get_exposure_list's `data` param is a nested list-of-lists, so this is a
-// POST with a JSON body — but this has NOT been confirmed to work. Tested
-// live on 2026-09-02 against PRAISE_BASE_URL with the real PRAISE_API_KEY:
-// a positive-control get_data call (same base URL, same key) returned a
-// normal 200 with real data, but every get_exposure_list variant tried —
-// POST JSON, GET query string, `data` vs `indata`, nested JSON vs a
-// JSON-encoded string, form-encoded — returned an identical `400 {}`,
-// the same response a deliberately bogus `todo` value produces. That
-// strongly suggests get_exposure_list is not registered as a todo dispatch
-// value on this endpoint/key at all (a different service, or this key
-// isn't provisioned for it) — not just a request-shape guess to fix.
-// Confirm the real endpoint with whoever maintains the API doc before
-// relying on this (see src/data/exposure/index.ts, which stays on the mock
-// provider until then).
-export const fetchPraiseExposureList = async (
-  rows: unknown[],
-): Promise<ExposureApiResultRow[]> => {
-  const response = await fetch(PRAISE_CONFIG.baseUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      todo: 'get_exposure_list',
-      apikey: PRAISE_CONFIG.apiKey,
-      myid: PRAISE_CONFIG.myId,
-      data: rows,
-    }),
-  });
+// expo_calx lives on a different uwsgi script (praise-ir-cal, not
+// praise-service) and — unlike the newer 9-field format documented in "API
+// for calculating Exposure" — the deployed Cal_Exposure.py still unpacks
+// records as `ts, pid, lon, lat, micenv, deltaT = record`, i.e. the older
+// 6-field ExposureRequestRow shape with no record_id/speed/status. Confirmed
+// working live on 2026-09-07 against this exact URL/row shape. It's a GET
+// with the rows JSON-encoded into the `input_data` query param, same as
+// get_data/get_mtiles above.
+export const fetchPraiseExposureCalc = async (
+  rows: ExposureRequestRow[],
+): Promise<ExposureCalcResponse> => {
+  const url = buildUrl(
+    { todo: 'expo_calx', input_data: JSON.stringify(rows) },
+    PRAISE_CONFIG.irCalBaseUrl,
+  );
+  const response = await fetch(url);
   const data = await response.json();
-  if (!Array.isArray(data)) {
+  if (!Array.isArray(data?.exposure)) {
     throw new Error(
-      typeof data?.msg === 'string'
-        ? data.msg
-        : 'PRAISE-HK get_exposure_list call failed',
+      typeof data?.msg === 'string' ? data.msg : 'PRAISE-HK expo_calx call failed',
     );
   }
-  return data as ExposureApiResultRow[];
+  return data as ExposureCalcResponse;
 };

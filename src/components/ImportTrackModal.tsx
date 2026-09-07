@@ -29,42 +29,58 @@ const ImportTrackModal: React.FC<Props> = ({ visible, onClose }) => {
   const { report, loading, error, generate, reset } = useExposureReport();
   const [url, setUrl] = useState('');
   const [localError, setLocalError] = useState<string | null>(null);
+  // Covers the file-pick/fetch/parse phase, which happens before
+  // useExposureReport's own `loading` (the network calculation phase) turns
+  // true — without this, that phase shows no feedback at all and a large
+  // file can look like the app has hung.
+  const [reading, setReading] = useState(false);
 
   const handleTrackJson = async (text: string) => {
     setLocalError(null);
+    let points;
     try {
-      const json = JSON.parse(text);
-      const points = parseGeoJsonTrack(json);
-      if (points.length === 0) {
-        setLocalError('No valid GPS points found in that file.');
-        return;
-      }
-      await generate(points);
+      points = parseGeoJsonTrack(JSON.parse(text));
     } catch (err) {
+      setReading(false);
       setLocalError(
         err instanceof Error ? err.message : 'Failed to parse track data.',
       );
+      return;
     }
+    if (points.length === 0) {
+      setReading(false);
+      setLocalError('No valid GPS points found in that file.');
+      return;
+    }
+    setReading(false);
+    await generate(points);
   };
 
   const handlePickFile = async () => {
+    setReading(true);
     try {
       const [file] = await pick({ type: [types.allFiles] });
       const text = await (await fetch(file.uri)).text();
       await handleTrackJson(text);
     } catch (err) {
-      if (isErrorWithCode(err) && err.code === errorCodes.OPERATION_CANCELED) return;
+      if (isErrorWithCode(err) && err.code === errorCodes.OPERATION_CANCELED) {
+        setReading(false);
+        return;
+      }
       setLocalError('Could not read the selected file.');
+      setReading(false);
     }
   };
 
   const handleImportUrl = async () => {
     if (!url.trim()) return;
+    setReading(true);
     try {
       const text = await (await fetch(url.trim())).text();
       await handleTrackJson(text);
     } catch {
       setLocalError('Could not fetch the track from that URL.');
+      setReading(false);
     }
   };
 
@@ -84,6 +100,7 @@ const ImportTrackModal: React.FC<Props> = ({ visible, onClose }) => {
   const handleReset = () => {
     reset();
     setLocalError(null);
+    setReading(false);
     setUrl('');
   };
 
@@ -109,7 +126,7 @@ const ImportTrackModal: React.FC<Props> = ({ visible, onClose }) => {
         </View>
 
         <ScrollView contentContainerStyle={styles.content}>
-          {!report && !loading && (
+          {!report && !reading && !loading && (
             <>
               <TouchableOpacity style={styles.actionRow} onPress={handlePickFile}>
                 <Upload size={18} color="#333" />
@@ -142,11 +159,16 @@ const ImportTrackModal: React.FC<Props> = ({ visible, onClose }) => {
             </>
           )}
 
-          {loading && (
-            <ActivityIndicator style={styles.loadingIndicator} size="large" />
+          {(reading || loading) && (
+            <View style={styles.progressBox}>
+              <ActivityIndicator style={styles.loadingIndicator} size="large" />
+              <Text style={styles.progressText}>
+                {reading ? 'Reading track…' : 'Calculating exposure…'}
+              </Text>
+            </View>
           )}
 
-          {report && !loading && (
+          {report && !reading && !loading && (
             <>
               <ExposureReportView report={report} title="Imported Track Exposure" />
               <View style={styles.footerRow}>
@@ -216,7 +238,9 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 10,
   },
-  loadingIndicator: { marginVertical: 40 },
+  loadingIndicator: { marginTop: 40 },
+  progressBox: { alignItems: 'center' },
+  progressText: { fontSize: 13, color: '#8E8E93', marginTop: 12, marginBottom: 40 },
   footerRow: { flexDirection: 'row', gap: 10, marginTop: 8 },
   footerButton: {
     flex: 1,

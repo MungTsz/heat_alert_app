@@ -5,7 +5,7 @@ import { simplifyTrackToSegments } from '../utils/trackSegmentation';
 import { buildExposureRows } from '../utils/buildExposureRequestRows';
 import { exposureDataProvider } from '../data/exposure';
 
-const DEFAULT_PID = 'local-device';
+export const DEFAULT_PID = 'local-device';
 
 export const useExposureReport = () => {
   const [report, setReport] = useState<ExposureReport | null>(null);

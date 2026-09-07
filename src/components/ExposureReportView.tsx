@@ -1,7 +1,7 @@
 // src/components/ExposureReportView.tsx
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
-import MapView, { Polyline, Marker } from 'react-native-maps';
+import MapView, { Polyline, Marker, Callout } from 'react-native-maps';
 import { AlertTriangle } from 'lucide-react-native';
 import { ExposureReport } from '../types/exposure';
 import { isExposureDataMocked } from '../data/exposure';
@@ -99,20 +99,48 @@ const ExposureReportView: React.FC<Props> = ({ report, title }) => {
       {region && (
         <View style={styles.mapContainer}>
           <MapView style={StyleSheet.absoluteFill} region={region}>
-            <Polyline
-              coordinates={report.segments.map(s => ({
-                latitude: s.lat,
-                longitude: s.lon,
-              }))}
-              strokeColor="rgba(80,80,80,0.5)"
-              strokeWidth={2}
-            />
+            {report.segments.slice(0, -1).map((segment, i) => {
+              const next = report.segments[i + 1];
+              return (
+                <Polyline
+                  key={`line-${segment.startTime}-${i}`}
+                  coordinates={[
+                    { latitude: segment.lat, longitude: segment.lon },
+                    { latitude: next.lat, longitude: next.lon },
+                  ]}
+                  strokeColor={exposureColor(segment.exposure, maxExposure)}
+                  strokeWidth={4}
+                />
+              );
+            })}
             {report.segments.map((segment, i) => (
               <Marker
-                key={`${segment.startTime}-${i}`}
+                key={`dot-${segment.startTime}-${i}`}
                 coordinate={{ latitude: segment.lat, longitude: segment.lon }}
-                pinColor={exposureColor(segment.exposure, maxExposure)}
-              />
+                anchor={{ x: 0.5, y: 0.5 }}
+                tracksViewChanges={false}
+              >
+                <View
+                  style={[
+                    styles.mapDot,
+                    { backgroundColor: exposureColor(segment.exposure, maxExposure) },
+                  ]}
+                />
+                <Callout>
+                  <View style={styles.calloutBox}>
+                    <Text style={styles.calloutTime}>
+                      {formatTime(segment.startTime)} – {formatTime(segment.endTime)}{' '}
+                      ({formatDuration(segment.endTime - segment.startTime)})
+                    </Text>
+                    <Text style={styles.calloutLocation}>
+                      {segment.lat.toFixed(5)}, {segment.lon.toFixed(5)}
+                    </Text>
+                    <Text style={styles.calloutExposure}>
+                      Exposure: {segment.exposure.toFixed(3)} %AR·h
+                    </Text>
+                  </View>
+                </Callout>
+              </Marker>
             ))}
           </MapView>
         </View>
@@ -226,6 +254,17 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(0,0,0,0.08)',
   },
   segmentDot: { width: 10, height: 10, borderRadius: 5, marginRight: 10 },
+  mapDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.9)',
+  },
+  calloutBox: { minWidth: 160, padding: 4 },
+  calloutTime: { fontSize: 12, fontWeight: '700', color: '#1C1C1E' },
+  calloutLocation: { fontSize: 11, color: '#8E8E93', marginTop: 2 },
+  calloutExposure: { fontSize: 12, fontWeight: '600', color: '#1C1C1E', marginTop: 4 },
   segmentInfo: { flex: 1 },
   segmentTime: { fontSize: 13, fontWeight: '600', color: '#1C1C1E' },
   segmentLocation: { fontSize: 11, color: '#8E8E93', marginTop: 2 },

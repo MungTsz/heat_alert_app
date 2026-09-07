@@ -10,7 +10,7 @@ const MOCK_DELAY_MS = 400;
 // pseudo-random variation, scaled by delta_t — enough to exercise the full
 // report/export UI before the real get_exposure_list endpoint is confirmed.
 const fakeExposureForRow = (row: ExposureRequestRow): number => {
-  const deltaT = row[6];
+  const deltaT = row[5];
   const baseRatePerHour = 0.6 + Math.random() * 0.8;
   return Number((baseRatePerHour * deltaT).toFixed(4));
 };
@@ -21,9 +21,8 @@ export const mockExposureProvider: ExposureDataProvider = {
       setTimeout(() => {
         resolve(
           rows.map(row => ({
-            recordId: row[0],
-            ts: row[1],
-            pid: row[2],
+            ts: row[0],
+            pid: row[1],
             exposure: fakeExposureForRow(row),
           })),
         );

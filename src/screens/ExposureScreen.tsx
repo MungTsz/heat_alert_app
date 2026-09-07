@@ -35,7 +35,10 @@ const ExposureScreen = () => {
             </Text>
           </View>
         ) : loading && !report ? (
-          <ActivityIndicator style={styles.loadingIndicator} />
+          <View style={styles.loadingBox}>
+            <ActivityIndicator style={styles.loadingIndicator} />
+            <Text style={styles.loadingText}>Calculating today's exposure…</Text>
+          </View>
         ) : report ? (
           <ExposureReportView report={report} title="Today's Exposure" />
         ) : null}
@@ -90,7 +93,9 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   emptyText: { fontSize: 13, color: '#8E8E93', textAlign: 'center' },
-  loadingIndicator: { marginVertical: 30 },
+  loadingBox: { alignItems: 'center', marginVertical: 30 },
+  loadingIndicator: { marginBottom: 10 },
+  loadingText: { fontSize: 13, color: '#8E8E93' },
   importCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,

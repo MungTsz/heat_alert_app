@@ -19,41 +19,36 @@ describe('buildExposureRows', () => {
     },
   ];
 
-  it('builds one row per segment with the 9-element positional shape', () => {
+  it('builds one row per segment with the 6-element positional shape', () => {
     const rows = buildExposureRows(segments, 'device-1');
     expect(rows.length).toBe(2);
-    rows.forEach(row => expect(row.length).toBe(9));
+    rows.forEach(row => expect(row.length).toBe(6));
   });
 
-  it('always assumes Outdoor and status -1', () => {
+  it('always tags the micro-environment as Outdoor', () => {
     const [row] = buildExposureRows(segments, 'device-1');
-    expect(row[5]).toEqual({ IO: 'Outdoor' });
-    expect(row[8]).toBe(-1);
+    expect(row[4]).toEqual({ IO: 'Outdoor' });
   });
 
-  it('uses "NULL" for record_id and the given pid', () => {
+  it('places t first and the given pid second', () => {
     const [row] = buildExposureRows(segments, 'device-1');
-    expect(row[0]).toBe('NULL');
-    expect(row[2]).toBe('device-1');
+    expect(row[0]).toMatch(/^\d{14}$/);
+    expect(row[1]).toBe('device-1');
+  });
+
+  it('places lng then lat in that order', () => {
+    const [row] = buildExposureRows(segments, 'device-1');
+    expect(row[2]).toBe(114.2632821);
+    expect(row[3]).toBe(22.3399352);
   });
 
   it('computes delta_t in hours from segment duration', () => {
     const [row] = buildExposureRows(segments, 'device-1');
-    expect(row[6]).toBeCloseTo(0.5, 5);
-  });
-
-  it('defaults speed to 0 when the segment has none', () => {
-    const [, secondRow] = buildExposureRows(segments, 'device-1');
-    expect(secondRow[7]).toBe(0);
-  });
-
-  it('carries speed through when the segment has one', () => {
-    const [row] = buildExposureRows(segments, 'device-1');
-    expect(row[7]).toBe(1.2);
+    expect(row[5]).toBeCloseTo(0.5, 5);
   });
 
   it('formats t as a 14-digit YYYYMMDDHHmmss string', () => {
     const [row] = buildExposureRows(segments, 'device-1');
-    expect(row[1]).toMatch(/^\d{14}$/);
+    expect(row[0]).toMatch(/^\d{14}$/);
   });
 });
