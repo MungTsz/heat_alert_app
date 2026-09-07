@@ -1,12 +1,12 @@
-// src/types/mapSettings.ts
-export type GoogleMapType = 'standard' | 'satellite' | 'terrain' | 'hybrid';
+// GoogleMapType is intentionally narrowed to what the Settings UI exposes —
+// 'standard' (Google's default light map) and 'hybrid' (satellite imagery
+// with street/building labels layered on top), see SettingsScreen "MAP DISPLAY".
+export type GoogleMapType = 'standard' | 'hybrid';
 
 export type MapSettings = {
   mapType: GoogleMapType;
-  show3DBuildings: boolean;
 };
 
 export const DEFAULT_MAP_SETTINGS: MapSettings = {
   mapType: 'standard',
-  show3DBuildings: false,
 };

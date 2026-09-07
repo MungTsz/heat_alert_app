@@ -6,6 +6,8 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Animated,
+  LayoutChangeEvent,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -64,6 +66,26 @@ const SettingsScreen = () => {
     'heat',
   );
 
+  // Sliding-pill segmented control for the index tabs, mirroring the
+  // capsule + moving-indicator pattern already used by FloatingNavBar.
+  const [indexTabRowWidth, setIndexTabRowWidth] = React.useState(0);
+  const indexTabAnim = React.useRef(new Animated.Value(0)).current;
+
+  React.useEffect(() => {
+    if (indexTabRowWidth > 0) {
+      Animated.spring(indexTabAnim, {
+        toValue: activeIndexTab === 'heat' ? 0 : 1,
+        useNativeDriver: true,
+        bounciness: 6,
+        speed: 14,
+      }).start();
+    }
+  }, [activeIndexTab, indexTabRowWidth, indexTabAnim]);
+
+  const handleIndexTabRowLayout = (e: LayoutChangeEvent) => {
+    setIndexTabRowWidth(e.nativeEvent.layout.width);
+  };
+
   const handleRunCheckNow = async () => {
     setChecking(true);
     const ran = await runHeatAlertCheckNow();
@@ -89,17 +111,32 @@ const SettingsScreen = () => {
           title="ALERT THRESHOLDS"
           subtitle="Choose which levels send a notification, per index"
         >
-          <View style={styles.indexTabRow}>
+          <View style={styles.indexTabRow} onLayout={handleIndexTabRowLayout}>
+            {indexTabRowWidth > 0 && (
+              <Animated.View
+                style={[
+                  styles.indexTabIndicator,
+                  {
+                    width: (indexTabRowWidth - 8) / 2,
+                    transform: [
+                      {
+                        translateX: indexTabAnim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [0, (indexTabRowWidth - 8) / 2],
+                        }),
+                      },
+                    ],
+                  },
+                ]}
+              />
+            )}
             <TouchableOpacity
-              style={[
-                styles.indexTab,
-                activeIndexTab === 'heat' && styles.indexTabActive,
-              ]}
+              style={styles.indexTab}
               onPress={() => setActiveIndexTab('heat')}
             >
               <Thermometer
                 size={16}
-                color={activeIndexTab === 'heat' ? '#fff' : '#666'}
+                color={activeIndexTab === 'heat' ? '#D9534F' : '#666'}
               />
               <Text
                 style={[
@@ -111,15 +148,12 @@ const SettingsScreen = () => {
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[
-                styles.indexTab,
-                activeIndexTab === 'aqhi' && styles.indexTabActive,
-              ]}
+              style={styles.indexTab}
               onPress={() => setActiveIndexTab('aqhi')}
             >
               <Wind
                 size={16}
-                color={activeIndexTab === 'aqhi' ? '#fff' : '#666'}
+                color={activeIndexTab === 'aqhi' ? '#D9534F' : '#666'}
               />
               <Text
                 style={[
@@ -203,7 +237,7 @@ const SettingsScreen = () => {
         </SettingsSection>
 
         <SettingsSection title="MAP DISPLAY">
-          {(['standard', 'satellite', 'terrain'] as const).map(type => (
+          {(['standard', 'hybrid'] as const).map(type => (
             <TouchableOpacity
               key={type}
               style={styles.mapTypeRow}
@@ -212,26 +246,13 @@ const SettingsScreen = () => {
               }
             >
               <Text style={styles.mapTypeLabel}>
-                {type === 'standard'
-                  ? 'Default'
-                  : type === 'satellite'
-                  ? 'Satellite'
-                  : 'Terrain'}
+                {type === 'standard' ? 'Default' : 'Satellite'}
               </Text>
               {mapSettings.mapType === type && (
                 <Text style={styles.mapTypeCheck}>✓</Text>
               )}
             </TouchableOpacity>
           ))}
-          <View style={styles.divider} />
-          <SettingsToggleRow
-            label="3D Buildings"
-            description="Show raised building outlines"
-            value={mapSettings.show3DBuildings}
-            onValueChange={v =>
-              updateMapSettings({ ...mapSettings, show3DBuildings: v })
-            }
-          />
         </SettingsSection>
 
         <SettingsSection
@@ -327,7 +348,26 @@ const styles = StyleSheet.create({
     color: '#333',
     marginBottom: 20,
   },
-  indexTabRow: { flexDirection: 'row', gap: 8, marginBottom: 14 },
+  indexTabRow: {
+    flexDirection: 'row',
+    backgroundColor: '#F0F0F0',
+    borderRadius: 24,
+    padding: 4,
+    marginBottom: 14,
+  },
+  indexTabIndicator: {
+    position: 'absolute',
+    top: 4,
+    left: 4,
+    bottom: 4,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+  },
   indexTab: {
     flex: 1,
     flexDirection: 'row',
@@ -335,12 +375,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
     paddingVertical: 10,
-    borderRadius: 10,
-    backgroundColor: '#F0F0F0',
   },
-  indexTabActive: { backgroundColor: '#D9534F' },
   indexTabText: { fontSize: 13, fontWeight: '700', color: '#666' },
-  indexTabTextActive: { color: '#fff' },
+  indexTabTextActive: { color: '#D9534F' },
   levelRowWrapper: { flexDirection: 'row', alignItems: 'center' },
   levelDot: { width: 10, height: 10, borderRadius: 5, marginRight: 10 },
   levelRowContent: { flex: 1 },

@@ -257,8 +257,12 @@ const MapScreen = ({
         ref={mapRef}
         provider={PROVIDER_GOOGLE}
         mapType={mapSettings.mapType}
-        showsBuildings={mapSettings.show3DBuildings}
-        pitchEnabled={mapSettings.show3DBuildings}
+        // Newer Google Maps SDK builds auto-switch the "standard" style to a
+        // dark theme when the device is in system dark mode; forcing "light"
+        // keeps the map matching Google Maps' own default light look.
+        userInterfaceStyle="light"
+        showsBuildings={false}
+        pitchEnabled={false}
         style={StyleSheet.absoluteFill}
         initialRegion={initialRegion}
         onRegionChangeComplete={setRegion}

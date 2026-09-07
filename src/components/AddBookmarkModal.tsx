@@ -390,6 +390,12 @@ const styles = StyleSheet.create({
   },
   suggestionText: { fontSize: 13, color: '#333' },
   suggestionLoading: { paddingVertical: 14, alignItems: 'center' },
+  mapPickButton: {
+    alignSelf: 'flex-start',
+    marginTop: -4,
+    marginBottom: 12,
+  },
+  mapPickText: { fontSize: 13, fontWeight: '600', color: '#D9534F' },
   noResultsText: {
     paddingVertical: 14,
     paddingHorizontal: 14,
