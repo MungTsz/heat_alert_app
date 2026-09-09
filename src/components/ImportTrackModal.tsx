@@ -21,7 +21,7 @@ import {
 } from 'lucide-react-native';
 import { pick, types, isErrorWithCode, errorCodes } from '@react-native-documents/picker';
 import { parseGeoJsonTrack } from '../utils/gpsTrackParser';
-import { useExposureReport, DEFAULT_PID } from '../hooks/useExposureReport';
+import { useExposureReport } from '../hooks/useExposureReport';
 import { useImportHistory } from '../hooks/useImportHistory';
 import { useExposureDevices } from '../hooks/useExposureDevices';
 import { splitExposureReportByDay } from '../utils/splitReportByDay';
@@ -32,9 +32,18 @@ import ExposureDaySwitcher from './ExposureDaySwitcher';
 type Props = {
   visible: boolean;
   onClose: () => void;
+  // When set, this modal is opened from a specific device workspace's own
+  // page (see DeviceDetailModal) — the device-target chip row is hidden and
+  // every import goes straight to that device, no picking/creating needed.
+  lockedDeviceId?: string;
 };
 
 const MAX_FILES = 3;
+// Sentinel target meaning "don't attach this to any device" — computed and
+// shown inline, but never written to import history or a device's daily
+// history, so it disappears once the modal closes. This is the default
+// target so a plain import-with-no-device-chosen is a no-save preview.
+const INSTANT_TARGET = '__instant__';
 
 type ImportItem = {
   id: string;
@@ -45,7 +54,7 @@ type ImportItem = {
   expanded: boolean;
 };
 
-const ImportTrackModal: React.FC<Props> = ({ visible, onClose }) => {
+const ImportTrackModal: React.FC<Props> = ({ visible, onClose, lockedDeviceId }) => {
   const insets = useSafeAreaInsets();
   const { generate } = useExposureReport();
   const { addImport } = useImportHistory();
@@ -54,9 +63,15 @@ const ImportTrackModal: React.FC<Props> = ({ visible, onClose }) => {
   const [localError, setLocalError] = useState<string | null>(null);
   const [items, setItems] = useState<ImportItem[]>([]);
   const [processing, setProcessing] = useState(false);
-  const [targetDeviceId, setTargetDeviceId] = useState<string>(DEFAULT_PID);
+  const [targetDeviceId, setTargetDeviceId] = useState<string>(
+    lockedDeviceId ?? INSTANT_TARGET,
+  );
   const [creatingDevice, setCreatingDevice] = useState(false);
   const [newDeviceName, setNewDeviceName] = useState('');
+
+  const lockedDevice = lockedDeviceId
+    ? devices.find(d => d.id === lockedDeviceId)
+    : undefined;
 
   const updateItem = (id: string, patch: Partial<ImportItem>) =>
     setItems(prev => prev.map(item => (item.id === id ? { ...item, ...patch } : item)));
@@ -87,15 +102,19 @@ const ImportTrackModal: React.FC<Props> = ({ visible, onClose }) => {
       return;
     }
     updateItem(id, { status: 'calculating' });
+    const isInstant = targetDeviceId === INSTANT_TARGET;
     try {
-      const report = await generate(points, targetDeviceId);
+      // Instant previews aren't tied to any device — the pid only matters
+      // for the exposure calculation call itself, not for what gets saved.
+      const report = await generate(points, isInstant ? undefined : targetDeviceId);
       updateItem(id, { status: 'done', report });
-      await addImport(sourceLabel, report);
-      if (targetDeviceId !== DEFAULT_PID) {
-        // Feeds this device workspace's own browsable per-day history
-        // (accumulating across imports — see exposureHistoryService.ts's
-        // merge-on-save behavior), in addition to the flat Import History
-        // entry every import gets regardless of device.
+      if (!isInstant) {
+        // Recorded in the flat import log regardless of device (kept for a
+        // future revisit/export surface — see ImportHistoryDetailModal),
+        // plus fed into this device workspace's own browsable per-day
+        // history (accumulating across imports — see
+        // exposureHistoryService.ts's merge-on-save behavior).
+        await addImport(sourceLabel, report);
         for (const { date, report: dayReport } of splitExposureReportByDay(report)) {
           await saveDailyExposureReport(date, dayReport, targetDeviceId);
         }
@@ -174,7 +193,7 @@ const ImportTrackModal: React.FC<Props> = ({ visible, onClose }) => {
     setItems([]);
     setLocalError(null);
     setUrl('');
-    setTargetDeviceId(DEFAULT_PID);
+    setTargetDeviceId(lockedDeviceId ?? INSTANT_TARGET);
     setCreatingDevice(false);
     setNewDeviceName('');
   };
@@ -188,7 +207,9 @@ const ImportTrackModal: React.FC<Props> = ({ visible, onClose }) => {
     <Modal visible={visible} animationType="slide" onRequestClose={handleClose}>
       <View style={[styles.container, { paddingTop: insets.top }]}>
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Import GPS Track</Text>
+          <Text style={styles.headerTitle}>
+            {lockedDevice ? `Import to ${lockedDevice.name}` : 'Import a Track'}
+          </Text>
           <TouchableOpacity onPress={handleClose} hitSlop={10}>
             <X size={22} color="#333" />
           </TouchableOpacity>
@@ -197,48 +218,55 @@ const ImportTrackModal: React.FC<Props> = ({ visible, onClose }) => {
         <ScrollView contentContainerStyle={styles.content}>
           {!processing && (
             <>
-              <Text style={styles.sectionLabel}>IMPORT TO</Text>
-              <View style={styles.deviceChipRow}>
-                <TouchableOpacity
-                  style={[styles.deviceChip, targetDeviceId === DEFAULT_PID && styles.deviceChipActive]}
-                  onPress={() => setTargetDeviceId(DEFAULT_PID)}
-                >
-                  <Text
-                    style={[
-                      styles.deviceChipText,
-                      targetDeviceId === DEFAULT_PID && styles.deviceChipTextActive,
-                    ]}
-                  >
-                    This device
-                  </Text>
-                </TouchableOpacity>
-                {devices.map(device => (
-                  <TouchableOpacity
-                    key={device.id}
-                    style={[styles.deviceChip, targetDeviceId === device.id && styles.deviceChipActive]}
-                    onPress={() => setTargetDeviceId(device.id)}
-                  >
-                    <Text
+              {!lockedDeviceId && (
+                <>
+                  <Text style={styles.sectionLabel}>IMPORT TO</Text>
+                  <View style={styles.deviceChipRow}>
+                    <TouchableOpacity
                       style={[
-                        styles.deviceChipText,
-                        targetDeviceId === device.id && styles.deviceChipTextActive,
+                        styles.deviceChip,
+                        targetDeviceId === INSTANT_TARGET && styles.deviceChipActive,
                       ]}
-                      numberOfLines={1}
+                      onPress={() => setTargetDeviceId(INSTANT_TARGET)}
                     >
-                      {device.name}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-                <TouchableOpacity
-                  style={styles.deviceChip}
-                  onPress={() => setCreatingDevice(true)}
-                >
-                  <Plus size={14} color="#8B5CF6" />
-                  <Text style={[styles.deviceChipText, styles.deviceChipTextAccent]}>
-                    New device
-                  </Text>
-                </TouchableOpacity>
-              </View>
+                      <Text
+                        style={[
+                          styles.deviceChipText,
+                          targetDeviceId === INSTANT_TARGET && styles.deviceChipTextActive,
+                        ]}
+                      >
+                        Instant (don't save)
+                      </Text>
+                    </TouchableOpacity>
+                    {devices.map(device => (
+                      <TouchableOpacity
+                        key={device.id}
+                        style={[styles.deviceChip, targetDeviceId === device.id && styles.deviceChipActive]}
+                        onPress={() => setTargetDeviceId(device.id)}
+                      >
+                        <Text
+                          style={[
+                            styles.deviceChipText,
+                            targetDeviceId === device.id && styles.deviceChipTextActive,
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {device.name}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                    <TouchableOpacity
+                      style={styles.deviceChip}
+                      onPress={() => setCreatingDevice(true)}
+                    >
+                      <Plus size={14} color="#8B5CF6" />
+                      <Text style={[styles.deviceChipText, styles.deviceChipTextAccent]}>
+                        New device
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
 
               {creatingDevice && (
                 <View style={styles.urlRow}>

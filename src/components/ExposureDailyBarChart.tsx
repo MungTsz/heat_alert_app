@@ -3,7 +3,7 @@ import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, Dimensions } from 'react-native';
 import Svg, { Rect, Line, Text as SvgText } from 'react-native-svg';
 import { DailyExposureEntry } from '../types/exposure';
-import { addHkDays } from '../utils/hkDate';
+import { addHkDays, formatHkDateLabel } from '../utils/hkDate';
 
 const SCREEN_WIDTH = Dimensions.get('window').width - 72;
 const SVG_HEIGHT = 150;
@@ -24,6 +24,10 @@ type Props = {
   // persisted history (which can lag a tick behind) — this lets that live
   // number override whatever's in `history` for today's own slot.
   todayOverride?: { date: string; total: number };
+  // Lets the range subtitle read "Today" instead of a bare date when it
+  // applies — optional since some callers (e.g. a device workspace with no
+  // live tracking) still want plain calendar dates only.
+  todayKey?: string;
 };
 
 // No existing bar-chart precedent in this repo — new, but reuses the same
@@ -37,6 +41,7 @@ const ExposureDailyBarChart: React.FC<Props> = ({
   selectedDate,
   onSelectDay,
   todayOverride,
+  todayKey,
 }) => {
   const days = useMemo(() => {
     const byDate = new Map(history.map(entry => [entry.date, entry]));
@@ -66,10 +71,14 @@ const ExposureDailyBarChart: React.FC<Props> = ({
 
   return (
     <View>
-      <Text style={styles.title}>
-        Daily totals — {rangeStart}
-        {rangeStart !== rangeEnd ? ` to ${rangeEnd}` : ''}
-      </Text>
+      <View style={styles.headerRow}>
+        <Text style={styles.title}>Daily Exposure</Text>
+        <Text style={styles.subtitle}>
+          {rangeStart === rangeEnd
+            ? formatHkDateLabel(rangeStart, todayKey)
+            : `${formatHkDateLabel(rangeStart, todayKey)} – ${formatHkDateLabel(rangeEnd, todayKey)}`}
+        </Text>
+      </View>
       <Svg width={SCREEN_WIDTH} height={SVG_HEIGHT}>
         <Line
           x1={0}
@@ -127,7 +136,14 @@ const ExposureDailyBarChart: React.FC<Props> = ({
 };
 
 const styles = StyleSheet.create({
-  title: { fontSize: 13, fontWeight: '700', color: '#1C1C1E', marginBottom: 4 },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    marginBottom: 8,
+  },
+  title: { fontSize: 15, fontWeight: '700', color: '#1C1C1E' },
+  subtitle: { fontSize: 12, fontWeight: '600', color: '#8E8E93' },
 });
 
 export default ExposureDailyBarChart;

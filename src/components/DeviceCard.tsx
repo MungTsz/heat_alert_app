@@ -1,17 +1,16 @@
 // src/components/DeviceCard.tsx
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { Trash2, Smartphone } from 'lucide-react-native';
+import { ChevronRight, Smartphone } from 'lucide-react-native';
 import { ExposureDevice } from '../types/exposure';
 import { useExposureHistory } from '../hooks/useExposureHistory';
 
 type Props = {
   device: ExposureDevice;
   onPress: () => void;
-  onRemove: () => void;
 };
 
-const DeviceCard: React.FC<Props> = ({ device, onPress, onRemove }) => {
+const DeviceCard: React.FC<Props> = ({ device, onPress }) => {
   const { history } = useExposureHistory(device.id);
 
   return (
@@ -23,9 +22,7 @@ const DeviceCard: React.FC<Props> = ({ device, onPress, onRemove }) => {
             {device.name}
           </Text>
         </View>
-        <TouchableOpacity onPress={onRemove} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-          <Trash2 size={16} color="#999" />
-        </TouchableOpacity>
+        <ChevronRight size={16} color="#999" />
       </View>
       <Text style={styles.meta}>
         {history.length === 0

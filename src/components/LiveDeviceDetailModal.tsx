@@ -1,50 +1,43 @@
-// src/components/DeviceDetailModal.tsx
+// src/components/LiveDeviceDetailModal.tsx
 import React, { useState } from 'react';
 import { Modal, View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ArrowLeft, Trash2, Upload, Calendar as CalendarIcon } from 'lucide-react-native';
-import { ExposureDevice } from '../types/exposure';
-import { useExposureHistory } from '../hooks/useExposureHistory';
-import { toHkDateKey, formatHkDateLabel } from '../utils/hkDate';
+import { ArrowLeft, Calendar as CalendarIcon } from 'lucide-react-native';
+import { DailyExposureEntry, ExposureReport } from '../types/exposure';
+import { formatHkDateLabel } from '../utils/hkDate';
 import ExposureDateScopedView from './ExposureDateScopedView';
 import ExposureDatePickerModal, { DateSelection } from './ExposureDatePickerModal';
-import ImportTrackModal from './ImportTrackModal';
 
 type Props = {
   visible: boolean;
-  device: ExposureDevice | null;
   onClose: () => void;
-  onDelete: (id: string) => void;
+  todayKey: string;
+  todayReport: ExposureReport | null;
+  todayLoading: boolean;
+  history: DailyExposureEntry[];
 };
 
-// A named device workspace's browsable view — same date-picker + map/chart
-// pattern as the main Exposure screen, scoped to this device's own imported
-// history (useExposureHistory(device.id)), but map + chart only (no
-// summary-stats card or per-location segment list — see
-// ExposureDateScopedView's 'compact' variant) and no import/tracking UI,
-// since a device workspace only ever gets data via import.
-const DeviceDetailModal: React.FC<Props> = ({ visible, device, onClose, onDelete }) => {
+// The live self-tracked device's full-screen detail page — same
+// back-arrow/date-pill shape as DeviceDetailModal, but no Import/Trash
+// actions, since this device only ever gets data via background tracking
+// (see ExposureScreen's compact "This Device" card, which is this page's
+// collapsed/"hidden" state).
+const LiveDeviceDetailModal: React.FC<Props> = ({
+  visible,
+  onClose,
+  todayKey,
+  todayReport,
+  todayLoading,
+  history,
+}) => {
   const insets = useSafeAreaInsets();
-  // No device selected (modal closed) still mounts this component (only
-  // `visible` toggles) — fall back to a placeholder id rather than
-  // useExposureHistory's own default, which would otherwise read the live
-  // device's own history for no reason.
-  const { history } = useExposureHistory(device?.id ?? '__no_device_selected__');
-  const todayKey = toHkDateKey();
   const [selection, setSelection] = useState<DateSelection>({ mode: 'single', date: todayKey });
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [importOpen, setImportOpen] = useState(false);
-
-  if (!device) return null;
 
   const selectionLabel =
     selection.mode === 'single'
       ? formatHkDateLabel(selection.date, todayKey)
       : `${formatHkDateLabel(selection.start, todayKey)} – ${formatHkDateLabel(selection.end, todayKey)}`;
-
-  const handleDelete = () => {
-    onDelete(device.id);
-  };
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
@@ -55,16 +48,8 @@ const DeviceDetailModal: React.FC<Props> = ({ visible, device, onClose, onDelete
               <ArrowLeft size={22} color="#333" />
             </TouchableOpacity>
             <Text style={styles.headerTitle} numberOfLines={1}>
-              {device.name}
+              This Device
             </Text>
-          </View>
-          <View style={styles.headerActions}>
-            <TouchableOpacity onPress={() => setImportOpen(true)} hitSlop={10}>
-              <Upload size={20} color="#333" />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={handleDelete} hitSlop={10}>
-              <Trash2 size={20} color="#333" />
-            </TouchableOpacity>
           </View>
         </View>
 
@@ -85,9 +70,10 @@ const DeviceDetailModal: React.FC<Props> = ({ visible, device, onClose, onDelete
             history={history}
             selection={selection}
             todayKey={todayKey}
-            todayReport={null}
+            todayReport={todayReport}
+            todayLoading={todayLoading}
             formatDateLabel={date => formatHkDateLabel(date, todayKey)}
-            variant="compact"
+            variant="full"
           />
         </ScrollView>
       </View>
@@ -97,11 +83,6 @@ const DeviceDetailModal: React.FC<Props> = ({ visible, device, onClose, onDelete
         initialSelection={selection}
         onClose={() => setPickerOpen(false)}
         onApply={setSelection}
-      />
-      <ImportTrackModal
-        visible={importOpen}
-        onClose={() => setImportOpen(false)}
-        lockedDeviceId={device.id}
       />
     </Modal>
   );
@@ -119,7 +100,6 @@ const styles = StyleSheet.create({
   },
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 14, flexShrink: 1 },
   headerTitle: { fontSize: 18, fontWeight: '700', color: '#1C1C1E', flexShrink: 1 },
-  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 16 },
   content: { flex: 1 },
   contentContainer: { padding: 20, paddingBottom: 60 },
   sectionHeaderRow: {
@@ -146,4 +126,4 @@ const styles = StyleSheet.create({
   datePillText: { fontSize: 13, fontWeight: '700', color: '#8B5CF6' },
 });
 
-export default DeviceDetailModal;
+export default LiveDeviceDetailModal;

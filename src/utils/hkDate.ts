@@ -23,3 +23,16 @@ export const addHkDays = (dateKey: string, days: number): string => {
   const dd = date.getUTCDate().toString().padStart(2, '0');
   return `${yyyy}-${mm}-${dd}`;
 };
+
+// The one human-readable date label used across every exposure screen —
+// "Today" when it matches todayKey, otherwise a short "Sep 9" style label
+// with no year (all exposure history is recent, near-term data). Was
+// previously copy-pasted per-component; consolidated here so every date
+// label in the Exposure tab reads the same way.
+export const formatHkDateLabel = (dateKey: string, todayKey?: string): string => {
+  if (todayKey && dateKey === todayKey) return 'Today';
+  return new Date(`${dateKey}T00:00:00`).toLocaleDateString([], {
+    month: 'short',
+    day: 'numeric',
+  });
+};

@@ -1,9 +1,11 @@
 // src/components/ExposureRangeReportView.tsx
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { DailyExposureEntry, ExposureReport } from '../types/exposure';
+import { formatHkDateLabel } from '../utils/hkDate';
 import ExposureTrajectoryMap from './ExposureTrajectoryMap';
 import ExposureDailyBarChart from './ExposureDailyBarChart';
+import ExposureTrendChart from './ExposureTrendChart';
 
 type Props = {
   history: DailyExposureEntry[];
@@ -16,10 +18,11 @@ type Props = {
   todayReport: ExposureReport | null;
 };
 
-// A selected calendar range shows one merged map (every day's points loaded
-// together) and one chart (daily totals) — deliberately no per-segment list,
-// which would get unwieldy across many days; that level of detail is what
-// picking a single date is for.
+// A selected calendar range shows one day at a time (defaulting to the last
+// day) on the map and in the hourly chart, plus one range-wide daily-totals
+// chart to switch between days — deliberately no per-segment list, which
+// would get unwieldy across many days; that level of detail is what picking
+// a single date is for.
 const ExposureRangeReportView: React.FC<Props> = ({
   history,
   rangeStart,
@@ -37,6 +40,21 @@ const ExposureRangeReportView: React.FC<Props> = ({
       .sort((a, b) => a.date.localeCompare(b.date));
   }, [history, rangeStart, rangeEnd, todayKey, todayReport]);
 
+  // The map and hourly chart below always show one day at a time — default
+  // to the last day that actually has tracked data (not necessarily
+  // rangeEnd itself, which may be an empty/future day), and only re-default
+  // when the user picks a new range — not on every live poll update, which
+  // would otherwise keep yanking the selection back while today's report
+  // refreshes in the background.
+  const [selectedDate, setSelectedDate] = useState(rangeEnd);
+  const lastRangeRef = useRef<string | null>(null);
+  useEffect(() => {
+    const rangeId = `${rangeStart}:${rangeEnd}`;
+    if (lastRangeRef.current === rangeId) return;
+    lastRangeRef.current = rangeId;
+    setSelectedDate(daysInRange.length > 0 ? daysInRange[daysInRange.length - 1].date : rangeEnd);
+  }, [rangeStart, rangeEnd, daysInRange]);
+
   const mergedSegments = useMemo(
     () =>
       daysInRange
@@ -45,14 +63,19 @@ const ExposureRangeReportView: React.FC<Props> = ({
     [daysInRange],
   );
 
+  const selectedDaySegments = useMemo(
+    () => daysInRange.find(entry => entry.date === selectedDate)?.report.segments ?? [],
+    [daysInRange, selectedDate],
+  );
+
   const totalExposure = daysInRange.reduce((sum, e) => sum + e.report.totalExposure, 0);
 
   return (
     <View>
       <View style={styles.summaryCard}>
         <Text style={styles.title}>
-          {rangeStart}
-          {rangeStart !== rangeEnd ? ` – ${rangeEnd}` : ''}
+          {formatHkDateLabel(rangeStart, todayKey)}
+          {rangeStart !== rangeEnd ? ` – ${formatHkDateLabel(rangeEnd, todayKey)}` : ''}
         </Text>
         <View style={styles.statsRow}>
           <View style={styles.stat}>
@@ -70,11 +93,13 @@ const ExposureRangeReportView: React.FC<Props> = ({
         </View>
       </View>
 
-      {mergedSegments.length > 0 ? (
-        <ExposureTrajectoryMap segments={mergedSegments} />
+      {selectedDaySegments.length > 0 ? (
+        <ExposureTrajectoryMap segments={selectedDaySegments} />
       ) : (
         <View style={styles.emptyCard}>
-          <Text style={styles.emptyText}>No tracked exposure in this range yet.</Text>
+          <Text style={styles.emptyText}>
+            No tracked exposure on {formatHkDateLabel(selectedDate, todayKey)} yet.
+          </Text>
         </View>
       )}
 
@@ -83,6 +108,9 @@ const ExposureRangeReportView: React.FC<Props> = ({
           history={daysInRange}
           rangeStart={rangeStart}
           rangeEnd={rangeEnd}
+          selectedDate={selectedDate}
+          onSelectDay={setSelectedDate}
+          todayKey={todayKey}
           todayOverride={
             todayReport && todayKey >= rangeStart && todayKey <= rangeEnd
               ? { date: todayKey, total: todayReport.totalExposure }
@@ -90,6 +118,16 @@ const ExposureRangeReportView: React.FC<Props> = ({
           }
         />
       </View>
+
+      {selectedDaySegments.length > 0 && (
+        <View style={styles.chartCard}>
+          <View style={styles.hourlyHeaderRow}>
+            <Text style={styles.hourlyTitle}>Hourly Exposure</Text>
+            <Text style={styles.hourlySubtitle}>{formatHkDateLabel(selectedDate, todayKey)}</Text>
+          </View>
+          <ExposureTrendChart segments={selectedDaySegments} />
+        </View>
+      )}
     </View>
   );
 };
@@ -123,7 +161,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 16,
+    marginBottom: 12,
   },
+  hourlyHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    marginBottom: 8,
+  },
+  hourlyTitle: { fontSize: 15, fontWeight: '700', color: '#1C1C1E' },
+  hourlySubtitle: { fontSize: 12, fontWeight: '600', color: '#8E8E93' },
 });
 
 export default ExposureRangeReportView;
