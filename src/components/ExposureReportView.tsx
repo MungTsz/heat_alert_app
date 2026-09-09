@@ -73,7 +73,7 @@ const ExposureReportView: React.FC<Props> = ({ report, title }) => {
 
       {report.segments.length > 0 && (
         <View style={styles.trendCard}>
-          <ExposureTrendChart segments={report.segments} />
+          <ExposureTrendChart segments={report.segments} title="Hourly Exposure" />
         </View>
       )}
 

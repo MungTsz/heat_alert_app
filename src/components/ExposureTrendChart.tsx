@@ -4,6 +4,7 @@ import { View, Text, StyleSheet, Dimensions } from 'react-native';
 import Svg, { Rect, Line, Text as SvgText } from 'react-native-svg';
 import { ExposureSegmentResult } from '../types/exposure';
 import { bucketExposureByHour } from '../utils/exposureHourlyBuckets';
+import { clampedChartLabelX, estimateSvgTextWidth } from '../utils/svgChartLabel';
 
 const SCREEN_WIDTH = Dimensions.get('window').width - 72;
 const SVG_HEIGHT = 160;
@@ -13,16 +14,21 @@ const GRAPH_HEIGHT = SVG_HEIGHT - PADDING_TOP - PADDING_BOTTOM;
 const MAX_BAR_WIDTH = 14;
 const BAR_COLOR = '#8B5CF6';
 const EMPTY_BAR_COLOR = '#E5E0FA';
+const SELECTED_LABEL_FONT_SIZE = 11;
 
 type Props = {
   segments: ExposureSegmentResult[];
+  // Callers that already show their own "Hourly Exposure"-style header
+  // (e.g. ExposureRangeReportView) omit this to avoid a duplicate title;
+  // callers with no header of their own (single-day views) pass one.
+  title?: string;
 };
 
 // One bar per hour-of-day (0-23, HK local), summing that hour's exposure —
 // reuses the same Svg/Rect/Line/SvgText/tap-to-select conventions as
 // ExposureDailyBarChart for visual consistency between the two exposure
 // charts, just bucketed by hour instead of by calendar day.
-const ExposureTrendChart: React.FC<Props> = ({ segments }) => {
+const ExposureTrendChart: React.FC<Props> = ({ segments, title }) => {
   const [selectedHour, setSelectedHour] = useState<number | null>(null);
 
   const hours = useMemo(() => bucketExposureByHour(segments), [segments]);
@@ -40,7 +46,7 @@ const ExposureTrendChart: React.FC<Props> = ({ segments }) => {
 
   return (
     <View>
-      <Text style={styles.title}>Exposure by hour</Text>
+      {title && <Text style={styles.title}>{title}</Text>}
       <Svg width={SCREEN_WIDTH} height={SVG_HEIGHT}>
         <Line
           x1={0}
@@ -90,18 +96,26 @@ const ExposureTrendChart: React.FC<Props> = ({ segments }) => {
             </React.Fragment>
           );
         })}
-        {selected && selected.total > 0 && (
-          <SvgText
-            x={selected.hour * slotWidth + slotWidth / 2}
-            y={Math.max(PADDING_TOP + GRAPH_HEIGHT - getBarHeight(selected.total) - 8, 12)}
-            fontSize={11}
-            fontWeight="700"
-            fill={BAR_COLOR}
-            textAnchor="middle"
-          >
-            {`${selected.label}  ${selected.total.toFixed(2)}`}
-          </SvgText>
-        )}
+        {selected && selected.total > 0 && (() => {
+          const labelText = `${selected.label}  ${selected.total.toFixed(2)}`;
+          const { x, textAnchor } = clampedChartLabelX(
+            selected.hour * slotWidth + slotWidth / 2,
+            SCREEN_WIDTH,
+            estimateSvgTextWidth(labelText, SELECTED_LABEL_FONT_SIZE),
+          );
+          return (
+            <SvgText
+              x={x}
+              y={PADDING_TOP - 10}
+              fontSize={SELECTED_LABEL_FONT_SIZE}
+              fontWeight="700"
+              fill={BAR_COLOR}
+              textAnchor={textAnchor}
+            >
+              {labelText}
+            </SvgText>
+          );
+        })()}
       </Svg>
     </View>
   );

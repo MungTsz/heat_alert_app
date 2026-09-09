@@ -27,6 +27,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { AqhiDayForecast } from '../data/aqhiForecast/types';
 import { formatAqhiValue } from '../utils/aqhiUtils';
+import { clampedChartLabelX, estimateSvgTextWidth } from '../utils/svgChartLabel';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
@@ -37,6 +38,7 @@ const PADDING_TOP = 15;
 const PADDING_BOTTOM = 30;
 const MIN_AQHI = 0;
 const MAX_AQHI = 11; // top band is "10+"
+const SELECTED_LABEL_FONT_SIZE = 13;
 
 // Fixed EPD severity bands — background zones, not per-point colors. This is
 // a deliberately independent, coarser 5-color palette for the chart backdrop,
@@ -298,18 +300,26 @@ const AqhiHourlyForecastChart: React.FC<Props> = ({ days }) => {
             </>
           )}
 
-          {selectedPoint && selectedHourIndex !== null && (
-            <SvgText
-              x={getX(selectedHourIndex)}
-              y={getY(selectedPoint.aqhi) - 12}
-              fontSize="13"
-              fontWeight="bold"
-              fill="#d36565"
-              textAnchor="middle"
-            >
-              {formatAqhiValue(selectedPoint.aqhi)}
-            </SvgText>
-          )}
+          {selectedPoint && selectedHourIndex !== null && (() => {
+            const labelText = formatAqhiValue(selectedPoint.aqhi);
+            const { x, textAnchor } = clampedChartLabelX(
+              getX(selectedHourIndex),
+              GRAPH_WIDTH,
+              estimateSvgTextWidth(labelText, SELECTED_LABEL_FONT_SIZE),
+            );
+            return (
+              <SvgText
+                x={x}
+                y={PADDING_TOP - 3}
+                fontSize={SELECTED_LABEL_FONT_SIZE}
+                fontWeight="bold"
+                fill="#d36565"
+                textAnchor={textAnchor}
+              >
+                {labelText}
+              </SvgText>
+            );
+          })()}
 
           {labelIndices.map(i => {
             const hour24 = parseInt(points[i].time.split(':')[0], 10);

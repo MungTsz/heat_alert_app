@@ -27,6 +27,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { DayForecast } from '../data/forecast/types';
 import { HEAT_INDEX_ZONES, fahrenheitToCelsius } from '../utils/heatIndexUtils';
+import { clampedChartLabelX, estimateSvgTextWidth } from '../utils/svgChartLabel';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
@@ -35,6 +36,7 @@ const SVG_HEIGHT = 260;
 const Y_AXIS_WIDTH = 30;
 const PADDING_TOP = 15;
 const PADDING_BOTTOM = 30;
+const SELECTED_LABEL_FONT_SIZE = 13;
 
 // Chart bounds in Celsius, with headroom below "Safe" and above "Extreme
 // Danger" so every zone's band is visible even at the axis edges.
@@ -291,18 +293,26 @@ const DailyHeatForecastCard: React.FC<Props> = ({ days }) => {
             </>
           )}
 
-          {selectedPoint && selectedHourIndex !== null && (
-            <SvgText
-              x={getX(selectedHourIndex)}
-              y={getY(selectedPoint.heatIndex) - 12}
-              fontSize="13"
-              fontWeight="bold"
-              fill="#d36565"
-              textAnchor="middle"
-            >
-              {Math.round(selectedPoint.heatIndex)}°C
-            </SvgText>
-          )}
+          {selectedPoint && selectedHourIndex !== null && (() => {
+            const labelText = `${Math.round(selectedPoint.heatIndex)}°C`;
+            const { x, textAnchor } = clampedChartLabelX(
+              getX(selectedHourIndex),
+              GRAPH_WIDTH,
+              estimateSvgTextWidth(labelText, SELECTED_LABEL_FONT_SIZE),
+            );
+            return (
+              <SvgText
+                x={x}
+                y={PADDING_TOP - 3}
+                fontSize={SELECTED_LABEL_FONT_SIZE}
+                fontWeight="bold"
+                fill="#d36565"
+                textAnchor={textAnchor}
+              >
+                {labelText}
+              </SvgText>
+            );
+          })()}
 
           {labelIndices.map(i => {
             const hour24 = parseInt(points[i].time.split(':')[0], 10);

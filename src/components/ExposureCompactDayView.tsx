@@ -20,7 +20,7 @@ const ExposureCompactDayView: React.FC<Props> = ({ report }) =>
     <View>
       <ExposureTrajectoryMap segments={report.segments} />
       <View style={styles.chartCard}>
-        <ExposureTrendChart segments={report.segments} />
+        <ExposureTrendChart segments={report.segments} title="Hourly Exposure" />
       </View>
     </View>
   );
