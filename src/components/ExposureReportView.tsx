@@ -1,10 +1,12 @@
 // src/components/ExposureReportView.tsx
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
-import MapView, { Polyline, Marker, Callout } from 'react-native-maps';
 import { AlertTriangle } from 'lucide-react-native';
 import { ExposureReport } from '../types/exposure';
 import { isExposureDataMocked } from '../data/exposure';
+import { exposureColor } from '../utils/exposureColor';
+import ExposureTrendChart from './ExposureTrendChart';
+import ExposureTrajectoryMap from './ExposureTrajectoryMap';
 
 type Props = {
   report: ExposureReport;
@@ -22,40 +24,11 @@ const formatDuration = (ms: number): string => {
 const formatTime = (ms: number): string =>
   new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-// Relative color scale (green -> red), normalized to this report's own
-// segment exposures. Exposure has no fixed classification scale like heat
-// index/AQHI do, so a self-contained gradient is the right fit here rather
-// than reusing those domains' band colors.
-const exposureColor = (value: number, max: number): string => {
-  if (max <= 0) return 'rgba(130, 200, 60, 0.9)';
-  const t = Math.max(0, Math.min(1, value / max));
-  const r = Math.round(130 + (220 - 130) * t);
-  const g = Math.round(200 - (200 - 20) * t);
-  const b = Math.round(60 - (60 - 20) * t);
-  return `rgba(${r}, ${g}, ${b}, 0.9)`;
-};
-
 const ExposureReportView: React.FC<Props> = ({ report, title }) => {
   const maxExposure = useMemo(
     () => Math.max(0, ...report.segments.map(s => s.exposure)),
     [report.segments],
   );
-
-  const region = useMemo(() => {
-    if (report.segments.length === 0) return null;
-    const lats = report.segments.map(s => s.lat);
-    const lons = report.segments.map(s => s.lon);
-    const minLat = Math.min(...lats);
-    const maxLat = Math.max(...lats);
-    const minLon = Math.min(...lons);
-    const maxLon = Math.max(...lons);
-    return {
-      latitude: (minLat + maxLat) / 2,
-      longitude: (minLon + maxLon) / 2,
-      latitudeDelta: Math.max(maxLat - minLat, 0.005) * 1.6,
-      longitudeDelta: Math.max(maxLon - minLon, 0.005) * 1.6,
-    };
-  }, [report.segments]);
 
   return (
     <View>
@@ -96,53 +69,11 @@ const ExposureReportView: React.FC<Props> = ({ report, title }) => {
         )}
       </View>
 
-      {region && (
-        <View style={styles.mapContainer}>
-          <MapView style={StyleSheet.absoluteFill} region={region}>
-            {report.segments.slice(0, -1).map((segment, i) => {
-              const next = report.segments[i + 1];
-              return (
-                <Polyline
-                  key={`line-${segment.startTime}-${i}`}
-                  coordinates={[
-                    { latitude: segment.lat, longitude: segment.lon },
-                    { latitude: next.lat, longitude: next.lon },
-                  ]}
-                  strokeColor={exposureColor(segment.exposure, maxExposure)}
-                  strokeWidth={4}
-                />
-              );
-            })}
-            {report.segments.map((segment, i) => (
-              <Marker
-                key={`dot-${segment.startTime}-${i}`}
-                coordinate={{ latitude: segment.lat, longitude: segment.lon }}
-                anchor={{ x: 0.5, y: 0.5 }}
-                tracksViewChanges={false}
-              >
-                <View
-                  style={[
-                    styles.mapDot,
-                    { backgroundColor: exposureColor(segment.exposure, maxExposure) },
-                  ]}
-                />
-                <Callout>
-                  <View style={styles.calloutBox}>
-                    <Text style={styles.calloutTime}>
-                      {formatTime(segment.startTime)} – {formatTime(segment.endTime)}{' '}
-                      ({formatDuration(segment.endTime - segment.startTime)})
-                    </Text>
-                    <Text style={styles.calloutLocation}>
-                      {segment.lat.toFixed(5)}, {segment.lon.toFixed(5)}
-                    </Text>
-                    <Text style={styles.calloutExposure}>
-                      Exposure: {segment.exposure.toFixed(3)} %AR·h
-                    </Text>
-                  </View>
-                </Callout>
-              </Marker>
-            ))}
-          </MapView>
+      <ExposureTrajectoryMap segments={report.segments} />
+
+      {report.segments.length > 0 && (
+        <View style={styles.trendCard}>
+          <ExposureTrendChart segments={report.segments} />
         </View>
       )}
 
@@ -223,10 +154,10 @@ const styles = StyleSheet.create({
     marginTop: 10,
     textAlign: 'center',
   },
-  mapContainer: {
-    height: 220,
+  trendCard: {
+    backgroundColor: '#FFFFFF',
     borderRadius: 16,
-    overflow: 'hidden',
+    padding: 16,
     marginBottom: 12,
   },
   emptyText: {
@@ -254,17 +185,6 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(0,0,0,0.08)',
   },
   segmentDot: { width: 10, height: 10, borderRadius: 5, marginRight: 10 },
-  mapDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.9)',
-  },
-  calloutBox: { minWidth: 160, padding: 4 },
-  calloutTime: { fontSize: 12, fontWeight: '700', color: '#1C1C1E' },
-  calloutLocation: { fontSize: 11, color: '#8E8E93', marginTop: 2 },
-  calloutExposure: { fontSize: 12, fontWeight: '600', color: '#1C1C1E', marginTop: 4 },
   segmentInfo: { flex: 1 },
   segmentTime: { fontSize: 13, fontWeight: '600', color: '#1C1C1E' },
   segmentLocation: { fontSize: 11, color: '#8E8E93', marginTop: 2 },

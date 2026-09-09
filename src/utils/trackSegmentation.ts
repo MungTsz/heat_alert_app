@@ -1,59 +1,50 @@
 // src/utils/trackSegmentation.ts
 import { TrackPoint, TrackSegment } from '../types/exposure';
-import { distanceMiles } from './distance';
 
-const METERS_PER_MILE = 1609.344;
+// Fixed clock-aligned window each point is bucketed into (16:00-16:10,
+// 16:10-16:20, ...) — one exposure API row per window, rather than one row
+// per raw ping. Real GPS-logger exports commonly ping about once a minute;
+// calling the exposure API per raw point would be far more calls than
+// useful, so points are grouped into fixed windows instead. Flooring raw
+// epoch ms by this width lands on clean HK-local :00/:10/:20/... marks with
+// no timezone math needed, since HK's UTC+8 offset is a whole number of
+// hours.
+const BUCKET_DURATION_MS = 10 * 60 * 1000;
 
-const distanceMeters = (
-  aLat: number,
-  aLon: number,
-  bLat: number,
-  bLon: number,
-): number => distanceMiles(aLat, aLon, bLat, bLon) * METERS_PER_MILE;
-
-// Collapses consecutive GPS pings into "stay" segments, merging points that
-// stay within `stationaryRadiusMeters` of the segment's anchor point. Raw
-// tracks (both self-tracked and imported files) commonly log the same spot
-// repeatedly — e.g. a network-provider fix every ~20s with ~100m accuracy —
-// so without merging, delta_t per API row would be tiny and near-meaningless,
-// and the exposure API would be called far more times than necessary.
-export const simplifyTrackToSegments = (
-  points: TrackPoint[],
-  stationaryRadiusMeters: number = 15,
-): TrackSegment[] => {
+// Buckets points into fixed BUCKET_DURATION_MS windows and returns one
+// TrackSegment per non-empty window, in chronological order. A window's
+// segment always spans its full fixed width (not just the span between the
+// first/last point that landed in it) — so every window that has any data,
+// including the very last one, gets a well-defined delta_t once sent through
+// buildExposureRequestRows. Shared by both live tracking (useTodayExposure)
+// and one-shot imports (useExposureReport) so the two behave identically.
+export const bucketTrackPoints = (points: TrackPoint[]): TrackSegment[] => {
   if (points.length === 0) return [];
 
   const segments: TrackSegment[] = [];
+  let bucketIndex = Math.floor(points[0].timestampMs / BUCKET_DURATION_MS);
   let anchor = points[0];
-  let segmentStart = points[0].timestampMs;
+
+  const pushSegment = (index: number, point: TrackPoint) => {
+    segments.push({
+      startTime: index * BUCKET_DURATION_MS,
+      endTime: (index + 1) * BUCKET_DURATION_MS,
+      lat: point.lat,
+      lon: point.lon,
+      speed: point.speed,
+    });
+  };
 
   for (let i = 1; i < points.length; i++) {
     const point = points[i];
-    const d = distanceMeters(anchor.lat, anchor.lon, point.lat, point.lon);
-
-    if (d > stationaryRadiusMeters) {
-      segments.push({
-        startTime: segmentStart,
-        endTime: point.timestampMs,
-        lat: anchor.lat,
-        lon: anchor.lon,
-        speed: anchor.speed,
-      });
+    const index = Math.floor(point.timestampMs / BUCKET_DURATION_MS);
+    if (index !== bucketIndex) {
+      pushSegment(bucketIndex, anchor);
+      bucketIndex = index;
       anchor = point;
-      segmentStart = point.timestampMs;
     }
   }
+  pushSegment(bucketIndex, anchor);
 
-  const lastPoint = points[points.length - 1];
-  segments.push({
-    startTime: segmentStart,
-    endTime: lastPoint.timestampMs,
-    lat: anchor.lat,
-    lon: anchor.lon,
-    speed: anchor.speed,
-  });
-
-  // A segment with zero duration (e.g. a single trailing point) has no
-  // delta_t to send to the exposure API.
-  return segments.filter(s => s.endTime > s.startTime);
+  return segments;
 };

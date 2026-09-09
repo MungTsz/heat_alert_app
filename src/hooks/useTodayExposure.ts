@@ -2,10 +2,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ExposureReport, ExposureSegmentResult } from '../types/exposure';
 import { getTodayTrackPoints } from '../services/deviceTrackingService';
-import { simplifyTrackToSegments } from '../utils/trackSegmentation';
+import { bucketTrackPoints } from '../utils/trackSegmentation';
 import { buildExposureRows } from '../utils/buildExposureRequestRows';
 import { exposureDataProvider } from '../data/exposure';
 import { DEFAULT_PID } from './useExposureReport';
+import { toHkDateKey } from '../utils/hkDate';
+import { saveDailyExposureReport } from '../services/exposureHistoryService';
 
 // Matches HeatAlertEngine's foreground check cadence — this is a
 // while-the-screen-is-open poll, not a background job.
@@ -31,12 +33,12 @@ export const useTodayExposure = (trackingEnabled: boolean) => {
       const newPoints = points.filter(
         p => p.timestampMs >= confirmedUpToRef.current,
       );
-      const newSegments = simplifyTrackToSegments(newPoints);
+      const newSegments = bucketTrackPoints(newPoints);
 
       if (newSegments.length > 0) {
-        // simplifyTrackToSegments always leaves its last segment "open" (it
-        // can't yet know whether the person has since left that spot) — only
-        // the earlier ones in this new batch are truly final.
+        // bucketTrackPoints always leaves its last window "open" (a later
+        // point could still land in the same window) — only the earlier
+        // ones in this new batch are truly final.
         const closing = newSegments.slice(0, -1);
         const growing = newSegments[newSegments.length - 1];
         const toCalculate = [...closing, growing];
@@ -60,7 +62,7 @@ export const useTodayExposure = (trackingEnabled: boolean) => {
         const growingResult = withExposure[withExposure.length - 1];
         const segments = [...confirmedSegmentsRef.current, growingResult];
 
-        setReport({
+        const built: ExposureReport = {
           totalExposure: segments.reduce(
             (sum, s) => sum + (s.exposure > 0 ? s.exposure : 0),
             0,
@@ -69,7 +71,12 @@ export const useTodayExposure = (trackingEnabled: boolean) => {
           timeRangeStart: segments[0].startTime,
           timeRangeEnd: segments[segments.length - 1].endTime,
           pointCount: points.length,
-        });
+        };
+        setReport(built);
+        // Keeps today's persisted history entry fresh across this poll —
+        // the only way past-day browsing/the 10-day chart can work, since
+        // the tracking plugin itself only retains ~1 day of raw points.
+        await saveDailyExposureReport(toHkDateKey(), built);
       } else if (confirmedSegmentsRef.current.length > 0) {
         setReport(prev => (prev ? { ...prev, pointCount: points.length } : prev));
       }

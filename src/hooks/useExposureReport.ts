@@ -1,7 +1,7 @@
 // src/hooks/useExposureReport.ts
 import { useCallback, useState } from 'react';
 import { TrackPoint, ExposureReport } from '../types/exposure';
-import { simplifyTrackToSegments } from '../utils/trackSegmentation';
+import { bucketTrackPoints } from '../utils/trackSegmentation';
 import { buildExposureRows } from '../utils/buildExposureRequestRows';
 import { exposureDataProvider } from '../data/exposure';
 
@@ -17,7 +17,7 @@ export const useExposureReport = () => {
       setLoading(true);
       setError(null);
       try {
-        const segments = simplifyTrackToSegments(points);
+        const segments = bucketTrackPoints(points);
 
         if (segments.length === 0) {
           const empty: ExposureReport = {

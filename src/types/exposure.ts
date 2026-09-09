@@ -46,3 +46,30 @@ export type ExposureReport = {
   timeRangeEnd: number;
   pointCount: number;
 };
+
+// A day's exposure as persisted history — HK-local date key, either the
+// live-tracked "today" snapshot or a frozen past day.
+export type DailyExposureEntry = {
+  date: string; // YYYY-MM-DD, HK local
+  report: ExposureReport;
+  updatedAt: number;
+};
+
+// A saved import (file or URL), revisitable without re-parsing/re-calling
+// the API — may span multiple calendar days (see splitReportByDay.ts).
+export type ImportHistoryEntry = {
+  id: string;
+  importedAt: number;
+  sourceLabel: string;
+  report: ExposureReport;
+};
+
+// A named workspace for imported data tagged with its own pid — distinct
+// from the live self-tracked device (DEFAULT_PID in useExposureReport.ts) —
+// so a track imported from someone else's device/id can be browsed by date
+// the same way the live device's history is, without mixing into it.
+export type ExposureDevice = {
+  id: string;
+  name: string;
+  createdAt: number;
+};
