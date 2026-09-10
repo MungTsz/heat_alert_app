@@ -2,10 +2,10 @@ import { parseGeoJsonTrack } from '../gpsTrackParser';
 import { bucketTrackPoints } from '../trackSegmentation';
 import sampleTrack from '../__fixtures__/sampleTrack.geojson.json';
 
-const BUCKET_MS = 10 * 60 * 1000;
+const BUCKET_MS = 60 * 60 * 1000;
 
 describe('bucketTrackPoints', () => {
-  it('collapses the sample track pings into far fewer 10-minute-window segments', () => {
+  it('collapses the sample track pings into far fewer 1-hour-window segments', () => {
     const points = parseGeoJsonTrack(sampleTrack);
     const segments = bucketTrackPoints(points);
 
@@ -13,7 +13,7 @@ describe('bucketTrackPoints', () => {
     expect(segments.length).toBeLessThan(points.length);
   });
 
-  it('produces contiguous, fixed-width (10-minute) segments', () => {
+  it('produces contiguous, fixed-width (1-hour) segments', () => {
     const points = parseGeoJsonTrack(sampleTrack);
     const segments = bucketTrackPoints(points);
 
@@ -40,11 +40,11 @@ describe('bucketTrackPoints', () => {
     expect(bucketTrackPoints([])).toEqual([]);
   });
 
-  it('merges points within the same 10-minute window into a single segment', () => {
+  it('merges points within the same 1-hour window into a single segment', () => {
     const segments = bucketTrackPoints([
       { lat: 22.34, lon: 114.26, timestampMs: 0 },
-      { lat: 22.3401, lon: 114.2601, timestampMs: 5 * 60 * 1000 },
-      { lat: 22.34, lon: 114.26, timestampMs: 9 * 60 * 1000 },
+      { lat: 22.3401, lon: 114.2601, timestampMs: 30 * 60 * 1000 },
+      { lat: 22.34, lon: 114.26, timestampMs: 59 * 60 * 1000 },
     ]);
     expect(segments.length).toBe(1);
     expect(segments[0].startTime).toBe(0);
@@ -54,9 +54,9 @@ describe('bucketTrackPoints', () => {
     expect(segments[0].lon).toBe(114.26);
   });
 
-  it('splits points that land in different 10-minute windows, even with no gap between them', () => {
+  it('splits points that land in different 1-hour windows, even with no gap between them', () => {
     const segments = bucketTrackPoints([
-      { lat: 22.34, lon: 114.26, timestampMs: BUCKET_MS - 1000 }, // 9:59 into window 0
+      { lat: 22.34, lon: 114.26, timestampMs: BUCKET_MS - 1000 }, // 59:59 into window 0
       { lat: 22.3401, lon: 114.2601, timestampMs: BUCKET_MS + 1000 }, // 0:01 into window 1
     ]);
     expect(segments.length).toBe(2);

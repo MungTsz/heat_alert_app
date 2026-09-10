@@ -1,15 +1,14 @@
 // src/utils/trackSegmentation.ts
 import { TrackPoint, TrackSegment } from '../types/exposure';
 
-// Fixed clock-aligned window each point is bucketed into (16:00-16:10,
-// 16:10-16:20, ...) — one exposure API row per window, rather than one row
+// Fixed clock-aligned window each point is bucketed into (16:00-17:00,
+// 17:00-18:00, ...) — one exposure API row per window, rather than one row
 // per raw ping. Real GPS-logger exports commonly ping about once a minute;
 // calling the exposure API per raw point would be far more calls than
 // useful, so points are grouped into fixed windows instead. Flooring raw
-// epoch ms by this width lands on clean HK-local :00/:10/:20/... marks with
-// no timezone math needed, since HK's UTC+8 offset is a whole number of
-// hours.
-const BUCKET_DURATION_MS = 10 * 60 * 1000;
+// epoch ms by this width lands on clean HK-local :00 marks with no timezone
+// math needed, since HK's UTC+8 offset is a whole number of hours.
+const BUCKET_DURATION_MS = 60 * 60 * 1000;
 
 // Buckets points into fixed BUCKET_DURATION_MS windows and returns one
 // TrackSegment per non-empty window, in chronological order. A window's

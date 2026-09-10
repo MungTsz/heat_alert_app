@@ -64,6 +64,23 @@ export type ImportHistoryEntry = {
   report: ExposureReport;
 };
 
+// One merged "stay" on the trajectory map — a run of chronologically
+// consecutive segments within stayRadiusMeters of each other (see
+// clusterStayPoints in utils/geoClustering.ts), rendered as a single dot
+// sized by totalDurationMs instead of one dot per raw time bucket.
+export type ExposureStayCluster = {
+  lat: number;
+  lon: number;
+  startTime: number; // first merged segment's startTime
+  endTime: number; // last merged segment's endTime
+  // Sum of each merged segment's own duration — NOT (endTime - startTime) of
+  // the whole run, since a tracking gap inside a stay (e.g. app killed for a
+  // while) would otherwise silently inflate dwell time and dot size.
+  totalDurationMs: number;
+  mergedSegmentCount: number;
+  totalExposure: number; // sum across merged segments, shown in the callout
+};
+
 // A named workspace for imported data tagged with its own pid — distinct
 // from the live self-tracked device (DEFAULT_PID in useExposureReport.ts) —
 // so a track imported from someone else's device/id can be browsed by date

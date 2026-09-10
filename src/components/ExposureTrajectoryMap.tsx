@@ -1,9 +1,10 @@
 // src/components/ExposureTrajectoryMap.tsx
-import React, { useMemo } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import MapView, { Polyline, Marker, Callout } from 'react-native-maps';
-import { ExposureSegmentResult } from '../types/exposure';
-import { exposureColor } from '../utils/exposureColor';
+import React, { useMemo, useState } from 'react';
+import { View, Text, StyleSheet, LayoutChangeEvent } from 'react-native';
+import MapView, { Polyline, Marker, Callout, Region } from 'react-native-maps';
+import { ExposureSegmentResult, ExposureStayCluster } from '../types/exposure';
+import { EXPOSURE_MAP_CONFIG } from '../config/exposureMapConfig';
+import { clusterStayPoints, computeBearing, computeZoomLevel } from '../utils/geoClustering';
 
 type Props = {
   segments: ExposureSegmentResult[];
@@ -25,19 +26,48 @@ const formatDateTime = (ms: number): string =>
     minute: '2-digit',
   });
 
+// Maps dwell duration to a dot diameter via sqrt (not linear/log): the dot is
+// a circle, so scaling its radius by sqrt(duration) makes the rendered AREA
+// scale linearly with dwell time — the standard area-encoding convention.
+// Linear radius scaling would make a 2x-longer stay look 4x bigger; log
+// would flatten the common 10min-2hr range users care about most.
+const clusterDotSize = (totalDurationMs: number): number => {
+  const { minDwellMsForSizing, maxDwellMsForSizing, minDotSizePx, maxDotSizePx } =
+    EXPOSURE_MAP_CONFIG;
+  const clamped = Math.min(Math.max(totalDurationMs, minDwellMsForSizing), maxDwellMsForSizing);
+  const t =
+    Math.sqrt(clamped - minDwellMsForSizing) /
+    Math.sqrt(maxDwellMsForSizing - minDwellMsForSizing);
+  return minDotSizePx + t * (maxDotSizePx - minDotSizePx);
+};
+
+type ArrowSegment = {
+  key: string;
+  latitude: number;
+  longitude: number;
+  bearing: number;
+};
+
 // The colored trajectory (segment-pair polylines + tappable dots) shared by
 // both a single day's ExposureReportView and a multi-day range view — same
 // rendering regardless of how many calendar days the segments span.
 const ExposureTrajectoryMap: React.FC<Props> = ({ segments }) => {
-  const maxExposure = useMemo(
-    () => Math.max(0, ...segments.map(s => s.exposure)),
+  const clusters = useMemo<ExposureStayCluster[]>(
+    () => clusterStayPoints(segments, EXPOSURE_MAP_CONFIG.stayRadiusMeters),
     [segments],
   );
 
-  const region = useMemo(() => {
-    if (segments.length === 0) return null;
-    const lats = segments.map(s => s.lat);
-    const lons = segments.map(s => s.lon);
+  // Bounding-box fit of the whole dataset, recomputed only when the actual
+  // dataset changes (not on every render) so it can seed initialRegion
+  // without fighting the user's own pan/zoom afterwards.
+  const datasetKey =
+    segments.length > 0
+      ? `${segments[0].startTime}-${segments[segments.length - 1].endTime}-${segments.length}`
+      : '';
+  const fittedRegion = useMemo<Region | null>(() => {
+    if (clusters.length === 0) return null;
+    const lats = clusters.map(c => c.lat);
+    const lons = clusters.map(c => c.lon);
     const minLat = Math.min(...lats);
     const maxLat = Math.max(...lats);
     const minLon = Math.min(...lons);
@@ -48,56 +78,128 @@ const ExposureTrajectoryMap: React.FC<Props> = ({ segments }) => {
       latitudeDelta: Math.max(maxLat - minLat, 0.005) * 1.6,
       longitudeDelta: Math.max(maxLon - minLon, 0.005) * 1.6,
     };
-  }, [segments]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [datasetKey]);
+
+  const [region, setRegion] = useState<Region | null>(fittedRegion);
+  const [prevDatasetKey, setPrevDatasetKey] = useState(datasetKey);
+  if (datasetKey !== prevDatasetKey) {
+    setPrevDatasetKey(datasetKey);
+    setRegion(fittedRegion);
+  }
+
+  const [containerWidthPx, setContainerWidthPx] = useState<number | null>(null);
+  const handleLayout = (e: LayoutChangeEvent) => {
+    setContainerWidthPx(e.nativeEvent.layout.width);
+  };
+
+  const showArrows = useMemo(() => {
+    if (!region || containerWidthPx == null) return false;
+    return (
+      computeZoomLevel(region.longitudeDelta, containerWidthPx) >=
+      EXPOSURE_MAP_CONFIG.arrowMinZoomLevel
+    );
+  }, [region, containerWidthPx]);
+
+  // Geometry is expensive-ish (bearing per pair) and purely a function of the
+  // clusters, so it's memoized independent of region/zoom — panning/zooming
+  // only toggles the cheap `showArrows` boolean, never recomputes this.
+  const arrowSegments = useMemo<ArrowSegment[]>(() => {
+    const result: ArrowSegment[] = [];
+    for (let i = 0; i < clusters.length - 1; i++) {
+      const a = clusters[i];
+      const b = clusters[i + 1];
+      result.push({
+        key: `arrow-${a.startTime}-${i}`,
+        latitude: (a.lat + b.lat) / 2,
+        longitude: (a.lon + b.lon) / 2,
+        bearing: computeBearing(a.lat, a.lon, b.lat, b.lon),
+      });
+    }
+    return result;
+  }, [clusters]);
 
   if (!region) return null;
 
   return (
-    <View style={styles.mapContainer}>
-      <MapView style={StyleSheet.absoluteFill} region={region}>
-        {segments.slice(0, -1).map((segment, i) => {
-          const next = segments[i + 1];
+    <View style={styles.mapContainer} onLayout={handleLayout}>
+      <MapView
+        style={StyleSheet.absoluteFill}
+        initialRegion={fittedRegion ?? undefined}
+        onRegionChangeComplete={setRegion}
+        // Pins light mode regardless of OS/system dark-mode — Google Maps
+        // SDK and MapKit can otherwise switch to a dark theme automatically.
+        userInterfaceStyle="light"
+      >
+        {clusters.slice(0, -1).map((cluster, i) => {
+          const next = clusters[i + 1];
           return (
             <Polyline
-              key={`line-${segment.startTime}-${i}`}
+              key={`line-${cluster.startTime}-${i}`}
               coordinates={[
-                { latitude: segment.lat, longitude: segment.lon },
+                { latitude: cluster.lat, longitude: cluster.lon },
                 { latitude: next.lat, longitude: next.lon },
               ]}
-              strokeColor={exposureColor(segment.exposure, maxExposure)}
+              strokeColor={EXPOSURE_MAP_CONFIG.trackColor}
               strokeWidth={4}
             />
           );
         })}
-        {segments.map((segment, i) => (
-          <Marker
-            key={`dot-${segment.startTime}-${i}`}
-            coordinate={{ latitude: segment.lat, longitude: segment.lon }}
-            anchor={{ x: 0.5, y: 0.5 }}
-            tracksViewChanges={false}
-          >
-            <View
-              style={[
-                styles.mapDot,
-                { backgroundColor: exposureColor(segment.exposure, maxExposure) },
-              ]}
-            />
-            <Callout>
-              <View style={styles.calloutBox}>
-                <Text style={styles.calloutTime}>
-                  {formatDateTime(segment.startTime)} – {formatDateTime(segment.endTime)}{' '}
-                  ({formatDuration(segment.endTime - segment.startTime)})
-                </Text>
-                <Text style={styles.calloutLocation}>
-                  {segment.lat.toFixed(5)}, {segment.lon.toFixed(5)}
-                </Text>
-                <Text style={styles.calloutExposure}>
-                  Exposure: {segment.exposure.toFixed(3)} %AR·h
-                </Text>
-              </View>
-            </Callout>
-          </Marker>
-        ))}
+        {showArrows &&
+          arrowSegments.map(arrow => (
+            <Marker
+              key={arrow.key}
+              coordinate={{ latitude: arrow.latitude, longitude: arrow.longitude }}
+              anchor={{ x: 0.5, y: 0.5 }}
+              tracksViewChanges={false}
+            >
+              <View
+                style={[styles.arrow, { transform: [{ rotate: `${arrow.bearing}deg` }] }]}
+              />
+            </Marker>
+          ))}
+        {clusters.map((cluster, i) => {
+          const size = clusterDotSize(cluster.totalDurationMs);
+          return (
+            <Marker
+              key={`dot-${cluster.startTime}-${i}`}
+              coordinate={{ latitude: cluster.lat, longitude: cluster.lon }}
+              anchor={{ x: 0.5, y: 0.5 }}
+              tracksViewChanges={false}
+            >
+              <View
+                style={[
+                  styles.mapDot,
+                  {
+                    width: size,
+                    height: size,
+                    borderRadius: size / 2,
+                    backgroundColor: EXPOSURE_MAP_CONFIG.trackColor,
+                  },
+                ]}
+              />
+              <Callout>
+                <View style={styles.calloutBox}>
+                  <Text style={styles.calloutTime}>
+                    {formatDateTime(cluster.startTime)} – {formatDateTime(cluster.endTime)}{' '}
+                    ({formatDuration(cluster.totalDurationMs)})
+                  </Text>
+                  <Text style={styles.calloutLocation}>
+                    {cluster.lat.toFixed(5)}, {cluster.lon.toFixed(5)}
+                  </Text>
+                  <Text style={styles.calloutExposure}>
+                    Total exposure: {cluster.totalExposure.toFixed(3)} %AR·h
+                  </Text>
+                  {cluster.mergedSegmentCount > 1 && (
+                    <Text style={styles.calloutMerged}>
+                      Visits merged: {cluster.mergedSegmentCount}
+                    </Text>
+                  )}
+                </View>
+              </Callout>
+            </Marker>
+          );
+        })}
       </MapView>
     </View>
   );
@@ -111,16 +213,24 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   mapDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
     borderWidth: 1.5,
     borderColor: 'rgba(255,255,255,0.9)',
+  },
+  arrow: {
+    width: 0,
+    height: 0,
+    borderLeftWidth: 5,
+    borderRightWidth: 5,
+    borderBottomWidth: 8,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderBottomColor: EXPOSURE_MAP_CONFIG.arrowColor,
   },
   calloutBox: { minWidth: 160, padding: 4 },
   calloutTime: { fontSize: 12, fontWeight: '700', color: '#1C1C1E' },
   calloutLocation: { fontSize: 11, color: '#8E8E93', marginTop: 2 },
   calloutExposure: { fontSize: 12, fontWeight: '600', color: '#1C1C1E', marginTop: 4 },
+  calloutMerged: { fontSize: 11, color: '#8E8E93', marginTop: 2 },
 });
 
 export default ExposureTrajectoryMap;
