@@ -1,13 +1,10 @@
 // src/hooks/useTodayExposure.ts
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ExposureReport, ExposureSegmentResult } from '../types/exposure';
-import { getTodayTrackPoints } from '../services/deviceTrackingService';
-import { bucketTrackPoints } from '../utils/trackSegmentation';
-import { buildExposureRows } from '../utils/buildExposureRequestRows';
+import { ExposureReport } from '../types/exposure';
+import { getTodayRawLocations, toLiveTrackingPing } from '../services/deviceTrackingService';
 import { exposureDataProvider } from '../data/exposure';
-import { DEFAULT_PID } from './useExposureReport';
-import { toHkDateKey } from '../utils/hkDate';
-import { saveDailyExposureReport } from '../services/exposureHistoryService';
+import { DEFAULT_PID } from '../utils/exposurePid';
+import { refreshHistoryCache } from '../services/exposureHistoryService';
 
 // Matches HeatAlertEngine's foreground check cadence — this is a
 // while-the-screen-is-open poll, not a background job.
@@ -18,68 +15,34 @@ export const useTodayExposure = (trackingEnabled: boolean) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Segments a later point has already moved away from — their exposure is
-  // final, so each is calculated once here and never resent to the API.
-  // Refs, not state: this is refresh()'s own bookkeeping, not a render input.
-  const confirmedSegmentsRef = useRef<ExposureSegmentResult[]>([]);
-  const confirmedUpToRef = useRef(0);
+  // Only pings newer than this cursor get sent to /ingest each poll — the
+  // ETL backend does its own windowing/classification/persistence now, so
+  // the client just needs to avoid resending pings it already ingested.
+  const lastIngestedAtMsRef = useRef(0);
 
   const refresh = useCallback(async () => {
     if (!trackingEnabled) return;
     setLoading(true);
     setError(null);
     try {
-      const points = await getTodayTrackPoints();
-      const newPoints = points.filter(
-        p => p.timestampMs >= confirmedUpToRef.current,
+      const locations = await getTodayRawLocations();
+      const newLocations = locations.filter(
+        location => new Date(location.timestamp).getTime() > lastIngestedAtMsRef.current,
       );
-      const newSegments = bucketTrackPoints(newPoints);
 
-      if (newSegments.length > 0) {
-        // bucketTrackPoints always leaves its last window "open" (a later
-        // point could still land in the same window) — only the earlier
-        // ones in this new batch are truly final.
-        const closing = newSegments.slice(0, -1);
-        const growing = newSegments[newSegments.length - 1];
-        const toCalculate = [...closing, growing];
-
-        const rows = buildExposureRows(toCalculate, DEFAULT_PID);
-        const results = await exposureDataProvider.calculateExposure(rows);
-        const withExposure: ExposureSegmentResult[] = toCalculate.map(
-          (segment, i) => ({
-            ...segment,
-            exposure: results[i]?.exposure ?? 0,
-          }),
+      if (newLocations.length > 0) {
+        const pings = newLocations.map(toLiveTrackingPing);
+        await exposureDataProvider.ingest(DEFAULT_PID, pings);
+        lastIngestedAtMsRef.current = Math.max(
+          ...newLocations.map(location => new Date(location.timestamp).getTime()),
         );
-
-        if (closing.length > 0) {
-          confirmedSegmentsRef.current = [
-            ...confirmedSegmentsRef.current,
-            ...withExposure.slice(0, closing.length),
-          ];
-          confirmedUpToRef.current = closing[closing.length - 1].endTime;
-        }
-        const growingResult = withExposure[withExposure.length - 1];
-        const segments = [...confirmedSegmentsRef.current, growingResult];
-
-        const built: ExposureReport = {
-          totalExposure: segments.reduce(
-            (sum, s) => sum + (s.exposure > 0 ? s.exposure : 0),
-            0,
-          ),
-          segments,
-          timeRangeStart: segments[0].startTime,
-          timeRangeEnd: segments[segments.length - 1].endTime,
-          pointCount: points.length,
-        };
-        setReport(built);
-        // Keeps today's persisted history entry fresh across this poll —
-        // the only way past-day browsing/the 10-day chart can work, since
-        // the tracking plugin itself only retains ~1 day of raw points.
-        await saveDailyExposureReport(toHkDateKey(), built);
-      } else if (confirmedSegmentsRef.current.length > 0) {
-        setReport(prev => (prev ? { ...prev, pointCount: points.length } : prev));
       }
+
+      const built = await exposureDataProvider.getHourlyReport(DEFAULT_PID);
+      setReport(built);
+      // Fire-and-forget — keeps the "DAILY EXPOSURE" history view fresh
+      // without this poll waiting on a second network round trip.
+      refreshHistoryCache(DEFAULT_PID).catch(() => {});
     } catch (err) {
       const message =
         err instanceof Error ? err.message : 'Failed to calculate exposure.';
@@ -89,12 +52,12 @@ export const useTodayExposure = (trackingEnabled: boolean) => {
     }
   }, [trackingEnabled]);
 
-  // A fresh mount (e.g. reopening the Exposure tab) starts the incremental
-  // bookkeeping over — it's an in-memory optimization for while this screen
-  // stays open, not persisted state.
+  // A fresh mount (e.g. reopening the Exposure tab) starts the ingest cursor
+  // over — it's an in-memory optimization for while this screen stays open,
+  // not persisted state; the backend already has everything from earlier
+  // sessions, so re-sending today's pings once is harmless.
   useEffect(() => {
-    confirmedSegmentsRef.current = [];
-    confirmedUpToRef.current = 0;
+    lastIngestedAtMsRef.current = 0;
     setReport(null);
   }, []);
 

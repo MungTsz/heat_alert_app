@@ -80,6 +80,7 @@ export const clusterStayPoints = (
       totalDurationMs: run.reduce((sum, s) => sum + (s.endTime - s.startTime), 0),
       mergedSegmentCount: run.length,
       totalExposure: run.reduce((sum, s) => sum + s.exposure, 0),
+      io: anchor.io,
     });
   };
 
@@ -87,7 +88,14 @@ export const clusterStayPoints = (
   for (let i = 1; i < segments.length; i++) {
     const segment = segments[i];
     const anchor = run[0];
-    if (haversineMeters(anchor.lat, anchor.lon, segment.lat, segment.lon) > radiusMeters) {
+    // Also break the run on an io change (e.g. a doorway transition) even
+    // when the backend's per-hour reference point hasn't moved — otherwise
+    // an Indoor and an Outdoor hour at the same spot would wrongly merge
+    // into one cluster with an arbitrary io label.
+    if (
+      segment.io !== anchor.io ||
+      haversineMeters(anchor.lat, anchor.lon, segment.lat, segment.lon) > radiusMeters
+    ) {
       closeRun(run);
       run = [segment];
     } else {

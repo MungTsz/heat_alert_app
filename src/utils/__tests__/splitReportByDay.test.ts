@@ -5,7 +5,14 @@ const segment = (
   startTime: number,
   endTime: number,
   exposure: number,
-): ExposureSegmentResult => ({ startTime, endTime, lat: 22.3, lon: 114.2, exposure });
+): ExposureSegmentResult => ({
+  startTime,
+  endTime,
+  lat: 22.3,
+  lon: 114.2,
+  exposure,
+  io: 'Outdoor',
+});
 
 const report = (segments: ExposureSegmentResult[]): ExposureReport => ({
   totalExposure: segments.reduce((s, x) => s + (x.exposure > 0 ? x.exposure : 0), 0),

@@ -1,9 +1,8 @@
-import { ExposureRequestRow, ExposureResultRow } from '../../types/exposure';
+import { ExposureIngestFeature, ExposureReport } from '../../types/exposure';
 
 export interface ExposureDataProvider {
-  calculateExposure: (
-    rows: ExposureRequestRow[],
-  ) => Promise<ExposureResultRow[]>;
+  ingest: (pid: string, features: ExposureIngestFeature[]) => Promise<void>;
+  getHourlyReport: (pid: string) => Promise<ExposureReport>;
 }
 
-export type { ExposureRequestRow, ExposureResultRow };
+export type { ExposureIngestFeature, ExposureReport };

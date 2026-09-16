@@ -160,6 +160,10 @@ const ExposureTrajectoryMap: React.FC<Props> = ({ segments }) => {
           ))}
         {clusters.map((cluster, i) => {
           const size = clusterDotSize(cluster.totalDurationMs);
+          const dotColor =
+            cluster.io === 'Indoor'
+              ? EXPOSURE_MAP_CONFIG.indoorColor
+              : EXPOSURE_MAP_CONFIG.outdoorColor;
           return (
             <Marker
               key={`dot-${cluster.startTime}-${i}`}
@@ -174,7 +178,7 @@ const ExposureTrajectoryMap: React.FC<Props> = ({ segments }) => {
                     width: size,
                     height: size,
                     borderRadius: size / 2,
-                    backgroundColor: EXPOSURE_MAP_CONFIG.trackColor,
+                    backgroundColor: dotColor,
                   },
                 ]}
               />
@@ -187,6 +191,7 @@ const ExposureTrajectoryMap: React.FC<Props> = ({ segments }) => {
                   <Text style={styles.calloutLocation}>
                     {cluster.lat.toFixed(5)}, {cluster.lon.toFixed(5)}
                   </Text>
+                  <Text style={[styles.calloutIo, { color: dotColor }]}>{cluster.io}</Text>
                   <Text style={styles.calloutExposure}>
                     Total exposure: {cluster.totalExposure.toFixed(3)} %AR·h
                   </Text>
@@ -229,6 +234,7 @@ const styles = StyleSheet.create({
   calloutBox: { minWidth: 160, padding: 4 },
   calloutTime: { fontSize: 12, fontWeight: '700', color: '#1C1C1E' },
   calloutLocation: { fontSize: 11, color: '#8E8E93', marginTop: 2 },
+  calloutIo: { fontSize: 11, fontWeight: '700', marginTop: 4 },
   calloutExposure: { fontSize: 12, fontWeight: '600', color: '#1C1C1E', marginTop: 4 },
   calloutMerged: { fontSize: 11, color: '#8E8E93', marginTop: 2 },
 });

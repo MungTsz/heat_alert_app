@@ -1,28 +1,30 @@
 // src/utils/gpsTrackParser.ts
-import { TrackPoint } from '../types/exposure';
+import { GeoJsonPointFeature } from '../types/exposure';
 
-type GeoJsonFeature = {
+type RawGeoJsonFeature = {
+  type?: string;
   geometry?: { type?: string; coordinates?: unknown };
   properties?: { time?: string; speed?: number };
 };
 
 type GeoJsonFeatureCollection = {
   type?: string;
-  features?: GeoJsonFeature[];
+  features?: RawGeoJsonFeature[];
 };
 
-// Parses a GeoJSON FeatureCollection of Point features (the shape exported
-// by phone/watch GPS logging apps — properties.time as ISO8601,
-// geometry.coordinates as [lng, lat]) into chronologically-sorted
-// TrackPoints. Malformed features are dropped rather than throwing, since
-// real-world exports commonly include a few bad rows.
-export const parseGeoJsonTrack = (json: unknown): TrackPoint[] => {
+// Validates a GeoJSON FeatureCollection of Point features (the shape
+// exported by phone/watch GPS logging apps — properties.time as ISO8601,
+// geometry.coordinates as [lng, lat]) and returns the well-formed features
+// unmodified, ready to POST to the ETL backend's /ingest endpoint. Malformed
+// features are dropped rather than throwing, since real-world exports
+// commonly include a few bad rows.
+export const extractGeoJsonFeatures = (json: unknown): GeoJsonPointFeature[] => {
   const collection = json as GeoJsonFeatureCollection;
   if (!collection || !Array.isArray(collection.features)) {
     throw new Error('Not a valid GeoJSON FeatureCollection.');
   }
 
-  const points: TrackPoint[] = [];
+  const features: GeoJsonPointFeature[] = [];
 
   for (const feature of collection.features) {
     if (feature?.geometry?.type !== 'Point') continue;
@@ -33,19 +35,18 @@ export const parseGeoJsonTrack = (json: unknown): TrackPoint[] => {
     if (typeof lon !== 'number' || typeof lat !== 'number') continue;
 
     const timeStr = feature.properties?.time;
-    if (typeof timeStr !== 'string') continue;
-    const timestampMs = Date.parse(timeStr);
-    if (Number.isNaN(timestampMs)) continue;
+    if (typeof timeStr !== 'string' || Number.isNaN(Date.parse(timeStr))) continue;
 
     const speed = feature.properties?.speed;
 
-    points.push({
-      lat,
-      lon,
-      timestampMs,
-      speed: typeof speed === 'number' ? speed : undefined,
+    features.push({
+      type: 'Feature',
+      properties: { time: timeStr, speed: typeof speed === 'number' ? speed : undefined },
+      geometry: { type: 'Point', coordinates: [lon, lat] },
     });
   }
 
-  return points.sort((a, b) => a.timestampMs - b.timestampMs);
+  return features.sort(
+    (a, b) => Date.parse(a.properties.time) - Date.parse(b.properties.time),
+  );
 };

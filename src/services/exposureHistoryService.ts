@@ -1,14 +1,18 @@
 // src/services/exposureHistoryService.ts
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { DailyExposureEntry, ExposureReport, ExposureSegmentResult } from '../types/exposure';
-import { DEFAULT_PID } from '../hooks/useExposureReport';
+import { DailyExposureEntry } from '../types/exposure';
+import { exposureDataProvider } from '../data/exposure';
+import { splitExposureReportByDay } from '../utils/splitReportByDay';
+import { DEFAULT_PID } from '../utils/exposurePid';
 
-// The background-geolocation plugin only reliably retains ~1 day of raw
-// points (see deviceTrackingService.ts), so "browse a past day"/"last 10
-// days" can't be built by re-querying it — each day's already-computed
-// report is persisted here as it's produced instead.
+// The ETL backend is now the source of truth for a pid's full history
+// (GET /exposure/hourly/{pid} returns everything ever ingested, unfiltered
+// by date) — this is just an AsyncStorage cache of the last successful
+// fetch, for instant paint and an offline fallback, not an accumulating log.
 const HISTORY_KEY = 'exposure_daily_history';
-const RETENTION_MS = 14 * 24 * 60 * 60 * 1000; // a few days' buffer past the 10 shown
+// Bounds cache size for long-lived devices — the backend itself is the
+// unbounded store; this only needs enough days for recent browsing.
+const MAX_CACHED_DAYS = 60;
 
 type HistoryMap = Record<string, DailyExposureEntry>;
 
@@ -19,64 +23,44 @@ type HistoryMap = Record<string, DailyExposureEntry>;
 const historyKeyFor = (deviceId: string): string =>
   deviceId === DEFAULT_PID ? HISTORY_KEY : `${HISTORY_KEY}:${deviceId}`;
 
-const readHistory = async (deviceId: string): Promise<HistoryMap> => {
+const readCache = async (deviceId: string): Promise<HistoryMap> => {
   try {
     const raw = await AsyncStorage.getItem(historyKeyFor(deviceId));
     return raw ? JSON.parse(raw) : {};
   } catch (error) {
-    console.log('Failed to read exposure history:', error);
+    console.log('Failed to read cached exposure history:', error);
     return {};
   }
 };
 
-const mergeReports = (a: ExposureReport, b: ExposureReport): ExposureReport => {
-  const segments: ExposureSegmentResult[] = [...a.segments, ...b.segments].sort(
-    (x, y) => x.startTime - y.startTime,
-  );
-  return {
-    totalExposure: segments.reduce((sum, s) => sum + (s.exposure > 0 ? s.exposure : 0), 0),
-    segments,
-    timeRangeStart: segments[0]?.startTime ?? Math.min(a.timeRangeStart, b.timeRangeStart),
-    timeRangeEnd: segments[segments.length - 1]?.endTime ?? Math.max(a.timeRangeEnd, b.timeRangeEnd),
-    pointCount: a.pointCount + b.pointCount,
-  };
-};
+const toSortedEntries = (map: HistoryMap): DailyExposureEntry[] =>
+  Object.values(map).sort((a, b) => a.date.localeCompare(b.date));
 
-// Saves a day's report for the given device (the live device by default).
-// If that device already has an entry for this day — e.g. a second import
-// landing on a date already covered by an earlier one — the two reports are
-// merged rather than one overwriting the other, so a device's history
-// accumulates across imports the same way the live device's accumulates
-// across a day's tracking ticks.
-export const saveDailyExposureReport = async (
-  dateKey: string,
-  report: ExposureReport,
+// Re-fetches the pid's full history from the backend, re-caches it, and
+// returns it — call this whenever the UI needs fresh data (a live poll tick,
+// opening a device's history, after an import).
+export const refreshHistoryCache = async (
   deviceId: string = DEFAULT_PID,
-): Promise<void> => {
-  const history = await readHistory(deviceId);
+): Promise<DailyExposureEntry[]> => {
+  const report = await exposureDataProvider.getHourlyReport(deviceId);
   const now = Date.now();
-  const existing = history[dateKey];
-  const mergedReport =
-    deviceId === DEFAULT_PID || !existing ? report : mergeReports(existing.report, report);
-  history[dateKey] = { date: dateKey, report: mergedReport, updatedAt: now };
-
-  const pruned: HistoryMap = {};
-  for (const [date, entry] of Object.entries(history)) {
-    if (now - entry.updatedAt < RETENTION_MS) {
-      pruned[date] = entry;
-    }
+  const slices = splitExposureReportByDay(report);
+  const map: HistoryMap = {};
+  for (const { date, report: dayReport } of slices.slice(-MAX_CACHED_DAYS)) {
+    map[date] = { date, report: dayReport, updatedAt: now };
   }
 
   try {
-    await AsyncStorage.setItem(historyKeyFor(deviceId), JSON.stringify(pruned));
+    await AsyncStorage.setItem(historyKeyFor(deviceId), JSON.stringify(map));
   } catch (error) {
-    console.log('Failed to save exposure history:', error);
+    console.log('Failed to cache exposure history:', error);
   }
+
+  return toSortedEntries(map);
 };
 
-export const getDailyExposureHistory = async (
+// Cache-only read — no network call, so it renders instantly and still
+// works if the backend is unreachable.
+export const getCachedDailyExposureHistory = async (
   deviceId: string = DEFAULT_PID,
-): Promise<DailyExposureEntry[]> => {
-  const history = await readHistory(deviceId);
-  return Object.values(history).sort((a, b) => a.date.localeCompare(b.date));
-};
+): Promise<DailyExposureEntry[]> => toSortedEntries(await readCache(deviceId));

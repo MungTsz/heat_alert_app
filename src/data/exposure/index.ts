@@ -1,12 +1,11 @@
 import { mockExposureProvider } from './mockExposureProvider';
 import { apiExposureProvider } from './apiExposureProvider';
-import { isPraiseConfigured } from '../../config/praiseConfig';
+import { isExposureApiConfigured } from '../../config/exposureApiConfig';
 import { ExposureDataProvider } from './types';
 
-// expo_calx (src/services/praiseApi.ts: fetchPraiseExposureCalc) was
-// confirmed working live on 2026-09-07, so exposure now auto-switches on
-// PRAISE_API_KEY the same way aqhi/aqhiForecast already do.
-export const exposureDataProvider: ExposureDataProvider = isPraiseConfigured()
+// Switches to the local exposure ETL backend once EXPOSURE_API_BASE_URL is
+// set, the same way aqhi/aqhiForecast auto-switch on their own config.
+export const exposureDataProvider: ExposureDataProvider = isExposureApiConfigured()
   ? apiExposureProvider
   : mockExposureProvider;
 

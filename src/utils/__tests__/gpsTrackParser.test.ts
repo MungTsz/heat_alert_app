@@ -1,35 +1,35 @@
-import { parseGeoJsonTrack } from '../gpsTrackParser';
+import { extractGeoJsonFeatures } from '../gpsTrackParser';
 import sampleTrack from '../__fixtures__/sampleTrack.geojson.json';
 
-describe('parseGeoJsonTrack', () => {
-  it('parses all valid Point features from the sample track', () => {
-    const points = parseGeoJsonTrack(sampleTrack);
-    expect(points.length).toBe(sampleTrack.features.length);
+describe('extractGeoJsonFeatures', () => {
+  it('extracts all valid Point features from the sample track', () => {
+    const features = extractGeoJsonFeatures(sampleTrack);
+    expect(features.length).toBe(sampleTrack.features.length);
   });
 
-  it('sorts points chronologically', () => {
-    const points = parseGeoJsonTrack(sampleTrack);
-    for (let i = 1; i < points.length; i++) {
-      expect(points[i].timestampMs).toBeGreaterThanOrEqual(
-        points[i - 1].timestampMs,
+  it('sorts features chronologically', () => {
+    const features = extractGeoJsonFeatures(sampleTrack);
+    for (let i = 1; i < features.length; i++) {
+      expect(Date.parse(features[i].properties.time)).toBeGreaterThanOrEqual(
+        Date.parse(features[i - 1].properties.time),
       );
     }
   });
 
-  it('maps GeoJSON [lng, lat] coordinates to {lat, lon}', () => {
-    const points = parseGeoJsonTrack(sampleTrack);
-    expect(points[0].lat).toBeCloseTo(22.3399352);
-    expect(points[0].lon).toBeCloseTo(114.2632821);
+  it('keeps GeoJSON [lng, lat] coordinate order untouched', () => {
+    const features = extractGeoJsonFeatures(sampleTrack);
+    expect(features[0].geometry.coordinates[0]).toBeCloseTo(114.2632821);
+    expect(features[0].geometry.coordinates[1]).toBeCloseTo(22.3399352);
   });
 
   it('carries speed through when present', () => {
-    const points = parseGeoJsonTrack(sampleTrack);
-    const withSpeed = points.find(p => p.speed !== undefined);
-    expect(withSpeed?.speed).toBeGreaterThan(0);
+    const features = extractGeoJsonFeatures(sampleTrack);
+    const withSpeed = features.find(f => f.properties.speed !== undefined);
+    expect(withSpeed?.properties.speed).toBeGreaterThan(0);
   });
 
   it('drops non-Point features and malformed entries without throwing', () => {
-    const points = parseGeoJsonTrack({
+    const features = extractGeoJsonFeatures({
       type: 'FeatureCollection',
       features: [
         { type: 'Feature', geometry: { type: 'LineString', coordinates: [] } },
@@ -41,10 +41,10 @@ describe('parseGeoJsonTrack', () => {
         },
       ],
     });
-    expect(points.length).toBe(1);
+    expect(features.length).toBe(1);
   });
 
   it('throws on a non-FeatureCollection input', () => {
-    expect(() => parseGeoJsonTrack({ foo: 'bar' })).toThrow();
+    expect(() => extractGeoJsonFeatures({ foo: 'bar' })).toThrow();
   });
 });

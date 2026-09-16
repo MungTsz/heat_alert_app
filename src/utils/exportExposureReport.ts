@@ -12,6 +12,7 @@ export const buildExposureReportCsv = (report: ExposureReport): string => {
     'longitude',
     'duration_hours',
     'exposure',
+    'io',
   ].join(',');
 
   const rows = report.segments.map(segment => {
@@ -23,6 +24,7 @@ export const buildExposureReportCsv = (report: ExposureReport): string => {
       segment.lon.toFixed(6),
       durationHours.toFixed(4),
       segment.exposure.toFixed(4),
+      segment.io,
     ].join(',');
   });
 

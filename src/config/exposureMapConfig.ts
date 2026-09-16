@@ -7,6 +7,10 @@
 export const EXPOSURE_MAP_CONFIG = {
   trackColor: '#2B7A9E',
   arrowColor: '#2B7A9E',
+  // Indoor/outdoor dot coloring — shared with ExposureTrendChart's stacked
+  // bars so the same io state reads the same color across map and chart.
+  indoorColor: '#8B5CF6',
+  outdoorColor: '#2B7A9E',
   // "Same location" judgment threshold for merging consecutive segments into
   // one stay-point cluster — matches deviceTrackingService.ts's existing
   // distanceFilter of 30m.

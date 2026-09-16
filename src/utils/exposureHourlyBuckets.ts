@@ -4,6 +4,8 @@ import { ExposureSegmentResult } from '../types/exposure';
 export type HourlyExposureBucket = {
   hour: number; // 0-23, HK local
   label: string;
+  indoor: number;
+  outdoor: number;
   total: number;
 };
 
@@ -23,23 +25,30 @@ export const formatHourLabel = (hour24: number): string => {
   return `${hour24 - 12}PM`;
 };
 
-// Sums each segment's exposure into its HK-local hour-of-day, matching the
-// same "sum, not average" convention totalExposure/ExposureDailyBarChart
-// already use. Always returns all 24 hours (zero-filled) so the chart's x
-// axis is stable regardless of which hours actually have data. Failed rows
-// (the API's -9 sentinel) are excluded from the sum.
+// Sums each segment's exposure into its HK-local hour-of-day, split by
+// indoor/outdoor for the stacked-bar chart. Always returns all 24 hours
+// (zero-filled) so the chart's x axis is stable regardless of which hours
+// actually have data. Failed rows (a non-positive exposure sentinel) are
+// excluded from the sum.
 export const bucketExposureByHour = (
   segments: ExposureSegmentResult[],
 ): HourlyExposureBucket[] => {
-  const totals = new Array(24).fill(0);
+  const indoorTotals = new Array(24).fill(0);
+  const outdoorTotals = new Array(24).fill(0);
   for (const segment of segments) {
     if (segment.exposure <= 0) continue;
     const hour = hkLocalHour(segment.startTime);
-    totals[hour] += segment.exposure;
+    if (segment.io === 'Indoor') {
+      indoorTotals[hour] += segment.exposure;
+    } else {
+      outdoorTotals[hour] += segment.exposure;
+    }
   }
-  return totals.map((total, hour) => ({
+  return indoorTotals.map((indoor, hour) => ({
     hour,
     label: formatHourLabel(hour),
-    total,
+    indoor,
+    outdoor: outdoorTotals[hour],
+    total: indoor + outdoorTotals[hour],
   }));
 };

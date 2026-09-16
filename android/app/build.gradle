@@ -102,7 +102,12 @@ android {
         versionName "1.0"
         manifestPlaceholders = [
             googleMapsApiKey: project.env.get("GOOGLE_ANDROID_MAP_KEY"),
-            backgroundGeolocationLicense: project.env.get("BACKGROUND_GEOLOCATION_LICENSE")
+            backgroundGeolocationLicense: project.env.get("BACKGROUND_GEOLOCATION_LICENSE"),
+            // Dev-only: lets the app reach the local exposure ETL backend over
+            // plain http:// on a LAN IP (Android 9+ blocks cleartext traffic by
+            // default). The backend's LAN IP varies per dev machine/hotspot, so
+            // a network-security-config pinned to one IP isn't practical here.
+            usesCleartextTraffic: "true"
         ]
     }
     signingConfigs {

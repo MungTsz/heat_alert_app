@@ -36,7 +36,7 @@ const ExposureReportView: React.FC<Props> = ({ report, title }) => {
         <View style={styles.mockBanner}>
           <AlertTriangle size={14} color="#9A6700" />
           <Text style={styles.mockBannerText}>
-            Mock data — not yet connected to the live exposure API
+            Mock data — not yet connected to the exposure ETL backend
           </Text>
         </View>
       )}

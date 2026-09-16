@@ -20,12 +20,11 @@ import {
   Plus,
 } from 'lucide-react-native';
 import { pick, types, isErrorWithCode, errorCodes } from '@react-native-documents/picker';
-import { parseGeoJsonTrack } from '../utils/gpsTrackParser';
-import { useExposureReport } from '../hooks/useExposureReport';
+import { extractGeoJsonFeatures } from '../utils/gpsTrackParser';
+import { exposureDataProvider } from '../data/exposure';
 import { useImportHistory } from '../hooks/useImportHistory';
 import { useExposureDevices } from '../hooks/useExposureDevices';
-import { splitExposureReportByDay } from '../utils/splitReportByDay';
-import { saveDailyExposureReport } from '../services/exposureHistoryService';
+import { refreshHistoryCache } from '../services/exposureHistoryService';
 import { ExposureReport } from '../types/exposure';
 import ExposureDaySwitcher from './ExposureDaySwitcher';
 
@@ -39,11 +38,17 @@ type Props = {
 };
 
 const MAX_FILES = 3;
-// Sentinel target meaning "don't attach this to any device" — computed and
-// shown inline, but never written to import history or a device's daily
-// history, so it disappears once the modal closes. This is the default
-// target so a plain import-with-no-device-chosen is a no-save preview.
+// Sentinel meaning "preview only, don't attach to a device workspace" — the
+// ETL backend always persists whatever's ingested under a pid (there's no
+// ephemeral/no-save mode), so this path generates a one-off throwaway pid
+// per import instead of skipping the network call. It's logged in the flat
+// import history (see useImportHistory) since it's the only way to revisit
+// it later, unlike a device import which stays browsable via its own
+// device workspace.
 const INSTANT_TARGET = '__instant__';
+
+const makePreviewPid = (): string =>
+  `preview-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
 type ImportItem = {
   id: string;
@@ -56,7 +61,6 @@ type ImportItem = {
 
 const ImportTrackModal: React.FC<Props> = ({ visible, onClose, lockedDeviceId }) => {
   const insets = useSafeAreaInsets();
-  const { generate } = useExposureReport();
   const { addImport } = useImportHistory();
   const { devices, createDevice } = useExposureDevices();
   const [url, setUrl] = useState('');
@@ -87,9 +91,9 @@ const ImportTrackModal: React.FC<Props> = ({ visible, onClose, lockedDeviceId })
 
   const processOne = async (id: string, sourceLabel: string, text: string) => {
     updateItem(id, { status: 'reading' });
-    let points;
+    let features;
     try {
-      points = parseGeoJsonTrack(JSON.parse(text));
+      features = extractGeoJsonFeatures(JSON.parse(text));
     } catch (err) {
       updateItem(id, {
         status: 'error',
@@ -97,27 +101,27 @@ const ImportTrackModal: React.FC<Props> = ({ visible, onClose, lockedDeviceId })
       });
       return;
     }
-    if (points.length === 0) {
+    if (features.length === 0) {
       updateItem(id, { status: 'error', error: 'No valid GPS points found in that file.' });
       return;
     }
     updateItem(id, { status: 'calculating' });
     const isInstant = targetDeviceId === INSTANT_TARGET;
+    const pid = isInstant ? makePreviewPid() : targetDeviceId;
     try {
-      // Instant previews aren't tied to any device — the pid only matters
-      // for the exposure calculation call itself, not for what gets saved.
-      const report = await generate(points, isInstant ? undefined : targetDeviceId);
+      await exposureDataProvider.ingest(pid, features);
+      const report = await exposureDataProvider.getHourlyReport(pid);
       updateItem(id, { status: 'done', report });
-      if (!isInstant) {
-        // Recorded in the flat import log regardless of device (kept for a
-        // future revisit/export surface — see ImportHistoryDetailModal),
-        // plus fed into this device workspace's own browsable per-day
-        // history (accumulating across imports — see
-        // exposureHistoryService.ts's merge-on-save behavior).
-        await addImport(sourceLabel, report);
-        for (const { date, report: dayReport } of splitExposureReportByDay(report)) {
-          await saveDailyExposureReport(date, dayReport, targetDeviceId);
-        }
+      if (isInstant) {
+        // Not tied to any device workspace, so the import log is the only
+        // way to revisit it later — stores the throwaway pid, not the
+        // report itself, since the backend is now the source of truth.
+        await addImport(sourceLabel, pid);
+      } else {
+        // Fed into this device workspace's own browsable per-day history —
+        // the backend already accumulates across imports under this pid, so
+        // this just re-caches its full history.
+        await refreshHistoryCache(targetDeviceId);
       }
     } catch (err) {
       updateItem(id, {
@@ -235,7 +239,7 @@ const ImportTrackModal: React.FC<Props> = ({ visible, onClose, lockedDeviceId })
                           targetDeviceId === INSTANT_TARGET && styles.deviceChipTextActive,
                         ]}
                       >
-                        Instant (don't save)
+                        Preview only
                       </Text>
                     </TouchableOpacity>
                     {devices.map(device => (

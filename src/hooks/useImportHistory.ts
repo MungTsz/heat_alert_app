@@ -1,7 +1,7 @@
 // src/hooks/useImportHistory.ts
 import { useCallback, useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { ExposureReport, ImportHistoryEntry } from '../types/exposure';
+import { ImportHistoryEntry } from '../types/exposure';
 
 const STORAGE_KEY = 'exposure_import_history';
 // User-curated saves, not an auto-generated log — no time-based pruning,
@@ -28,12 +28,12 @@ export const useImportHistory = () => {
     loadImports();
   }, [loadImports]);
 
-  const addImport = async (sourceLabel: string, report: ExposureReport) => {
+  const addImport = async (sourceLabel: string, previewPid: string) => {
     const entry: ImportHistoryEntry = {
       id: `import-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       importedAt: Date.now(),
       sourceLabel,
-      report,
+      previewPid,
     };
     const updated = [entry, ...imports].slice(0, MAX_ENTRIES);
     setImports(updated);

@@ -1,6 +1,5 @@
 // src/services/praiseApi.ts
 import { PRAISE_CONFIG } from '../config/praiseConfig';
-import { ExposureRequestRow } from '../types/exposure';
 
 const buildUrl = (
   params: Record<string, string>,
@@ -102,50 +101,4 @@ export const fetchPraiseTiles = async (
     throw new Error(data.msg ?? 'PRAISE-HK get_mtiles call failed');
   }
   return data;
-};
-
-// --- Exposure calculation (get_exposure_list) ---
-
-// Formats a Date as YYYYMMDDHHmmss in Hong Kong time (UTC+8) — the full
-// second-resolution timestamp get_exposure_list's `t` field expects, as
-// distinct from the hour-only format toHkTimestamp() produces above.
-export const toHkTimestampFull = (date: Date = new Date()): string => {
-  const utcMs = date.getTime() + date.getTimezoneOffset() * 60000;
-  const hkDate = new Date(utcMs + 8 * 60 * 60 * 1000);
-  const yyyy = hkDate.getFullYear();
-  const mm = (hkDate.getMonth() + 1).toString().padStart(2, '0');
-  const dd = hkDate.getDate().toString().padStart(2, '0');
-  const hh = hkDate.getHours().toString().padStart(2, '0');
-  const min = hkDate.getMinutes().toString().padStart(2, '0');
-  const ss = hkDate.getSeconds().toString().padStart(2, '0');
-  return `${yyyy}${mm}${dd}${hh}${min}${ss}`;
-};
-
-export type ExposureCalcResponse = {
-  exposure: [string, string, number][]; // [t, pid, exposure_value]
-};
-
-// expo_calx lives on a different uwsgi script (praise-ir-cal, not
-// praise-service) and — unlike the newer 9-field format documented in "API
-// for calculating Exposure" — the deployed Cal_Exposure.py still unpacks
-// records as `ts, pid, lon, lat, micenv, deltaT = record`, i.e. the older
-// 6-field ExposureRequestRow shape with no record_id/speed/status. Confirmed
-// working live on 2026-09-07 against this exact URL/row shape. It's a GET
-// with the rows JSON-encoded into the `input_data` query param, same as
-// get_data/get_mtiles above.
-export const fetchPraiseExposureCalc = async (
-  rows: ExposureRequestRow[],
-): Promise<ExposureCalcResponse> => {
-  const url = buildUrl(
-    { todo: 'expo_calx', input_data: JSON.stringify(rows) },
-    PRAISE_CONFIG.irCalBaseUrl,
-  );
-  const response = await fetch(url);
-  const data = await response.json();
-  if (!Array.isArray(data?.exposure)) {
-    throw new Error(
-      typeof data?.msg === 'string' ? data.msg : 'PRAISE-HK expo_calx call failed',
-    );
-  }
-  return data as ExposureCalcResponse;
 };

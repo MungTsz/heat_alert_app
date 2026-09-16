@@ -1,8 +1,11 @@
 // src/hooks/useExposureHistory.ts
 import { useCallback, useEffect, useState } from 'react';
 import { DailyExposureEntry } from '../types/exposure';
-import { getDailyExposureHistory } from '../services/exposureHistoryService';
-import { DEFAULT_PID } from './useExposureReport';
+import {
+  getCachedDailyExposureHistory,
+  refreshHistoryCache,
+} from '../services/exposureHistoryService';
+import { DEFAULT_PID } from '../utils/exposurePid';
 
 // deviceId defaults to the live self-tracked device — pass a named device's
 // id (see useExposureDevices.ts) to browse that device's history instead.
@@ -12,7 +15,10 @@ export const useExposureHistory = (deviceId: string = DEFAULT_PID) => {
 
   const refresh = useCallback(async () => {
     try {
-      setHistory(await getDailyExposureHistory(deviceId));
+      // Paint the cached snapshot immediately, then replace it with a fresh
+      // fetch — on network failure the cached value just stays put.
+      setHistory(await getCachedDailyExposureHistory(deviceId));
+      setHistory(await refreshHistoryCache(deviceId));
     } catch (error) {
       console.log('Failed to load exposure history:', error);
     } finally {
