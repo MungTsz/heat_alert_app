@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { DailyExposureEntry, ExposureReport } from '../types/exposure';
 import { formatHkDateLabel } from '../utils/hkDate';
+import { sumExposureByIo } from '../utils/exposureIoTotals';
 import ExposureTrajectoryMap from './ExposureTrajectoryMap';
 import ExposureDailyBarChart from './ExposureDailyBarChart';
 import ExposureTrendChart from './ExposureTrendChart';
@@ -113,7 +114,10 @@ const ExposureRangeReportView: React.FC<Props> = ({
           todayKey={todayKey}
           todayOverride={
             todayReport && todayKey >= rangeStart && todayKey <= rangeEnd
-              ? { date: todayKey, total: todayReport.totalExposure }
+              ? (() => {
+                  const { indoor, outdoor } = sumExposureByIo(todayReport.segments);
+                  return { date: todayKey, indoor, outdoor };
+                })()
               : undefined
           }
         />
