@@ -4,6 +4,7 @@ import { View, Text, StyleSheet, Dimensions } from 'react-native';
 import Svg, { Rect, Line, Text as SvgText } from 'react-native-svg';
 import { ExposureSegmentResult } from '../types/exposure';
 import { bucketExposureByHour } from '../utils/exposureHourlyBuckets';
+import { pickAxisLabelStride } from '../utils/chartAxisLabels';
 import { clampedChartLabelX, estimateSvgTextWidth } from '../utils/svgChartLabel';
 import { niceAxisTicks } from '../utils/niceAxisTicks';
 import { EXPOSURE_MAP_CONFIG } from '../config/exposureMapConfig';
@@ -50,7 +51,7 @@ const ExposureTrendChart: React.FC<Props> = ({ segments, title }) => {
   const { ticks, niceMax } = useMemo(() => niceAxisTicks(maxTotal, 4), [maxTotal]);
   const slotWidth = CHART_WIDTH / 24;
   const barWidth = slotWidth;
-  const labelEvery = 4; // matches AqhiHourlyForecastChart's 4-hour label spacing
+  const labelEvery = pickAxisLabelStride(24, 6); // matches AqhiHourlyForecastChart's 4-hour label spacing
 
   const baseY = PADDING_TOP + GRAPH_HEIGHT;
   const getY = (value: number) => baseY - (value / niceMax) * GRAPH_HEIGHT;

@@ -1,16 +1,18 @@
 // src/components/ExposureDailyBarChart.tsx
-import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, Dimensions } from 'react-native';
+import React, { useMemo, useRef } from 'react';
+import { View, Text, StyleSheet, Dimensions, ScrollView, Pressable } from 'react-native';
 import Svg, { Rect, Line, Text as SvgText } from 'react-native-svg';
 import { DailyExposureEntry } from '../types/exposure';
 import { addHkDays, formatHkDateLabel } from '../utils/hkDate';
 import { sumExposureByIo } from '../utils/exposureIoTotals';
 import { niceAxisTicks } from '../utils/niceAxisTicks';
+import { pickAxisLabelStride } from '../utils/chartAxisLabels';
+import { clampedChartLabelX, estimateSvgTextWidth } from '../utils/svgChartLabel';
 import { EXPOSURE_MAP_CONFIG } from '../config/exposureMapConfig';
 
 const SCREEN_WIDTH = Dimensions.get('window').width - 72;
 const SVG_HEIGHT = 170;
-const PADDING_TOP = 12;
+const PADDING_TOP = 26;
 const PADDING_BOTTOM = 26;
 const GRAPH_HEIGHT = SVG_HEIGHT - PADDING_TOP - PADDING_BOTTOM;
 // Rotated axis-title column + tick-value column to the left of the main
@@ -19,6 +21,12 @@ const GRAPH_HEIGHT = SVG_HEIGHT - PADDING_TOP - PADDING_BOTTOM;
 const Y_TITLE_WIDTH = 14;
 const Y_AXIS_WIDTH = 32;
 const CHART_WIDTH = SCREEN_WIDTH - Y_TITLE_WIDTH - Y_AXIS_WIDTH;
+// Floor so a 1-2 day range doesn't render one giant bar, and a cap so bars
+// never get thinner than a 30-day-wide window — past that, the rest scrolls
+// instead of shrinking further (mirrors the hourly chart's fixed 24-bar page).
+const MIN_VISIBLE_DAY_BARS = 3;
+const MAX_VISIBLE_DAY_BARS = 30;
+const SELECTED_LABEL_FONT_SIZE = 11; // matches ExposureTrendChart
 // Shared with ExposureTrendChart/ExposureTrajectoryMap so Indoor/Outdoor
 // read the same color everywhere in the exposure tab.
 const INDOOR_COLOR = EXPOSURE_MAP_CONFIG.indoorColor;
@@ -89,14 +97,175 @@ const ExposureDailyBarChart: React.FC<Props> = ({
   const maxTotal = Math.max(0, ...days.map(d => d.total ?? 0));
   const { ticks, niceMax } = useMemo(() => niceAxisTicks(maxTotal, 4), [maxTotal]);
   const dayCount = Math.max(days.length, 1);
-  const slotWidth = CHART_WIDTH / dayCount;
+  const isScrollable = dayCount > MAX_VISIBLE_DAY_BARS;
+  // Zooms bars wider for a short range (down to the 3-day floor), and caps
+  // them at the 30-day-wide window once the range grows past that.
+  const visibleCount = Math.min(MAX_VISIBLE_DAY_BARS, Math.max(MIN_VISIBLE_DAY_BARS, dayCount));
+  const slotWidth = CHART_WIDTH / visibleCount;
   const barWidth = slotWidth;
-  // Sparse ranges skip labels to avoid overlapping text.
-  const labelEvery = Math.max(1, Math.ceil(days.length / 12));
+  const contentWidth = slotWidth * dayCount;
+  // Once paging (>30 days), match the hourly chart's label density so the
+  // two charts read as one system. Below that, keep the unchanged ceil(n/12)
+  // density — no reason to thin labels on a week/month view that already
+  // fits on screen.
+  const labelEvery = isScrollable
+    ? pickAxisLabelStride(MAX_VISIBLE_DAY_BARS, 6)
+    : pickAxisLabelStride(dayCount, 12);
+
+  const selectedDay = selectedDate ? days.find(d => d.date === selectedDate) ?? null : null;
+  const selectedDayIndex = selectedDay ? days.indexOf(selectedDay) : -1;
 
   const baseY = PADDING_TOP + GRAPH_HEIGHT;
   const getY = (value: number) => baseY - (value / niceMax) * GRAPH_HEIGHT;
   const getSegmentHeight = (value: number) => (value / niceMax) * GRAPH_HEIGHT;
+
+  // Defaults the scroll position to the most recent days whenever the range
+  // changes. Deciding "should I scroll" and "did the native content view
+  // actually finish laying out" in the SAME callback (rather than splitting
+  // that across a separate effect + this native callback) avoids a race
+  // where onContentSizeChange could fire before an effect's flag was set,
+  // silently dropping the initial auto-scroll.
+  const scrollRef = useRef<ScrollView>(null);
+  const scrolledRangeRef = useRef<string | null>(null);
+  const handleContentSizeChange = (w: number) => {
+    if (!isScrollable) return;
+    const rangeId = `${rangeStart}:${rangeEnd}`;
+    if (scrolledRangeRef.current === rangeId) return;
+    scrolledRangeRef.current = rangeId;
+    scrollRef.current?.scrollTo({ x: w - CHART_WIDTH, animated: false });
+  };
+
+  const barsSvg = (
+    <Svg width={contentWidth} height={SVG_HEIGHT}>
+      {ticks.map(v => (
+        <Line
+          key={v}
+          x1={0}
+          y1={getY(v)}
+          x2={contentWidth}
+          y2={getY(v)}
+          stroke="#718096"
+          strokeOpacity={0.12}
+        />
+      ))}
+      <Line x1={0} y1={baseY} x2={contentWidth} y2={baseY} stroke="#718096" strokeOpacity={0.25} />
+      {days.map((day, i) => {
+        const outdoorHeight = getSegmentHeight(day.outdoor);
+        const indoorHeight = getSegmentHeight(day.indoor);
+        const slotX = i * slotWidth;
+        const barX = slotX;
+        const outdoorY = baseY - outdoorHeight;
+        const indoorY = outdoorY - indoorHeight;
+        const isSelected = selectedDate === day.date;
+        const opacity = selectedDate && !isSelected ? 0.5 : 1;
+        return (
+          <React.Fragment key={day.date}>
+            {day.total && day.total > 0 ? (
+              <>
+                {day.outdoor > 0 && (
+                  <Rect
+                    x={barX}
+                    y={outdoorY}
+                    width={barWidth}
+                    height={outdoorHeight}
+                    fill={OUTDOOR_COLOR}
+                    opacity={opacity}
+                  />
+                )}
+                {day.indoor > 0 && (
+                  <Rect
+                    x={barX}
+                    y={indoorY}
+                    width={barWidth}
+                    height={indoorHeight}
+                    fill={INDOOR_COLOR}
+                    opacity={opacity}
+                  />
+                )}
+              </>
+            ) : (
+              <Rect x={barX} y={baseY - 2} width={barWidth} height={2} fill={EMPTY_BAR_COLOR} />
+            )}
+            {i % labelEvery === 0 && (() => {
+              // Edge labels are anchored inward so they never render past
+              // the chart's left/right bounds and get clipped — same
+              // convention as AqhiHourlyForecastChart/ExposureTrendChart.
+              const isFirst = i === 0;
+              const isLast = i === days.length - 1;
+              const textAnchor = isFirst ? 'start' : isLast ? 'end' : 'middle';
+              const x = isFirst ? slotX : isLast ? slotX + slotWidth : slotX + slotWidth / 2;
+              return (
+                <SvgText
+                  x={x}
+                  y={SVG_HEIGHT - 8}
+                  fontSize={9}
+                  fontWeight={isSelected ? '700' : '400'}
+                  fill={isSelected ? '#1C1C1E' : '#8E8E93'}
+                  textAnchor={textAnchor}
+                >
+                  {day.label}
+                </SvgText>
+              );
+            })()}
+          </React.Fragment>
+        );
+      })}
+      {/* Thin white seams between touching bars so adjacent days stay
+          visually distinct without leaving an actual gap in the strip. */}
+      {days.slice(1).map((day, i) => (
+        <Line
+          key={`divider-${day.date}`}
+          x1={(i + 1) * slotWidth}
+          y1={PADDING_TOP}
+          x2={(i + 1) * slotWidth}
+          y2={baseY}
+          stroke={DIVIDER_COLOR}
+          strokeWidth={1.5}
+        />
+      ))}
+      {selectedDay && selectedDay.total && selectedDay.total > 0 && (() => {
+        const labelText = `${selectedDay.label}  Outdoor ${selectedDay.outdoor.toFixed(2)} · Indoor ${selectedDay.indoor.toFixed(2)}`;
+        const { x, textAnchor } = clampedChartLabelX(
+          selectedDayIndex * slotWidth + slotWidth / 2,
+          contentWidth,
+          estimateSvgTextWidth(labelText, SELECTED_LABEL_FONT_SIZE),
+        );
+        return (
+          <SvgText
+            x={x}
+            y={PADDING_TOP - 10}
+            fontSize={SELECTED_LABEL_FONT_SIZE}
+            fontWeight="700"
+            fill="#1C1C1E"
+            textAnchor={textAnchor}
+          >
+            {labelText}
+          </SvgText>
+        );
+      })()}
+    </Svg>
+  );
+
+  // A real RN Pressable per day-slot, absolutely positioned over the Svg,
+  // rather than an onPress on an Svg Rect: react-native-svg's own touch
+  // handling doesn't reliably compose with a horizontal ScrollView's gesture
+  // responder (the SVG shape can lose the touch to the ScrollView's pan
+  // detection), whereas Pressable is the standard RN primitive built to
+  // nest correctly inside ScrollView.
+  const chartContent = (
+    <View style={{ width: contentWidth, height: SVG_HEIGHT }}>
+      {barsSvg}
+      <View style={[styles.tapOverlay, { width: contentWidth }]}>
+        {days.map(day => (
+          <Pressable
+            key={day.date}
+            style={{ width: slotWidth }}
+            onPress={() => onSelectDay?.(day.date)}
+          />
+        ))}
+      </View>
+    </View>
+  );
 
   return (
     <View>
@@ -138,104 +307,19 @@ const ExposureDailyBarChart: React.FC<Props> = ({
             </SvgText>
           ))}
         </Svg>
-        <Svg width={CHART_WIDTH} height={SVG_HEIGHT}>
-          {ticks.map(v => (
-            <Line
-              key={v}
-              x1={0}
-              y1={getY(v)}
-              x2={CHART_WIDTH}
-              y2={getY(v)}
-              stroke="#718096"
-              strokeOpacity={0.12}
-            />
-          ))}
-          <Line x1={0} y1={baseY} x2={CHART_WIDTH} y2={baseY} stroke="#718096" strokeOpacity={0.25} />
-          {days.map((day, i) => {
-            const outdoorHeight = getSegmentHeight(day.outdoor);
-            const indoorHeight = getSegmentHeight(day.indoor);
-            const slotX = i * slotWidth;
-            const barX = slotX;
-            const outdoorY = baseY - outdoorHeight;
-            const indoorY = outdoorY - indoorHeight;
-            const isSelected = selectedDate === day.date;
-            const opacity = selectedDate && !isSelected ? 0.5 : 1;
-            return (
-              <React.Fragment key={day.date}>
-                {/* Full-column, full-height, invisible hit target so the whole
-                    slot is tappable, not just the visible bar sliver. */}
-                <Rect
-                  x={slotX}
-                  y={PADDING_TOP}
-                  width={slotWidth}
-                  height={GRAPH_HEIGHT}
-                  fill="transparent"
-                  onPress={() => onSelectDay?.(day.date)}
-                />
-                {day.total && day.total > 0 ? (
-                  <>
-                    {day.outdoor > 0 && (
-                      <Rect
-                        x={barX}
-                        y={outdoorY}
-                        width={barWidth}
-                        height={outdoorHeight}
-                        fill={OUTDOOR_COLOR}
-                        opacity={opacity}
-                      />
-                    )}
-                    {day.indoor > 0 && (
-                      <Rect
-                        x={barX}
-                        y={indoorY}
-                        width={barWidth}
-                        height={indoorHeight}
-                        fill={INDOOR_COLOR}
-                        opacity={opacity}
-                      />
-                    )}
-                  </>
-                ) : (
-                  <Rect x={barX} y={baseY - 2} width={barWidth} height={2} fill={EMPTY_BAR_COLOR} />
-                )}
-                {i % labelEvery === 0 && (() => {
-                  // Edge labels are anchored inward so they never render past
-                  // the chart's left/right bounds and get clipped — same
-                  // convention as AqhiHourlyForecastChart/ExposureTrendChart.
-                  const isFirst = i === 0;
-                  const isLast = i === days.length - 1;
-                  const textAnchor = isFirst ? 'start' : isLast ? 'end' : 'middle';
-                  const x = isFirst ? slotX : isLast ? slotX + slotWidth : slotX + slotWidth / 2;
-                  return (
-                    <SvgText
-                      x={x}
-                      y={SVG_HEIGHT - 8}
-                      fontSize={9}
-                      fontWeight={isSelected ? '700' : '400'}
-                      fill={isSelected ? '#1C1C1E' : '#8E8E93'}
-                      textAnchor={textAnchor}
-                    >
-                      {day.label}
-                    </SvgText>
-                  );
-                })()}
-              </React.Fragment>
-            );
-          })}
-          {/* Thin white seams between touching bars so adjacent days stay
-              visually distinct without leaving an actual gap in the strip. */}
-          {days.slice(1).map((day, i) => (
-            <Line
-              key={`divider-${day.date}`}
-              x1={(i + 1) * slotWidth}
-              y1={PADDING_TOP}
-              x2={(i + 1) * slotWidth}
-              y2={baseY}
-              stroke={DIVIDER_COLOR}
-              strokeWidth={1.5}
-            />
-          ))}
-        </Svg>
+        {isScrollable ? (
+          <ScrollView
+            ref={scrollRef}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={{ width: CHART_WIDTH }}
+            onContentSizeChange={handleContentSizeChange}
+          >
+            {chartContent}
+          </ScrollView>
+        ) : (
+          chartContent
+        )}
       </View>
       <Text style={styles.xTitleText}>Date</Text>
     </View>
@@ -256,6 +340,13 @@ const styles = StyleSheet.create({
   legendDot: { width: 8, height: 8, borderRadius: 4 },
   legendText: { fontSize: 11, color: '#8E8E93' },
   axisRow: { flexDirection: 'row', alignItems: 'flex-start' },
+  tapOverlay: {
+    position: 'absolute',
+    left: 0,
+    top: PADDING_TOP,
+    height: GRAPH_HEIGHT,
+    flexDirection: 'row',
+  },
   yTitleColumn: {
     width: Y_TITLE_WIDTH,
     height: GRAPH_HEIGHT,

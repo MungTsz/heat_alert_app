@@ -2,6 +2,22 @@
 import { EXPOSURE_API_CONFIG } from '../config/exposureApiConfig';
 import { ExposureHourlyApiRow, ExposureIngestFeature } from '../types/exposure';
 
+// react-native's fetch has no request timeout of its own — without this,
+// slow ETL calls (see ingestExposurePings below) get cut off by the
+// underlying platform networking default instead of EXPOSURE_API_CONFIG.timeoutMs.
+const fetchWithTimeout = async (
+  input: string,
+  init: RequestInit = {},
+): Promise<Response> => {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), EXPOSURE_API_CONFIG.timeoutMs);
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+};
+
 // Sends the full set of raw pings (either GeoJSON Point features or
 // live-tracking pings, mixable in the same call) to the ETL backend in one
 // request, which does GPS-spike rejection, indoor/outdoor dwell
@@ -10,7 +26,7 @@ export const ingestExposurePings = async (
   pid: string,
   features: ExposureIngestFeature[],
 ): Promise<void> => {
-  const response = await fetch(`${EXPOSURE_API_CONFIG.baseUrl}/ingest`, {
+  const response = await fetchWithTimeout(`${EXPOSURE_API_CONFIG.baseUrl}/ingest`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ pid, features }),
@@ -26,7 +42,7 @@ export const ingestExposurePings = async (
 export const fetchHourlyExposure = async (
   pid: string,
 ): Promise<ExposureHourlyApiRow[]> => {
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     `${EXPOSURE_API_CONFIG.baseUrl}/exposure/hourly/${encodeURIComponent(pid)}`,
   );
   if (!response.ok) {

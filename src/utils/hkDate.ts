@@ -24,6 +24,17 @@ export const addHkDays = (dateKey: string, days: number): string => {
   return `${yyyy}-${mm}-${dd}`;
 };
 
+// Day span between two YYYY-MM-DD keys (positive if b is after a) — plain
+// calendar-date math, same as addHkDays, no timezone conversion needed since
+// both inputs are already date keys. Callers add +1 for an inclusive count.
+export const diffHkDays = (a: string, b: string): number => {
+  const [ay, am, ad] = a.split('-').map(Number);
+  const [by, bm, bd] = b.split('-').map(Number);
+  const aMs = Date.UTC(ay, am - 1, ad);
+  const bMs = Date.UTC(by, bm - 1, bd);
+  return Math.round((bMs - aMs) / 86400000);
+};
+
 // The one human-readable date label used across every exposure screen —
 // "Today" when it matches todayKey, otherwise a short "Sep 9" style label
 // with no year (all exposure history is recent, near-term data). Was
