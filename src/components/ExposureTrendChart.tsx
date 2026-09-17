@@ -151,18 +151,28 @@ const ExposureTrendChart: React.FC<Props> = ({ segments, title }) => {
                 ) : (
                   <Rect x={barX} y={baseY - 2} width={barWidth} height={2} fill={EMPTY_BAR_COLOR} />
                 )}
-                {h.hour % labelEvery === 0 && (
-                  <SvgText
-                    x={slotX + slotWidth / 2}
-                    y={SVG_HEIGHT - 8}
-                    fontSize={9}
-                    fontWeight={isSelected ? '700' : '400'}
-                    fill={isSelected ? '#1C1C1E' : '#8E8E93'}
-                    textAnchor="middle"
-                  >
-                    {h.label}
-                  </SvgText>
-                )}
+                {h.hour % labelEvery === 0 && (() => {
+                  // Edge labels are anchored inward so they never render past
+                  // the chart's left/right bounds and get clipped (e.g.
+                  // "12AM" at hour 0) — same convention as
+                  // AqhiHourlyForecastChart's x-axis labels.
+                  const isFirst = h.hour === 0;
+                  const isLast = h.hour === 23;
+                  const textAnchor = isFirst ? 'start' : isLast ? 'end' : 'middle';
+                  const x = isFirst ? slotX : isLast ? slotX + slotWidth : slotX + slotWidth / 2;
+                  return (
+                    <SvgText
+                      x={x}
+                      y={SVG_HEIGHT - 8}
+                      fontSize={9}
+                      fontWeight={isSelected ? '700' : '400'}
+                      fill={isSelected ? '#1C1C1E' : '#8E8E93'}
+                      textAnchor={textAnchor}
+                    >
+                      {h.label}
+                    </SvgText>
+                  );
+                })()}
               </React.Fragment>
             );
           })}

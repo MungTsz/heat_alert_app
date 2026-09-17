@@ -198,18 +198,27 @@ const ExposureDailyBarChart: React.FC<Props> = ({
                 ) : (
                   <Rect x={barX} y={baseY - 2} width={barWidth} height={2} fill={EMPTY_BAR_COLOR} />
                 )}
-                {i % labelEvery === 0 && (
-                  <SvgText
-                    x={slotX + slotWidth / 2}
-                    y={SVG_HEIGHT - 8}
-                    fontSize={9}
-                    fontWeight={isSelected ? '700' : '400'}
-                    fill={isSelected ? '#1C1C1E' : '#8E8E93'}
-                    textAnchor="middle"
-                  >
-                    {day.label}
-                  </SvgText>
-                )}
+                {i % labelEvery === 0 && (() => {
+                  // Edge labels are anchored inward so they never render past
+                  // the chart's left/right bounds and get clipped — same
+                  // convention as AqhiHourlyForecastChart/ExposureTrendChart.
+                  const isFirst = i === 0;
+                  const isLast = i === days.length - 1;
+                  const textAnchor = isFirst ? 'start' : isLast ? 'end' : 'middle';
+                  const x = isFirst ? slotX : isLast ? slotX + slotWidth : slotX + slotWidth / 2;
+                  return (
+                    <SvgText
+                      x={x}
+                      y={SVG_HEIGHT - 8}
+                      fontSize={9}
+                      fontWeight={isSelected ? '700' : '400'}
+                      fill={isSelected ? '#1C1C1E' : '#8E8E93'}
+                      textAnchor={textAnchor}
+                    >
+                      {day.label}
+                    </SvgText>
+                  );
+                })()}
               </React.Fragment>
             );
           })}
