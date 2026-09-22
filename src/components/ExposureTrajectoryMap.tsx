@@ -1,6 +1,8 @@
 // src/components/ExposureTrajectoryMap.tsx
 import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, LayoutChangeEvent } from 'react-native';
+import { View, Text, StyleSheet, LayoutChangeEvent, Modal, TouchableOpacity } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Maximize2, ArrowLeft } from 'lucide-react-native';
 import MapView, { Polyline, Marker, Callout, Region } from 'react-native-maps';
 import { ExposureSegmentResult, ExposureStayCluster } from '../types/exposure';
 import { EXPOSURE_MAP_CONFIG } from '../config/exposureMapConfig';
@@ -53,6 +55,12 @@ type ArrowSegment = {
 // both a single day's ExposureReportView and a multi-day range view — same
 // rendering regardless of how many calendar days the segments span.
 const ExposureTrajectoryMap: React.FC<Props> = ({ segments }) => {
+  const insets = useSafeAreaInsets();
+  // Same MapView instance and geometry render inline (fixed-height card) or
+  // full-screen (Modal) depending on this flag — avoids a second parallel
+  // implementation of the marker/polyline JSX for the expand button feature.
+  const [fullscreen, setFullscreen] = useState(false);
+
   const clusters = useMemo<ExposureStayCluster[]>(
     () => clusterStayPoints(segments, EXPOSURE_MAP_CONFIG.stayRadiusMeters),
     [segments],
@@ -129,8 +137,11 @@ const ExposureTrajectoryMap: React.FC<Props> = ({ segments }) => {
 
   if (!region) return null;
 
-  return (
-    <View style={styles.mapContainer} onLayout={handleLayout}>
+  const mapView = (
+    <View
+      style={fullscreen ? styles.mapContainerFullscreen : styles.mapContainer}
+      onLayout={handleLayout}
+    >
       <MapView
         style={StyleSheet.absoluteFill}
         initialRegion={fittedRegion ?? undefined}
@@ -211,8 +222,32 @@ const ExposureTrajectoryMap: React.FC<Props> = ({ segments }) => {
           );
         })}
       </MapView>
+
+      <TouchableOpacity
+        style={[
+          styles.expandButton,
+          fullscreen && [styles.expandButtonFullscreen, { top: insets.top + 16 }],
+        ]}
+        onPress={() => setFullscreen(f => !f)}
+      >
+        {fullscreen ? (
+          <ArrowLeft size={26} color="#333" />
+        ) : (
+          <Maximize2 size={18} color="#333" />
+        )}
+      </TouchableOpacity>
     </View>
   );
+
+  if (fullscreen) {
+    return (
+      <Modal visible animationType="slide" onRequestClose={() => setFullscreen(false)}>
+        {mapView}
+      </Modal>
+    );
+  }
+
+  return mapView;
 };
 
 const styles = StyleSheet.create({
@@ -221,6 +256,33 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     overflow: 'hidden',
     marginBottom: 12,
+  },
+  // Flush full-device-size variant used inside the expand Modal — no rounded
+  // corners/margin since it's the only content in that screen.
+  mapContainerFullscreen: {
+    flex: 1,
+  },
+  expandButton: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 3,
+  },
+  // Repositioned/enlarged to match FullscreenMapModal's back button so the
+  // "close full screen" affordance looks consistent across the app.
+  expandButtonFullscreen: {
+    left: 16,
+    right: undefined,
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: '#FFFFFF',
   },
   mapDot: {
     borderWidth: 1.5,
