@@ -22,13 +22,16 @@ export type LiveTrackingPing = {
 export type ExposureIngestFeature = GeoJsonPointFeature | LiveTrackingPing;
 
 // One row of the ETL backend's GET /exposure/hourly/{pid} response — one per
-// (hour, indoor/outdoor). A dwell run crossing an hour boundary is split
-// into per-hour-touched rows with a prorated delta_t_hours, not reclassified
-// per hour. lat/lng are the dwell run's first-ping reference point; if
-// multiple same-labelled runs land in the same hour, only the
-// last-processed run's coordinates survive (no averaging).
+// dwell run, or one per hour-slice of a run that crosses an hour boundary
+// (prorated delta_t_hours per slice, not reclassified per hour). Rows are
+// keyed by (pid, io, start_time_hk), so multiple rows can now share the same
+// hour_start_hk + io (e.g. two separate outdoor stops inside one clock
+// hour) — each still carries its own coordinates. lat/lng semantics differ
+// by io: Outdoor is the average of the run's pings, Indoor is the run's
+// anchor (its first ping).
 export type ExposureHourlyApiRow = {
-  hour_start_hk: string; // YYYYMMDDHHMMSS, HK local, truncated to the hour
+  hour_start_hk: string; // YYYYMMDDHHMMSS, HK local, truncated to the hour — group by this (+io) for the bar chart
+  start_time_hk: string; // YYYYMMDDHHMMSS, HK local — this row's own precise start; sort by this for the map route
   io: 'Indoor' | 'Outdoor';
   delta_t_hours: number;
   exposure_value: number;
@@ -38,9 +41,9 @@ export type ExposureHourlyApiRow = {
 
 // One hourly-API row adapted into the shape the app's UI already renders
 // (map clustering, trend chart, segment list, CSV export). startTime is the
-// row's hour boundary; endTime approximates it as startTime + delta_t_hours
-// — the backend doesn't expose the real dwell-run start/end, only the
-// per-hour prorated duration.
+// row's precise start (from start_time_hk); endTime approximates it as
+// startTime + delta_t_hours — the backend doesn't expose the real dwell-run
+// end, only its (possibly hour-sliced) duration.
 export type ExposureSegmentResult = {
   startTime: number;
   endTime: number;

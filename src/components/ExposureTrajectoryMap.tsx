@@ -5,6 +5,7 @@ import MapView, { Polyline, Marker, Callout, Region } from 'react-native-maps';
 import { ExposureSegmentResult, ExposureStayCluster } from '../types/exposure';
 import { EXPOSURE_MAP_CONFIG } from '../config/exposureMapConfig';
 import { clusterStayPoints, computeBearing, computeZoomLevel } from '../utils/geoClustering';
+import { useRoadSnappedRoute } from '../hooks/useRoadSnappedRoute';
 
 type Props = {
   segments: ExposureSegmentResult[];
@@ -56,6 +57,13 @@ const ExposureTrajectoryMap: React.FC<Props> = ({ segments }) => {
     () => clusterStayPoints(segments, EXPOSURE_MAP_CONFIG.stayRadiusMeters),
     [segments],
   );
+
+  // Road-snapped per-hop paths, upgraded from straight lines as each
+  // resolves (see useRoadSnappedRoute.ts). isFallback (dashed) hops rely on
+  // lineDashPattern, which react-native-maps only supports on iOS via Apple
+  // Maps — this MapView deliberately doesn't set provider={PROVIDER_GOOGLE},
+  // so don't add that prop here without re-checking dashed rendering on iOS.
+  const hopSegments = useRoadSnappedRoute(clusters);
 
   // Bounding-box fit of the whole dataset, recomputed only when the actual
   // dataset changes (not on every render) so it can seed initialRegion
@@ -131,20 +139,17 @@ const ExposureTrajectoryMap: React.FC<Props> = ({ segments }) => {
         // SDK and MapKit can otherwise switch to a dark theme automatically.
         userInterfaceStyle="light"
       >
-        {clusters.slice(0, -1).map((cluster, i) => {
-          const next = clusters[i + 1];
-          return (
-            <Polyline
-              key={`line-${cluster.startTime}-${i}`}
-              coordinates={[
-                { latitude: cluster.lat, longitude: cluster.lon },
-                { latitude: next.lat, longitude: next.lon },
-              ]}
-              strokeColor={EXPOSURE_MAP_CONFIG.trackColor}
-              strokeWidth={4}
-            />
-          );
-        })}
+        {hopSegments.map(segment => (
+          <Polyline
+            key={segment.key}
+            coordinates={segment.coordinates}
+            strokeColor={
+              segment.isFallback ? EXPOSURE_MAP_CONFIG.fallbackTrackColor : EXPOSURE_MAP_CONFIG.trackColor
+            }
+            strokeWidth={4}
+            {...(segment.isFallback ? { lineDashPattern: EXPOSURE_MAP_CONFIG.fallbackDashPattern } : {})}
+          />
+        ))}
         {showArrows &&
           arrowSegments.map(arrow => (
             <Marker

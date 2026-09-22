@@ -8,7 +8,7 @@ import {
 const MS_PER_HOUR = 3600000;
 
 // Inverse of praiseApi.ts's toHkTimestampFull: parses a YYYYMMDDHHMMSS
-// HK-local timestamp (as returned in hour_start_hk) back into epoch ms.
+// HK-local timestamp (hour_start_hk or start_time_hk) back into epoch ms.
 export const hkTimestampToEpochMs = (ts: string): number => {
   const yyyy = Number(ts.slice(0, 4));
   const mm = Number(ts.slice(4, 6));
@@ -19,16 +19,21 @@ export const hkTimestampToEpochMs = (ts: string): number => {
   return Date.UTC(yyyy, mm - 1, dd, hh, min, ss) - 8 * 60 * 60 * 1000;
 };
 
-// Adapts the ETL backend's per-(hour, io) rows into the segment shape the
-// existing map/chart/list UI renders. endTime is an approximation
-// (startTime + delta_t_hours) since the backend doesn't expose the dwell
-// run's real start/end, only its per-hour prorated duration.
+// Adapts the ETL backend's per-dwell-run rows into the segment shape the
+// existing map/chart/list UI renders. Uses start_time_hk (not hour_start_hk)
+// for startTime so segments keep their real chronological order even when
+// several rows share an hour — required for the map route (see
+// ExposureTrajectoryMap.tsx) to connect points in the order they actually
+// happened rather than in whatever order the backend's JSON array used.
+// endTime is an approximation (startTime + delta_t_hours) since the backend
+// doesn't expose the dwell run's real end, only its (possibly hour-sliced)
+// duration.
 export const toExposureSegments = (
   rows: ExposureHourlyApiRow[],
 ): ExposureSegmentResult[] =>
   rows
     .map(row => {
-      const startTime = hkTimestampToEpochMs(row.hour_start_hk);
+      const startTime = hkTimestampToEpochMs(row.start_time_hk);
       return {
         startTime,
         endTime: startTime + row.delta_t_hours * MS_PER_HOUR,

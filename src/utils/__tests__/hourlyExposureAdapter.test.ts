@@ -3,6 +3,7 @@ import { ExposureHourlyApiRow } from '../../types/exposure';
 
 const row = (overrides: Partial<ExposureHourlyApiRow> = {}): ExposureHourlyApiRow => ({
   hour_start_hk: '20260830160000',
+  start_time_hk: '20260830160000',
   io: 'Outdoor',
   delta_t_hours: 1,
   exposure_value: 2.5,
@@ -35,6 +36,18 @@ describe('toExposureSegments', () => {
   it('normalizes a NaN exposure_value to 0', () => {
     const [segment] = toExposureSegments([row({ exposure_value: NaN })]);
     expect(segment.exposure).toBe(0);
+  });
+
+  it('sorts by start_time_hk, not input order, when rows share an hour_start_hk', () => {
+    const segments = toExposureSegments([
+      row({ start_time_hk: '20260830163500', lat: 22.31, lng: 114.21 }),
+      row({ start_time_hk: '20260830160500', lat: 22.3, lng: 114.2 }),
+      row({ start_time_hk: '20260830162000', lat: 22.305, lng: 114.205 }),
+    ]);
+    expect(segments.map(s => s.startTime)).toEqual(
+      [...segments.map(s => s.startTime)].sort((a, b) => a - b),
+    );
+    expect(segments.map(s => s.lat)).toEqual([22.3, 22.305, 22.31]);
   });
 });
 

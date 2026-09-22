@@ -32,6 +32,7 @@ describe('apiExposureProvider.getHourlyReport', () => {
     mockedFetch.mockResolvedValue([
       {
         hour_start_hk: '20260830160000',
+        start_time_hk: '20260830160000',
         io: 'Outdoor',
         delta_t_hours: 0.5,
         exposure_value: 1.5,
@@ -40,6 +41,7 @@ describe('apiExposureProvider.getHourlyReport', () => {
       },
       {
         hour_start_hk: '20260830160000',
+        start_time_hk: '20260830163000',
         io: 'Indoor',
         delta_t_hours: 0.5,
         exposure_value: 0.3,
