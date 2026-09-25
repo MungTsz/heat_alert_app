@@ -1,13 +1,12 @@
 // src/components/ExposureTrajectoryMap.tsx
-import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, LayoutChangeEvent, Modal, TouchableOpacity } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { View, Text, StyleSheet, Modal, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Maximize2, ArrowLeft } from 'lucide-react-native';
-import MapView, { Polyline, Marker, Callout, Region } from 'react-native-maps';
+import MapView, { Marker, Callout, Region } from 'react-native-maps';
 import { ExposureSegmentResult, ExposureStayCluster } from '../types/exposure';
 import { EXPOSURE_MAP_CONFIG } from '../config/exposureMapConfig';
-import { clusterStayPoints, computeBearing, computeZoomLevel } from '../utils/geoClustering';
-import { useRoadSnappedRoute } from '../hooks/useRoadSnappedRoute';
+import { clusterStayPoints } from '../utils/geoClustering';
 
 type Props = {
   segments: ExposureSegmentResult[];
@@ -44,21 +43,15 @@ const clusterDotSize = (totalDurationMs: number): number => {
   return minDotSizePx + t * (maxDotSizePx - minDotSizePx);
 };
 
-type ArrowSegment = {
-  key: string;
-  latitude: number;
-  longitude: number;
-  bearing: number;
-};
-
-// The colored trajectory (segment-pair polylines + tappable dots) shared by
-// both a single day's ExposureReportView and a multi-day range view — same
-// rendering regardless of how many calendar days the segments span.
+// The stay-point map, shared by both a single day's ExposureReportView and a
+// multi-day range view — same rendering regardless of how many calendar days
+// the segments span. Points-only: no routed/straight-line path between stay
+// points is drawn, and no routing API is called.
 const ExposureTrajectoryMap: React.FC<Props> = ({ segments }) => {
   const insets = useSafeAreaInsets();
   // Same MapView instance and geometry render inline (fixed-height card) or
   // full-screen (Modal) depending on this flag — avoids a second parallel
-  // implementation of the marker/polyline JSX for the expand button feature.
+  // implementation of the marker JSX for the expand button feature.
   const [fullscreen, setFullscreen] = useState(false);
 
   const clusters = useMemo<ExposureStayCluster[]>(
@@ -66,12 +59,20 @@ const ExposureTrajectoryMap: React.FC<Props> = ({ segments }) => {
     [segments],
   );
 
-  // Road-snapped per-hop paths, upgraded from straight lines as each
-  // resolves (see useRoadSnappedRoute.ts). isFallback (dashed) hops rely on
-  // lineDashPattern, which react-native-maps only supports on iOS via Apple
-  // Maps — this MapView deliberately doesn't set provider={PROVIDER_GOOGLE},
-  // so don't add that prop here without re-checking dashed rendering on iOS.
-  const hopSegments = useRoadSnappedRoute(clusters);
+  // Custom-View dot Markers can end up permanently blank on Android if
+  // tracksViewChanges is already false before the native layer captures its
+  // first snapshot of the child view. Start "tracked" for one brief window
+  // after the cluster set changes to force a fresh snapshot, then settle to
+  // false for normal performance.
+  const [snapshotsReady, setSnapshotsReady] = useState(false);
+  useEffect(() => {
+    setSnapshotsReady(false);
+    const timer = setTimeout(
+      () => setSnapshotsReady(true),
+      EXPOSURE_MAP_CONFIG.markerSnapshotDelayMs,
+    );
+    return () => clearTimeout(timer);
+  }, [clusters]);
 
   // Bounding-box fit of the whole dataset, recomputed only when the actual
   // dataset changes (not on every render) so it can seed initialRegion
@@ -104,44 +105,10 @@ const ExposureTrajectoryMap: React.FC<Props> = ({ segments }) => {
     setRegion(fittedRegion);
   }
 
-  const [containerWidthPx, setContainerWidthPx] = useState<number | null>(null);
-  const handleLayout = (e: LayoutChangeEvent) => {
-    setContainerWidthPx(e.nativeEvent.layout.width);
-  };
-
-  const showArrows = useMemo(() => {
-    if (!region || containerWidthPx == null) return false;
-    return (
-      computeZoomLevel(region.longitudeDelta, containerWidthPx) >=
-      EXPOSURE_MAP_CONFIG.arrowMinZoomLevel
-    );
-  }, [region, containerWidthPx]);
-
-  // Geometry is expensive-ish (bearing per pair) and purely a function of the
-  // clusters, so it's memoized independent of region/zoom — panning/zooming
-  // only toggles the cheap `showArrows` boolean, never recomputes this.
-  const arrowSegments = useMemo<ArrowSegment[]>(() => {
-    const result: ArrowSegment[] = [];
-    for (let i = 0; i < clusters.length - 1; i++) {
-      const a = clusters[i];
-      const b = clusters[i + 1];
-      result.push({
-        key: `arrow-${a.startTime}-${i}`,
-        latitude: (a.lat + b.lat) / 2,
-        longitude: (a.lon + b.lon) / 2,
-        bearing: computeBearing(a.lat, a.lon, b.lat, b.lon),
-      });
-    }
-    return result;
-  }, [clusters]);
-
   if (!region) return null;
 
   const mapView = (
-    <View
-      style={fullscreen ? styles.mapContainerFullscreen : styles.mapContainer}
-      onLayout={handleLayout}
-    >
+    <View style={fullscreen ? styles.mapContainerFullscreen : styles.mapContainer}>
       <MapView
         style={StyleSheet.absoluteFill}
         initialRegion={fittedRegion ?? undefined}
@@ -150,30 +117,6 @@ const ExposureTrajectoryMap: React.FC<Props> = ({ segments }) => {
         // SDK and MapKit can otherwise switch to a dark theme automatically.
         userInterfaceStyle="light"
       >
-        {hopSegments.map(segment => (
-          <Polyline
-            key={segment.key}
-            coordinates={segment.coordinates}
-            strokeColor={
-              segment.isFallback ? EXPOSURE_MAP_CONFIG.fallbackTrackColor : EXPOSURE_MAP_CONFIG.trackColor
-            }
-            strokeWidth={4}
-            {...(segment.isFallback ? { lineDashPattern: EXPOSURE_MAP_CONFIG.fallbackDashPattern } : {})}
-          />
-        ))}
-        {showArrows &&
-          arrowSegments.map(arrow => (
-            <Marker
-              key={arrow.key}
-              coordinate={{ latitude: arrow.latitude, longitude: arrow.longitude }}
-              anchor={{ x: 0.5, y: 0.5 }}
-              tracksViewChanges={false}
-            >
-              <View
-                style={[styles.arrow, { transform: [{ rotate: `${arrow.bearing}deg` }] }]}
-              />
-            </Marker>
-          ))}
         {clusters.map((cluster, i) => {
           const size = clusterDotSize(cluster.totalDurationMs);
           const dotColor =
@@ -185,7 +128,7 @@ const ExposureTrajectoryMap: React.FC<Props> = ({ segments }) => {
               key={`dot-${cluster.startTime}-${i}`}
               coordinate={{ latitude: cluster.lat, longitude: cluster.lon }}
               anchor={{ x: 0.5, y: 0.5 }}
-              tracksViewChanges={false}
+              tracksViewChanges={!snapshotsReady}
             >
               <View
                 style={[
@@ -287,16 +230,6 @@ const styles = StyleSheet.create({
   mapDot: {
     borderWidth: 1.5,
     borderColor: 'rgba(255,255,255,0.9)',
-  },
-  arrow: {
-    width: 0,
-    height: 0,
-    borderLeftWidth: 5,
-    borderRightWidth: 5,
-    borderBottomWidth: 8,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
-    borderBottomColor: EXPOSURE_MAP_CONFIG.arrowColor,
   },
   calloutBox: { minWidth: 160, padding: 4 },
   calloutTime: { fontSize: 12, fontWeight: '700', color: '#1C1C1E' },

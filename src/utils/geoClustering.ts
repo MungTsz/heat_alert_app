@@ -22,34 +22,6 @@ export const haversineMeters = (
   return 2 * EARTH_RADIUS_METERS * Math.asin(Math.sqrt(a));
 };
 
-// Forward azimuth in degrees, 0-360 clockwise from north — matches CSS
-// transform: rotate()'s clockwise convention directly, so callers don't need
-// to flip the sign before rotating an arrow glyph.
-export const computeBearing = (
-  lat1: number,
-  lon1: number,
-  lat2: number,
-  lon2: number,
-): number => {
-  const phi1 = toRadians(lat1);
-  const phi2 = toRadians(lat2);
-  const dLon = toRadians(lon2 - lon1);
-  const y = Math.sin(dLon) * Math.cos(phi2);
-  const x =
-    Math.cos(phi1) * Math.sin(phi2) - Math.sin(phi1) * Math.cos(phi2) * Math.cos(dLon);
-  const bearing = (Math.atan2(y, x) * 180) / Math.PI;
-  return (bearing + 360) % 360;
-};
-
-// Standard slippy-map zoom formula, made screen-size-independent by taking
-// the map's actual rendered width instead of assuming a fixed tile size —
-// so the arrow-visibility threshold in exposureMapConfig behaves consistently
-// across phone/tablet screens rather than reacting to a raw region delta.
-export const computeZoomLevel = (
-  longitudeDelta: number,
-  containerWidthPx: number,
-): number => Math.log2((360 * (containerWidthPx / 256)) / longitudeDelta);
-
 // Greedily merges chronologically-ordered segments into stay-point clusters:
 // a run stays open as long as each next segment is within radiusMeters of
 // the run's ANCHOR (its first segment), not a running centroid. A running
