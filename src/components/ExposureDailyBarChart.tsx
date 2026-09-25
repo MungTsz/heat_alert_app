@@ -91,7 +91,15 @@ const ExposureDailyBarChart: React.FC<Props> = ({
       });
       cursor = addHkDays(cursor, 1);
     }
-    return result;
+    // Trim untracked days off the START/END of the picked range only — an
+    // all-empty edge just narrows every bar for nothing meaningful to show.
+    // A no-data day strictly BETWEEN two tracked days is a real gap and
+    // still renders as the empty placeholder bar, so only the leading/
+    // trailing run gets dropped, never the middle.
+    const firstDataIdx = result.findIndex(d => d.total !== null);
+    if (firstDataIdx === -1) return result;
+    const lastDataIdx = result.length - 1 - [...result].reverse().findIndex(d => d.total !== null);
+    return result.slice(firstDataIdx, lastDataIdx + 1);
   }, [history, rangeStart, rangeEnd, todayOverride]);
 
   const maxTotal = Math.max(0, ...days.map(d => d.total ?? 0));

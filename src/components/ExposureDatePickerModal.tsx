@@ -13,7 +13,11 @@ export type DateSelection =
 
 type Props = {
   visible: boolean;
-  initialSelection: DateSelection;
+  // null = nothing explicitly picked yet on the calling screen — the
+  // calendar should open blank rather than pre-anchored to a computed
+  // default, so both boundaries of a range are always dates the user
+  // actually tapped themselves.
+  initialSelection: DateSelection | null;
   onClose: () => void;
   onApply: (selection: DateSelection) => void;
 };
@@ -47,7 +51,10 @@ const ExposureDatePickerModal: React.FC<Props> = ({
   // rather than carrying over whatever was mid-pick last time it was closed.
   useEffect(() => {
     if (!visible) return;
-    if (initialSelection.mode === 'single') {
+    if (!initialSelection) {
+      setStart(null);
+      setEnd(null);
+    } else if (initialSelection.mode === 'single') {
       setStart(initialSelection.date);
       setEnd(null);
     } else {

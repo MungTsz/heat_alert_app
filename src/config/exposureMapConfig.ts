@@ -7,10 +7,12 @@
 export const EXPOSURE_MAP_CONFIG = {
   // Indoor/outdoor dot coloring — shared with ExposureTrendChart's stacked
   // bars so the same io state reads the same color across map and chart.
-  // outdoorColor is amber/gold rather than a pure bright yellow, which
-  // washes out against the white card/map background.
+  // outdoorColor is a darker burnt-amber (not the lighter gold it used to be)
+  // because the map tiles render in light mode (userInterfaceStyle="light" in
+  // ExposureTrajectoryMap): a lighter yellow/gold washes out against light
+  // roads/land, roughly halving WCAG contrast vs this shade.
   indoorColor: '#8B5CF6',
-  outdoorColor: '#F5B700',
+  outdoorColor: '#C2790C',
   // "Same location" judgment threshold for merging consecutive segments into
   // one stay-point cluster — matches deviceTrackingService.ts's existing
   // distanceFilter of 30m.

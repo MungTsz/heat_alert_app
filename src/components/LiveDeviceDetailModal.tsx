@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArrowLeft, Calendar as CalendarIcon } from 'lucide-react-native';
 import { DailyExposureEntry, ExposureReport } from '../types/exposure';
 import { formatHkDateLabel } from '../utils/hkDate';
+import { getLastTrackedDate } from '../utils/exposureLastTrackedDate';
 import ExposureDateScopedView from './ExposureDateScopedView';
 import ExposureDatePickerModal, { DateSelection } from './ExposureDatePickerModal';
 
@@ -31,13 +32,21 @@ const LiveDeviceDetailModal: React.FC<Props> = ({
   history,
 }) => {
   const insets = useSafeAreaInsets();
-  const [selection, setSelection] = useState<DateSelection>({ mode: 'single', date: todayKey });
+  // null = nothing explicitly picked yet — the screen defaults to the last
+  // tracked day (below) rather than forcing "today", but the date PICKER
+  // itself should still open blank in that case (see ExposureDatePickerModal
+  // and DeviceDetailModal for the same pattern), not pre-anchored to this
+  // computed default.
+  const [selection, setSelection] = useState<DateSelection | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
 
+  const effectiveSelection: DateSelection =
+    selection ?? { mode: 'single', date: getLastTrackedDate(history, todayKey, !!todayReport) };
+
   const selectionLabel =
-    selection.mode === 'single'
-      ? formatHkDateLabel(selection.date, todayKey)
-      : `${formatHkDateLabel(selection.start, todayKey)} – ${formatHkDateLabel(selection.end, todayKey)}`;
+    effectiveSelection.mode === 'single'
+      ? formatHkDateLabel(effectiveSelection.date, todayKey)
+      : `${formatHkDateLabel(effectiveSelection.start, todayKey)} – ${formatHkDateLabel(effectiveSelection.end, todayKey)}`;
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
@@ -68,7 +77,7 @@ const LiveDeviceDetailModal: React.FC<Props> = ({
 
           <ExposureDateScopedView
             history={history}
-            selection={selection}
+            selection={effectiveSelection}
             todayKey={todayKey}
             todayReport={todayReport}
             todayLoading={todayLoading}

@@ -6,6 +6,7 @@ import { ArrowLeft, Trash2, Upload, Calendar as CalendarIcon } from 'lucide-reac
 import { ExposureDevice } from '../types/exposure';
 import { useExposureHistory } from '../hooks/useExposureHistory';
 import { toHkDateKey, formatHkDateLabel } from '../utils/hkDate';
+import { getLastTrackedDate } from '../utils/exposureLastTrackedDate';
 import ExposureDateScopedView from './ExposureDateScopedView';
 import ExposureDatePickerModal, { DateSelection } from './ExposureDatePickerModal';
 import ImportTrackModal from './ImportTrackModal';
@@ -31,16 +32,27 @@ const DeviceDetailModal: React.FC<Props> = ({ visible, device, onClose, onDelete
   // device's own history for no reason.
   const { history } = useExposureHistory(device?.id ?? '__no_device_selected__');
   const todayKey = toHkDateKey();
-  const [selection, setSelection] = useState<DateSelection>({ mode: 'single', date: todayKey });
+  // null = nothing explicitly picked yet — the screen defaults to the last
+  // tracked day (below) rather than forcing "today", but the date PICKER
+  // itself should still open blank in that case (see ExposureDatePickerModal
+  // and LiveDeviceDetailModal for the same pattern), not pre-anchored to
+  // this computed default.
+  const [selection, setSelection] = useState<DateSelection | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
 
   if (!device) return null;
 
+  // A device workspace has no live "today" report of its own (todayHasData
+  // is always false) — its default falls through to the newest history
+  // entry, or todayKey if nothing's been imported yet at all.
+  const effectiveSelection: DateSelection =
+    selection ?? { mode: 'single', date: getLastTrackedDate(history, todayKey, false) };
+
   const selectionLabel =
-    selection.mode === 'single'
-      ? formatHkDateLabel(selection.date, todayKey)
-      : `${formatHkDateLabel(selection.start, todayKey)} – ${formatHkDateLabel(selection.end, todayKey)}`;
+    effectiveSelection.mode === 'single'
+      ? formatHkDateLabel(effectiveSelection.date, todayKey)
+      : `${formatHkDateLabel(effectiveSelection.start, todayKey)} – ${formatHkDateLabel(effectiveSelection.end, todayKey)}`;
 
   const handleDelete = () => {
     onDelete(device.id);
@@ -83,7 +95,7 @@ const DeviceDetailModal: React.FC<Props> = ({ visible, device, onClose, onDelete
 
           <ExposureDateScopedView
             history={history}
-            selection={selection}
+            selection={effectiveSelection}
             todayKey={todayKey}
             todayReport={null}
             formatDateLabel={date => formatHkDateLabel(date, todayKey)}
