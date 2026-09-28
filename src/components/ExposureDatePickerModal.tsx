@@ -32,7 +32,7 @@ const MAX_RANGE_DAYS = MAX_CACHED_DAYS;
 const RANGE_PRESETS: { label: string; days: number }[] = [
   { label: 'Last week', days: 7 },
   { label: 'Last 2 weeks', days: 14 },
-  { label: 'Last month', days: 30 },
+  { label: 'Last 30 days', days: 30 },
   { label: 'Last 90 days', days: 90 },
 ];
 

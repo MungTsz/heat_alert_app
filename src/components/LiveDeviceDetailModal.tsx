@@ -1,11 +1,21 @@
 // src/components/LiveDeviceDetailModal.tsx
 import React, { useState } from 'react';
-import { Modal, View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import {
+  Modal,
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+  ActivityIndicator,
+  RefreshControl,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArrowLeft, Calendar as CalendarIcon } from 'lucide-react-native';
 import { DailyExposureEntry, ExposureReport } from '../types/exposure';
 import { formatHkDateLabel } from '../utils/hkDate';
 import { getLastTrackedDate } from '../utils/exposureLastTrackedDate';
+import { usePullToRefresh } from '../hooks/usePullToRefresh';
 import ExposureDateScopedView from './ExposureDateScopedView';
 import ExposureDatePickerModal, { DateSelection } from './ExposureDatePickerModal';
 
@@ -16,6 +26,7 @@ type Props = {
   todayReport: ExposureReport | null;
   todayLoading: boolean;
   history: DailyExposureEntry[];
+  refresh: () => Promise<void>;
 };
 
 // The live self-tracked device's full-screen detail page — same
@@ -30,8 +41,10 @@ const LiveDeviceDetailModal: React.FC<Props> = ({
   todayReport,
   todayLoading,
   history,
+  refresh,
 }) => {
   const insets = useSafeAreaInsets();
+  const { refreshing, onRefresh } = usePullToRefresh(refresh);
   // null = nothing explicitly picked yet — the screen defaults to the last
   // tracked day (below) rather than forcing "today", but the date PICKER
   // itself should still open blank in that case (see ExposureDatePickerModal
@@ -66,13 +79,24 @@ const LiveDeviceDetailModal: React.FC<Props> = ({
           style={styles.content}
           contentContainerStyle={styles.contentContainer}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#8B5CF6" colors={['#8B5CF6']} />
+          }
         >
           <View style={styles.sectionHeaderRow}>
             <Text style={styles.sectionLabel}>DAILY EXPOSURE</Text>
-            <TouchableOpacity style={styles.datePill} onPress={() => setPickerOpen(true)}>
-              <CalendarIcon size={14} color="#8B5CF6" />
-              <Text style={styles.datePillText}>{selectionLabel}</Text>
-            </TouchableOpacity>
+            <View style={styles.headerRightGroup}>
+              {todayLoading && (
+                <View style={styles.updatingPill}>
+                  <ActivityIndicator size="small" color="#8B5CF6" />
+                  <Text style={styles.updatingPillText}>Updating…</Text>
+                </View>
+              )}
+              <TouchableOpacity style={styles.datePill} onPress={() => setPickerOpen(true)}>
+                <CalendarIcon size={14} color="#8B5CF6" />
+                <Text style={styles.datePillText}>{selectionLabel}</Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           <ExposureDateScopedView
@@ -123,6 +147,9 @@ const styles = StyleSheet.create({
     color: '#8E8E93',
     letterSpacing: 0.5,
   },
+  headerRightGroup: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  updatingPill: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  updatingPillText: { fontSize: 12, color: '#8B5CF6', fontWeight: '600' },
   datePill: {
     flexDirection: 'row',
     alignItems: 'center',

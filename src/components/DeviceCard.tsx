@@ -1,9 +1,10 @@
 // src/components/DeviceCard.tsx
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { ChevronRight, Smartphone } from 'lucide-react-native';
 import { ExposureDevice } from '../types/exposure';
 import { useExposureHistory } from '../hooks/useExposureHistory';
+import { useImportJobStatus } from '../hooks/useImportJobStatus';
 
 type Props = {
   device: ExposureDevice;
@@ -11,7 +12,8 @@ type Props = {
 };
 
 const DeviceCard: React.FC<Props> = ({ device, onPress }) => {
-  const { history } = useExposureHistory(device.id);
+  const { history, refresh } = useExposureHistory(device.id);
+  const { status: jobStatus } = useImportJobStatus(device.id, refresh);
 
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.7}>
@@ -24,11 +26,16 @@ const DeviceCard: React.FC<Props> = ({ device, onPress }) => {
         </View>
         <ChevronRight size={16} color="#999" />
       </View>
-      <Text style={styles.meta}>
-        {history.length === 0
-          ? 'No data imported yet'
-          : `${history.length} day${history.length === 1 ? '' : 's'} tracked`}
-      </Text>
+      <View style={styles.metaRow}>
+        {jobStatus && <ActivityIndicator size="small" color="#8B5CF6" />}
+        <Text style={styles.meta}>
+          {jobStatus
+            ? `Processing ${jobStatus.completed} of ${jobStatus.total} files…`
+            : history.length === 0
+              ? 'No data imported yet'
+              : `${history.length} day${history.length === 1 ? '' : 's'} tracked`}
+        </Text>
+      </View>
     </TouchableOpacity>
   );
 };
@@ -45,7 +52,8 @@ const styles = StyleSheet.create({
   topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   labelRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 },
   label: { fontSize: 15, fontWeight: '600', color: '#222', flexShrink: 1 },
-  meta: { fontSize: 12, color: '#888', marginTop: 4 },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
+  meta: { fontSize: 12, color: '#888' },
 });
 
 export default DeviceCard;

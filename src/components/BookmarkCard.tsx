@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { Trash2, Home, MapPin } from 'lucide-react-native';
 import { getHeatIndexInfo } from '../utils/heatIndexUtils';
 import { getAqhiInfo } from '../utils/aqhiUtils';
@@ -28,6 +28,13 @@ const BookmarkCard = ({
   const aqhiInfo = getAqhiInfo(aqhi);
   const Icon = type === 'house' ? Home : MapPin;
 
+  const handleRemovePress = () => {
+    Alert.alert('Delete Bookmark', `Remove "${label}" from your bookmarks?`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: onRemove },
+    ]);
+  };
+
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.7}>
       <View style={styles.topRow}>
@@ -38,7 +45,7 @@ const BookmarkCard = ({
           </Text>
         </View>
         <TouchableOpacity
-          onPress={onRemove}
+          onPress={handleRemovePress}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
           <Trash2 size={16} color="#999" />

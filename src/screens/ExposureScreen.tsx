@@ -1,6 +1,6 @@
 // src/screens/ExposureScreen.tsx
-import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useCallback, useMemo, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Footprints, ChevronRight, Plus } from 'lucide-react-native';
 import ImportTrackModal from '../components/ImportTrackModal';
@@ -11,14 +11,25 @@ import { useTodayExposure } from '../hooks/useTodayExposure';
 import { useExposureTrackingSettings } from '../hooks/useExposureTrackingSettings';
 import { useExposureHistory } from '../hooks/useExposureHistory';
 import { useExposureDevices } from '../hooks/useExposureDevices';
+import { usePullToRefresh } from '../hooks/usePullToRefresh';
 import { toHkDateKey } from '../utils/hkDate';
 import { ExposureDevice } from '../types/exposure';
 
 const ExposureScreen = () => {
   const { enabled: trackingEnabled } = useExposureTrackingSettings();
-  const { report: todayReport, loading: todayLoading } = useTodayExposure(trackingEnabled);
-  const { history } = useExposureHistory();
-  const { devices, removeDevice } = useExposureDevices();
+  const {
+    report: todayReport,
+    loading: todayLoading,
+    refresh: refreshToday,
+  } = useTodayExposure(trackingEnabled);
+  const { history, refresh: refreshHistory } = useExposureHistory();
+  const { devices, removeDevice, refresh: refreshDevices } = useExposureDevices();
+
+  const handleRefresh = useCallback(
+    () => Promise.all([refreshToday(), refreshHistory(), refreshDevices()]).then(() => {}),
+    [refreshToday, refreshHistory, refreshDevices],
+  );
+  const { refreshing, onRefresh } = usePullToRefresh(handleRefresh);
 
   const todayKey = useMemo(() => toHkDateKey(), []);
   const [addModalOpen, setAddModalOpen] = useState(false);
@@ -27,7 +38,12 @@ const ExposureScreen = () => {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#8B5CF6" colors={['#8B5CF6']} />
+        }
+      >
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Exposure</Text>
           <TouchableOpacity style={styles.addButton} onPress={() => setAddModalOpen(true)}>
@@ -94,6 +110,7 @@ const ExposureScreen = () => {
         todayReport={todayReport}
         todayLoading={todayLoading}
         history={history}
+        refresh={handleRefresh}
       />
       <DeviceDetailModal
         visible={!!selectedDevice}

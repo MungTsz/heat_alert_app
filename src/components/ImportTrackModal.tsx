@@ -25,6 +25,7 @@ import { exposureDataProvider } from '../data/exposure';
 import { useImportHistory } from '../hooks/useImportHistory';
 import { useExposureDevices } from '../hooks/useExposureDevices';
 import { refreshHistoryCache } from '../services/exposureHistoryService';
+import { setImportJobStatus, clearImportJobStatus } from '../services/importJobStatusService';
 import { ExposureReport } from '../types/exposure';
 import ExposureDaySwitcher from './ExposureDaySwitcher';
 
@@ -37,7 +38,7 @@ type Props = {
   lockedDeviceId?: string;
 };
 
-const MAX_FILES = 3;
+const MAX_FILES = 30;
 // Sentinel meaning "preview only, don't attach to a device workspace" — the
 // ETL backend always persists whatever's ingested under a pid (there's no
 // ephemeral/no-save mode), so this path generates a one-off throwaway pid
@@ -50,6 +51,16 @@ const INSTANT_TARGET = '__instant__';
 const makePreviewPid = (): string =>
   `preview-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
+// A picked file or submitted URL that the user hasn't committed to yet —
+// tracked separately from ImportItem so nothing hits the network (and the
+// slow ETL backend) until the user explicitly confirms the batch.
+type PendingSource = {
+  id: string;
+  label: string;
+  kind: 'file' | 'url';
+  uri: string;
+};
+
 type ImportItem = {
   id: string;
   fileName: string;
@@ -59,14 +70,17 @@ type ImportItem = {
   expanded: boolean;
 };
 
+type Phase = 'select' | 'importing' | 'complete';
+
 const ImportTrackModal: React.FC<Props> = ({ visible, onClose, lockedDeviceId }) => {
   const insets = useSafeAreaInsets();
   const { addImport } = useImportHistory();
   const { devices, createDevice } = useExposureDevices();
   const [url, setUrl] = useState('');
   const [localError, setLocalError] = useState<string | null>(null);
+  const [pendingSources, setPendingSources] = useState<PendingSource[]>([]);
   const [items, setItems] = useState<ImportItem[]>([]);
-  const [processing, setProcessing] = useState(false);
+  const [phase, setPhase] = useState<Phase>('select');
   const [targetDeviceId, setTargetDeviceId] = useState<string>(
     lockedDeviceId ?? INSTANT_TARGET,
   );
@@ -76,6 +90,11 @@ const ImportTrackModal: React.FC<Props> = ({ visible, onClose, lockedDeviceId })
   const lockedDevice = lockedDeviceId
     ? devices.find(d => d.id === lockedDeviceId)
     : undefined;
+
+  const total = items.length;
+  const doneCount = items.filter(item => item.status === 'done').length;
+  const errorCount = items.filter(item => item.status === 'error').length;
+  const completedCount = doneCount + errorCount;
 
   const updateItem = (id: string, patch: Partial<ImportItem>) =>
     setItems(prev => prev.map(item => (item.id === id ? { ...item, ...patch } : item)));
@@ -131,61 +150,109 @@ const ImportTrackModal: React.FC<Props> = ({ visible, onClose, lockedDeviceId })
     }
   };
 
+  // Only picks/queues files — nothing is sent to the backend until the user
+  // taps "Confirm Import". Lets the user invoke this repeatedly to build up
+  // a batch even if the native picker only returns one file per call.
   const handlePickFiles = async () => {
     setLocalError(null);
+    const room = Math.max(0, MAX_FILES - pendingSources.length);
+    if (room === 0) return;
     try {
       const picked = await pick({ type: [types.allFiles], allowMultiSelection: true });
-      if (picked.length > MAX_FILES) {
-        setLocalError(`Only the first ${MAX_FILES} files were imported.`);
+      if (picked.length > room) {
+        setLocalError(
+          `Only ${room} more file${room === 1 ? '' : 's'} could be added (max ${MAX_FILES} per import).`,
+        );
       }
-      const toImport = picked.slice(0, MAX_FILES);
-
-      const newItems: ImportItem[] = toImport.map((file, i) => ({
+      const toAdd: PendingSource[] = picked.slice(0, room).map((file, i) => ({
         id: `${Date.now()}-${i}`,
-        fileName: file.name ?? 'Untitled track',
-        status: 'reading',
-        expanded: false,
+        label: file.name ?? 'Untitled track',
+        kind: 'file',
+        uri: file.uri,
       }));
-      setItems(prev => [...prev, ...newItems]);
-
-      setProcessing(true);
-      // Sequential, not parallel — each file's exposure calculation is a
-      // real network call, and sequential keeps batching/URL-length
-      // behavior predictable rather than firing several batches at once.
-      for (let i = 0; i < toImport.length; i++) {
-        const file = toImport[i];
-        const item = newItems[i];
-        try {
-          const text = await (await fetch(file.uri)).text();
-          await processOne(item.id, item.fileName, text);
-        } catch {
-          updateItem(item.id, { status: 'error', error: 'Could not read the selected file.' });
-        }
-      }
-      setProcessing(false);
+      setPendingSources(prev => [...prev, ...toAdd]);
     } catch (err) {
       if (isErrorWithCode(err) && err.code === errorCodes.OPERATION_CANCELED) return;
       setLocalError('Could not open the file picker.');
     }
   };
 
-  const handleImportUrl = async () => {
-    if (!url.trim()) return;
-    const sourceLabel = url.trim();
-    const id = `${Date.now()}-url`;
-    setItems(prev => [
+  // Same idea as handlePickFiles, but for the URL field — just queues it.
+  const handleAddUrlSource = () => {
+    const trimmed = url.trim();
+    if (!trimmed || pendingSources.length >= MAX_FILES) return;
+    setPendingSources(prev => [
       ...prev,
-      { id, fileName: sourceLabel, status: 'reading', expanded: false },
+      { id: `${Date.now()}-url`, label: trimmed, kind: 'url', uri: trimmed },
     ]);
     setUrl('');
-    setProcessing(true);
-    try {
-      const text = await (await fetch(sourceLabel)).text();
-      await processOne(id, sourceLabel, text);
-    } catch {
-      updateItem(id, { status: 'error', error: 'Could not fetch the track from that URL.' });
+  };
+
+  const removePendingSource = (id: string) =>
+    setPendingSources(prev => prev.filter(source => source.id !== id));
+
+  const handleConfirmImport = async () => {
+    if (pendingSources.length === 0) return;
+    const sources = pendingSources;
+    const isInstant = targetDeviceId === INSTANT_TARGET;
+    const jobId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const startedAt = Date.now();
+    const newItems: ImportItem[] = sources.map(source => ({
+      id: source.id,
+      fileName: source.label,
+      status: 'reading',
+      expanded: false,
+    }));
+    setItems(newItems);
+    setPendingSources([]);
+    setPhase('importing');
+
+    // Preview-only imports have no persistent device page to check back on,
+    // so there's no job status worth persisting for them — only named
+    // devices get one.
+    if (!isInstant) {
+      await setImportJobStatus(targetDeviceId, {
+        jobId,
+        total: sources.length,
+        completed: 0,
+        startedAt,
+        updatedAt: startedAt,
+      });
     }
-    setProcessing(false);
+
+    // Sequential, not parallel — each file's exposure calculation is a
+    // real network call, and sequential keeps batching/URL-length
+    // behavior predictable rather than firing several batches at once.
+    let completed = 0;
+    for (const source of sources) {
+      try {
+        const text = await (await fetch(source.uri)).text();
+        await processOne(source.id, source.label, text);
+      } catch {
+        updateItem(source.id, {
+          status: 'error',
+          error:
+            source.kind === 'url'
+              ? 'Could not fetch the track from that URL.'
+              : 'Could not read the selected file.',
+        });
+      }
+      completed += 1;
+      if (!isInstant) {
+        await setImportJobStatus(targetDeviceId, {
+          jobId,
+          total: sources.length,
+          completed,
+          startedAt,
+          updatedAt: Date.now(),
+        });
+      }
+    }
+
+    if (!isInstant) {
+      await clearImportJobStatus(targetDeviceId, jobId);
+    }
+    setPhase('complete');
   };
 
   const toggleExpanded = (id: string) =>
@@ -193,19 +260,30 @@ const ImportTrackModal: React.FC<Props> = ({ visible, onClose, lockedDeviceId })
       prev.map(item => (item.id === id ? { ...item, expanded: !item.expanded } : item)),
     );
 
-  const handleReset = () => {
+  // "Import More" from the complete screen — starts a fresh selection but
+  // deliberately keeps the chosen destination, since the user is continuing
+  // the same session rather than starting over.
+  const handleImportMore = () => {
     setItems([]);
+    setPendingSources([]);
     setLocalError(null);
     setUrl('');
-    setTargetDeviceId(lockedDeviceId ?? INSTANT_TARGET);
     setCreatingDevice(false);
     setNewDeviceName('');
+    setPhase('select');
+  };
+
+  const handleFullReset = () => {
+    handleImportMore();
+    setTargetDeviceId(lockedDeviceId ?? INSTANT_TARGET);
   };
 
   const handleClose = () => {
-    handleReset();
+    handleFullReset();
     onClose();
   };
+
+  const atFileCap = pendingSources.length >= MAX_FILES;
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={handleClose}>
@@ -220,7 +298,7 @@ const ImportTrackModal: React.FC<Props> = ({ visible, onClose, lockedDeviceId })
         </View>
 
         <ScrollView contentContainerStyle={styles.content}>
-          {!processing && (
+          {phase === 'select' && (
             <>
               {!lockedDeviceId && (
                 <>
@@ -299,12 +377,17 @@ const ImportTrackModal: React.FC<Props> = ({ visible, onClose, lockedDeviceId })
                 </View>
               )}
 
-              <TouchableOpacity style={styles.actionRow} onPress={handlePickFiles}>
+              <TouchableOpacity
+                style={[styles.actionRow, atFileCap && styles.actionRowDisabled]}
+                onPress={handlePickFiles}
+                disabled={atFileCap}
+              >
                 <Upload size={18} color="#333" />
-                <Text style={styles.actionText}>
-                  Upload Files (up to {MAX_FILES}, .geojson/.json)
-                </Text>
+                <Text style={styles.actionText}>Add Files</Text>
               </TouchableOpacity>
+              <Text style={styles.helperCaption}>
+                .geojson or .json — up to {MAX_FILES} per import
+              </Text>
 
               <Text style={styles.orText}>or</Text>
 
@@ -321,79 +404,152 @@ const ImportTrackModal: React.FC<Props> = ({ visible, onClose, lockedDeviceId })
                 />
               </View>
               <TouchableOpacity
-                style={[styles.actionRow, !url.trim() && styles.actionRowDisabled]}
-                onPress={handleImportUrl}
-                disabled={!url.trim()}
+                style={[styles.actionRow, (!url.trim() || atFileCap) && styles.actionRowDisabled]}
+                onPress={handleAddUrlSource}
+                disabled={!url.trim() || atFileCap}
               >
-                <Text style={styles.actionText}>Import from URL</Text>
+                <Text style={styles.actionText}>Add URL</Text>
               </TouchableOpacity>
 
               {localError && <Text style={styles.errorText}>{localError}</Text>}
+
+              {pendingSources.length > 0 && (
+                <>
+                  <Text style={styles.sectionLabel}>
+                    READY TO IMPORT ({pendingSources.length})
+                  </Text>
+                  {pendingSources.map(source => (
+                    <View key={source.id} style={styles.pendingRow}>
+                      {source.kind === 'url' ? (
+                        <LinkIcon size={16} color="#8E8E93" />
+                      ) : (
+                        <Upload size={16} color="#8E8E93" />
+                      )}
+                      <Text style={styles.pendingLabel} numberOfLines={1}>
+                        {source.label}
+                      </Text>
+                      <TouchableOpacity
+                        onPress={() => removePendingSource(source.id)}
+                        hitSlop={10}
+                      >
+                        <X size={16} color="#8E8E93" />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                  <TouchableOpacity style={styles.confirmButton} onPress={handleConfirmImport}>
+                    <Text style={styles.confirmButtonText}>
+                      Confirm Import ({pendingSources.length})
+                    </Text>
+                  </TouchableOpacity>
+                </>
+              )}
             </>
           )}
 
-          {items.map(item => (
-            <View key={item.id} style={styles.itemCard}>
-              {(item.status === 'reading' || item.status === 'calculating') && (
-                <View style={styles.itemProgressRow}>
-                  <ActivityIndicator size="small" />
-                  <View style={styles.itemProgressText}>
-                    <Text style={styles.itemFileName} numberOfLines={1}>
-                      {item.fileName}
-                    </Text>
-                    <Text style={styles.itemStatusText}>
-                      {item.status === 'reading' ? 'Reading track…' : 'Calculating exposure…'}
-                    </Text>
-                  </View>
-                </View>
-              )}
+          {phase === 'importing' && (
+            <>
+              <View style={styles.reassuranceBanner}>
+                <Text style={styles.reassuranceTitle}>
+                  Received {total} file{total === 1 ? '' : 's'} — processing now
+                </Text>
+                <Text style={styles.reassuranceSubtext}>
+                  {targetDeviceId === INSTANT_TARGET
+                    ? "This can take a few minutes. Keep this screen open to see each file's results as they finish."
+                    : "This can take a few minutes. You can close this and check back on the device later — it'll show your data once it's ready."}
+                </Text>
+              </View>
+              <Text style={styles.progressLabel}>
+                Importing file {Math.min(completedCount + 1, total)} of {total}
+              </Text>
+              <View style={styles.progressTrack}>
+                <View
+                  style={[
+                    styles.progressFill,
+                    { width: `${total ? (completedCount / total) * 100 : 0}%` },
+                  ]}
+                />
+              </View>
+            </>
+          )}
 
-              {item.status === 'error' && (
-                <View>
-                  <Text style={styles.itemFileName} numberOfLines={1}>
-                    {item.fileName}
-                  </Text>
-                  <Text style={styles.errorText}>{item.error}</Text>
-                </View>
-              )}
+          {phase === 'complete' && (
+            <View style={styles.summaryBanner}>
+              <Text style={styles.summaryBannerText}>
+                {errorCount === 0
+                  ? `Imported ${total} of ${total} files`
+                  : `${doneCount} of ${total} imported, ${errorCount} failed`}
+              </Text>
+            </View>
+          )}
 
-              {item.status === 'done' && item.report && (
-                <View>
-                  <TouchableOpacity
-                    style={styles.itemSummaryRow}
-                    onPress={() => toggleExpanded(item.id)}
-                  >
+          {phase !== 'select' &&
+            items.map(item => (
+              <View key={item.id} style={styles.itemCard}>
+                {(item.status === 'reading' || item.status === 'calculating') && (
+                  <View style={styles.itemProgressRow}>
+                    <ActivityIndicator size="small" />
                     <View style={styles.itemProgressText}>
                       <Text style={styles.itemFileName} numberOfLines={1}>
                         {item.fileName}
                       </Text>
                       <Text style={styles.itemStatusText}>
-                        {item.report.totalExposure.toFixed(2)} %AR·h total
+                        {item.status === 'reading' ? 'Reading track…' : 'Calculating exposure…'}
                       </Text>
                     </View>
-                    {item.expanded ? (
-                      <ChevronUp size={18} color="#8E8E93" />
-                    ) : (
-                      <ChevronDown size={18} color="#8E8E93" />
-                    )}
-                  </TouchableOpacity>
-                  {item.expanded && (
-                    <View style={styles.itemExpanded}>
-                      <ExposureDaySwitcher
-                        report={item.report}
-                        title="Imported Track Exposure"
-                      />
-                    </View>
-                  )}
-                </View>
-              )}
-            </View>
-          ))}
+                  </View>
+                )}
 
-          {items.length > 0 && !processing && (
-            <TouchableOpacity style={styles.footerButton} onPress={handleReset}>
-              <Text style={styles.footerButtonText}>Import More</Text>
-            </TouchableOpacity>
+                {item.status === 'error' && (
+                  <View>
+                    <Text style={styles.itemFileName} numberOfLines={1}>
+                      {item.fileName}
+                    </Text>
+                    <Text style={styles.errorText}>{item.error}</Text>
+                  </View>
+                )}
+
+                {item.status === 'done' && item.report && (
+                  <View>
+                    <TouchableOpacity
+                      style={styles.itemSummaryRow}
+                      onPress={() => toggleExpanded(item.id)}
+                    >
+                      <View style={styles.itemProgressText}>
+                        <Text style={styles.itemFileName} numberOfLines={1}>
+                          {item.fileName}
+                        </Text>
+                        <Text style={styles.itemStatusText}>
+                          {item.report.totalExposure.toFixed(2)} %AR·h total
+                        </Text>
+                      </View>
+                      {item.expanded ? (
+                        <ChevronUp size={18} color="#8E8E93" />
+                      ) : (
+                        <ChevronDown size={18} color="#8E8E93" />
+                      )}
+                    </TouchableOpacity>
+                    {item.expanded && (
+                      <View style={styles.itemExpanded}>
+                        <ExposureDaySwitcher
+                          report={item.report}
+                          title="Imported Track Exposure"
+                        />
+                      </View>
+                    )}
+                  </View>
+                )}
+              </View>
+            ))}
+
+          {phase === 'complete' && (
+            <View style={styles.completeFooterRow}>
+              <TouchableOpacity style={styles.footerButton} onPress={handleImportMore}>
+                <Text style={styles.footerButtonText}>Import More</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.footerButtonPrimary} onPress={handleClose}>
+                <Text style={styles.footerButtonPrimaryText}>Done</Text>
+              </TouchableOpacity>
+            </View>
           )}
         </ScrollView>
       </View>
@@ -457,6 +613,13 @@ const styles = StyleSheet.create({
   },
   actionRowDisabled: { opacity: 0.5 },
   actionText: { fontSize: 14, fontWeight: '600', color: '#333' },
+  helperCaption: {
+    fontSize: 12,
+    color: '#8E8E93',
+    textAlign: 'center',
+    marginTop: -6,
+    marginBottom: 14,
+  },
   orText: {
     textAlign: 'center',
     color: '#8E8E93',
@@ -479,6 +642,59 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 10,
   },
+  pendingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginBottom: 8,
+  },
+  pendingLabel: { flex: 1, fontSize: 14, fontWeight: '600', color: '#1C1C1E' },
+  confirmButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#8B5CF6',
+    borderRadius: 12,
+    paddingVertical: 14,
+    marginTop: 4,
+  },
+  confirmButtonText: { fontSize: 14, fontWeight: '700', color: '#FFFFFF' },
+  reassuranceBanner: {
+    backgroundColor: '#F0EBFF',
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    marginBottom: 16,
+  },
+  reassuranceTitle: { fontSize: 14, fontWeight: '700', color: '#1C1C1E' },
+  reassuranceSubtext: { fontSize: 12, color: '#5B5B5E', marginTop: 6, lineHeight: 17 },
+  progressLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#333',
+    textAlign: 'center',
+    marginBottom: 10,
+  },
+  progressTrack: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#E5E5EA',
+    overflow: 'hidden',
+    marginBottom: 16,
+  },
+  progressFill: { height: '100%', backgroundColor: '#8B5CF6', borderRadius: 3 },
+  summaryBanner: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  summaryBannerText: { fontSize: 15, fontWeight: '700', color: '#1C1C1E' },
   itemCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
@@ -491,14 +707,23 @@ const styles = StyleSheet.create({
   itemFileName: { fontSize: 14, fontWeight: '600', color: '#1C1C1E' },
   itemStatusText: { fontSize: 12, color: '#8E8E93', marginTop: 2 },
   itemExpanded: { marginTop: 14 },
+  completeFooterRow: { flexDirection: 'row', gap: 10, marginTop: 4 },
   footerButton: {
+    flex: 1,
     alignItems: 'center',
     paddingVertical: 14,
     borderRadius: 12,
     backgroundColor: '#FFFFFF',
-    marginTop: 4,
   },
   footerButtonText: { fontSize: 14, fontWeight: '700', color: '#333' },
+  footerButtonPrimary: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: '#8B5CF6',
+  },
+  footerButtonPrimaryText: { fontSize: 14, fontWeight: '700', color: '#FFFFFF' },
 });
 
 export default ImportTrackModal;

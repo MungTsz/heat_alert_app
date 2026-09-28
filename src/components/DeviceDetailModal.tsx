@@ -1,12 +1,24 @@
 // src/components/DeviceDetailModal.tsx
 import React, { useState } from 'react';
-import { Modal, View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import {
+  Modal,
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+  ActivityIndicator,
+  RefreshControl,
+  Alert,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArrowLeft, Trash2, Upload, Calendar as CalendarIcon } from 'lucide-react-native';
 import { ExposureDevice } from '../types/exposure';
 import { useExposureHistory } from '../hooks/useExposureHistory';
 import { toHkDateKey, formatHkDateLabel } from '../utils/hkDate';
 import { getLastTrackedDate } from '../utils/exposureLastTrackedDate';
+import { usePullToRefresh } from '../hooks/usePullToRefresh';
+import { useImportJobStatus } from '../hooks/useImportJobStatus';
 import ExposureDateScopedView from './ExposureDateScopedView';
 import ExposureDatePickerModal, { DateSelection } from './ExposureDatePickerModal';
 import ImportTrackModal from './ImportTrackModal';
@@ -30,7 +42,9 @@ const DeviceDetailModal: React.FC<Props> = ({ visible, device, onClose, onDelete
   // `visible` toggles) — fall back to a placeholder id rather than
   // useExposureHistory's own default, which would otherwise read the live
   // device's own history for no reason.
-  const { history } = useExposureHistory(device?.id ?? '__no_device_selected__');
+  const { history, loading, refresh } = useExposureHistory(device?.id ?? '__no_device_selected__');
+  const { status: jobStatus } = useImportJobStatus(device?.id ?? '__no_device_selected__', refresh);
+  const { refreshing, onRefresh } = usePullToRefresh(refresh);
   const todayKey = toHkDateKey();
   // null = nothing explicitly picked yet — the screen defaults to the last
   // tracked day (below) rather than forcing "today", but the date PICKER
@@ -54,8 +68,19 @@ const DeviceDetailModal: React.FC<Props> = ({ visible, device, onClose, onDelete
       ? formatHkDateLabel(effectiveSelection.date, todayKey)
       : `${formatHkDateLabel(effectiveSelection.start, todayKey)} – ${formatHkDateLabel(effectiveSelection.end, todayKey)}`;
 
+  const importingHint = jobStatus
+    ? 'Still processing your import — this can take a few minutes.'
+    : undefined;
+
   const handleDelete = () => {
-    onDelete(device.id);
+    Alert.alert(
+      'Delete Device',
+      `Delete "${device.name}" and all of its imported history? This can't be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: () => onDelete(device.id) },
+      ],
+    );
   };
 
   return (
@@ -84,13 +109,33 @@ const DeviceDetailModal: React.FC<Props> = ({ visible, device, onClose, onDelete
           style={styles.content}
           contentContainerStyle={styles.contentContainer}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#8B5CF6" colors={['#8B5CF6']} />
+          }
         >
           <View style={styles.sectionHeaderRow}>
             <Text style={styles.sectionLabel}>DAILY EXPOSURE</Text>
-            <TouchableOpacity style={styles.datePill} onPress={() => setPickerOpen(true)}>
-              <CalendarIcon size={14} color="#8B5CF6" />
-              <Text style={styles.datePillText}>{selectionLabel}</Text>
-            </TouchableOpacity>
+            <View style={styles.headerRightGroup}>
+              {jobStatus ? (
+                <View style={styles.updatingPill}>
+                  <ActivityIndicator size="small" color="#8B5CF6" />
+                  <Text style={styles.updatingPillText}>
+                    Processing {jobStatus.completed}/{jobStatus.total}…
+                  </Text>
+                </View>
+              ) : (
+                loading && (
+                  <View style={styles.updatingPill}>
+                    <ActivityIndicator size="small" color="#8B5CF6" />
+                    <Text style={styles.updatingPillText}>Updating…</Text>
+                  </View>
+                )
+              )}
+              <TouchableOpacity style={styles.datePill} onPress={() => setPickerOpen(true)}>
+                <CalendarIcon size={14} color="#8B5CF6" />
+                <Text style={styles.datePillText}>{selectionLabel}</Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           <ExposureDateScopedView
@@ -100,6 +145,7 @@ const DeviceDetailModal: React.FC<Props> = ({ visible, device, onClose, onDelete
             todayReport={null}
             formatDateLabel={date => formatHkDateLabel(date, todayKey)}
             variant="compact"
+            importingHint={importingHint}
           />
         </ScrollView>
       </View>
@@ -146,6 +192,9 @@ const styles = StyleSheet.create({
     color: '#8E8E93',
     letterSpacing: 0.5,
   },
+  headerRightGroup: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  updatingPill: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  updatingPillText: { fontSize: 12, color: '#8B5CF6', fontWeight: '600' },
   datePill: {
     flexDirection: 'row',
     alignItems: 'center',

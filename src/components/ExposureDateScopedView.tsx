@@ -22,6 +22,10 @@ type Props = {
   // chart, and the per-location segment list. 'compact': a device
   // workspace's detail view — map + chart only, no stats card/segment list.
   variant?: 'full' | 'compact';
+  // Overrides the "no data yet" empty state below — used by a device
+  // workspace to explain that an import is still processing in the
+  // background rather than reading as a failed/empty import.
+  importingHint?: string;
 };
 
 // The single/range/loading/empty branching shared by the main Exposure
@@ -35,6 +39,7 @@ const ExposureDateScopedView: React.FC<Props> = ({
   todayLoading = false,
   formatDateLabel,
   variant = 'full',
+  importingHint,
 }) => {
   const renderDay = (report: ExposureReport, title: string) =>
     variant === 'compact' ? (
@@ -73,7 +78,9 @@ const ExposureDateScopedView: React.FC<Props> = ({
     renderDay(entry.report, formatDateLabel(selection.date))
   ) : (
     <View style={styles.emptyCard}>
-      <Text style={styles.emptyText}>No tracked exposure for this day yet.</Text>
+      <Text style={styles.emptyText}>
+        {importingHint ?? 'No tracked exposure for this day yet.'}
+      </Text>
     </View>
   );
 };
