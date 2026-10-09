@@ -5,14 +5,8 @@
 // size range, and zoom threshold can be adjusted without touching rendering
 // logic.
 export const EXPOSURE_MAP_CONFIG = {
-  // Indoor/outdoor dot coloring — shared with ExposureTrendChart's stacked
-  // bars so the same io state reads the same color across map and chart.
-  // outdoorColor is a darker burnt-amber (not the lighter gold it used to be)
-  // because the map tiles render in light mode (userInterfaceStyle="light" in
-  // ExposureTrajectoryMap): a lighter yellow/gold washes out against light
-  // roads/land, roughly halving WCAG contrast vs this shade.
-  indoorColor: '#8B5CF6',
-  outdoorColor: '#C2790C',
+  // Per-io dot colors live in exposureIoConfig.ts (EXPOSURE_IO_CONFIG) — the
+  // single source shared with the stacked-bar charts.
   // Points outside Hong Kong (in_hk: false) — expo_calx can't score them, so
   // they're drawn in a muted light gray regardless of io. Light gray (not
   // dark gray/black) follows the common "disabled / no value" UI convention;

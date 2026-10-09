@@ -9,8 +9,9 @@ const MOCK_DELAY_MS = 400;
 // EXPOSURE_MAP_CONFIG.stayRadiusMeters (30m) so mock waypoints render as
 // distinct dots/points instead of re-merging under clusterStayPoints.
 const OUTDOOR_WAYPOINT_STEP_DEG = 0.0005;
+const MOCK_HOME_WINDOW_END_HOUR = 6;
 
-// Fakes a full day's worth of Indoor/Outdoor hourly rows up to the current
+// Fakes a full day's worth of Home/Other Indoor/Outdoor hourly rows up to the current
 // HK hour, near a fixed HK reference point — enough to exercise the
 // stacked-bar chart and map before the ETL backend is configured. Outdoor
 // hours are split into several same-hour rows with distinct start_time_hk
@@ -33,7 +34,9 @@ const buildMockRows = (): ExposureHourlyApiRow[] => {
       rows.push({
         hour_start_hk: hourStartHk,
         start_time_hk: hourStartHk,
-        io: 'Indoor',
+        // Mirrors the backend's Home window (indoor stay starting 00:00-06:00
+        // HK) so all three io colors show up without a live backend.
+        io: hour < MOCK_HOME_WINDOW_END_HOUR ? 'Home' : 'Other Indoor',
         delta_t_hours: indoorShare,
         exposure_value: Number(((0.4 + Math.random() * 0.3) * indoorShare).toFixed(4)),
         lng: 114.1694,

@@ -4,6 +4,7 @@ import {
   ExposureReport,
   ExposureSegmentResult,
 } from '../types/exposure';
+import { normalizeExposureIo } from '../config/exposureIoConfig';
 
 const MS_PER_HOUR = 3600000;
 
@@ -48,7 +49,7 @@ export const toExposureSegments = (
           typeof row.exposure_value === 'number' && !Number.isNaN(row.exposure_value)
             ? row.exposure_value
             : 0,
-        io: row.io,
+        io: normalizeExposureIo(row.io),
         // Missing in_hk = a row stored before the backend added the field,
         // when everything ingested was scored as HK — treat as inside.
         inHk: row.in_hk !== false,

@@ -2,12 +2,13 @@
 import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, Dimensions } from 'react-native';
 import Svg, { Rect, Line, Text as SvgText } from 'react-native-svg';
-import { ExposureSegmentResult } from '../types/exposure';
+import { EXPOSURE_IO_TYPES, ExposureSegmentResult } from '../types/exposure';
 import { bucketExposureByHour } from '../utils/exposureHourlyBuckets';
+import { formatIoBreakdown } from '../utils/exposureIoTotals';
 import { pickAxisLabelStride } from '../utils/chartAxisLabels';
 import { clampedChartLabelX, estimateSvgTextWidth } from '../utils/svgChartLabel';
 import { niceAxisTicks } from '../utils/niceAxisTicks';
-import { EXPOSURE_MAP_CONFIG } from '../config/exposureMapConfig';
+import { EXPOSURE_IO_CONFIG } from '../config/exposureIoConfig';
 
 const SCREEN_WIDTH = Dimensions.get('window').width - 72;
 const SVG_HEIGHT = 160;
@@ -20,10 +21,6 @@ const GRAPH_HEIGHT = SVG_HEIGHT - PADDING_TOP - PADDING_BOTTOM;
 const Y_TITLE_WIDTH = 14;
 const Y_AXIS_WIDTH = 32;
 const CHART_WIDTH = SCREEN_WIDTH - Y_TITLE_WIDTH - Y_AXIS_WIDTH;
-// Shared with ExposureTrajectoryMap's dot coloring so the same io state
-// reads the same color across map and chart.
-const INDOOR_COLOR = EXPOSURE_MAP_CONFIG.indoorColor;
-const OUTDOOR_COLOR = EXPOSURE_MAP_CONFIG.outdoorColor;
 const EMPTY_BAR_COLOR = '#E5E0FA';
 const DIVIDER_COLOR = '#FFFFFF';
 const SELECTED_LABEL_FONT_SIZE = 11;
@@ -36,8 +33,9 @@ type Props = {
   title?: string;
 };
 
-// One stacked bar per hour-of-day (0-23, HK local) — Outdoor on the bottom,
-// Indoor stacked on top — reusing the same Svg/Rect/Line/SvgText/tap-to-select
+// One stacked bar per hour-of-day (0-23, HK local) — one layer per io in
+// EXPOSURE_IO_TYPES order (Outdoor at the bottom), colored from
+// EXPOSURE_IO_CONFIG (shared with the map dots) — reusing the same Svg/Rect/Line/SvgText/tap-to-select
 // conventions as ExposureDailyBarChart for visual consistency between the
 // exposure charts, just bucketed by hour and split by io instead of one flat
 // total. Bars fill their full hour slot (no gap) with a thin white divider
@@ -65,14 +63,12 @@ const ExposureTrendChart: React.FC<Props> = ({ segments, title }) => {
     <View>
       {title && <Text style={styles.title}>{title}</Text>}
       <View style={styles.legendRow}>
-        <View style={styles.legendItem}>
-          <View style={[styles.legendDot, { backgroundColor: OUTDOOR_COLOR }]} />
-          <Text style={styles.legendText}>Outdoor</Text>
-        </View>
-        <View style={styles.legendItem}>
-          <View style={[styles.legendDot, { backgroundColor: INDOOR_COLOR }]} />
-          <Text style={styles.legendText}>Indoor</Text>
-        </View>
+        {EXPOSURE_IO_TYPES.map(io => (
+          <View key={io} style={styles.legendItem}>
+            <View style={[styles.legendDot, { backgroundColor: EXPOSURE_IO_CONFIG[io].color }]} />
+            <Text style={styles.legendText}>{EXPOSURE_IO_CONFIG[io].label}</Text>
+          </View>
+        ))}
       </View>
       <View style={styles.axisRow}>
         <View style={styles.yTitleColumn}>
@@ -108,12 +104,10 @@ const ExposureTrendChart: React.FC<Props> = ({ segments, title }) => {
           ))}
           <Line x1={0} y1={baseY} x2={CHART_WIDTH} y2={baseY} stroke="#718096" strokeOpacity={0.25} />
           {hours.map(h => {
-            const outdoorHeight = getSegmentHeight(h.outdoor);
-            const indoorHeight = getSegmentHeight(h.indoor);
             const slotX = h.hour * slotWidth;
             const barX = slotX;
-            const outdoorY = baseY - outdoorHeight;
-            const indoorY = outdoorY - indoorHeight;
+            // Running top edge while stacking io layers bottom → top.
+            let stackTop = baseY;
             const isSelected = selectedHour === h.hour;
             const opacity = selectedHour !== null && !isSelected ? 0.5 : 1;
             return (
@@ -127,28 +121,22 @@ const ExposureTrendChart: React.FC<Props> = ({ segments, title }) => {
                   onPress={() => setSelectedHour(selectedHour === h.hour ? null : h.hour)}
                 />
                 {h.total > 0 ? (
-                  <>
-                    {h.outdoor > 0 && (
+                  EXPOSURE_IO_TYPES.map(io => {
+                    if (h.byIo[io] <= 0) return null;
+                    const height = getSegmentHeight(h.byIo[io]);
+                    stackTop -= height;
+                    return (
                       <Rect
+                        key={io}
                         x={barX}
-                        y={outdoorY}
+                        y={stackTop}
                         width={barWidth}
-                        height={outdoorHeight}
-                        fill={OUTDOOR_COLOR}
+                        height={height}
+                        fill={EXPOSURE_IO_CONFIG[io].color}
                         opacity={opacity}
                       />
-                    )}
-                    {h.indoor > 0 && (
-                      <Rect
-                        x={barX}
-                        y={indoorY}
-                        width={barWidth}
-                        height={indoorHeight}
-                        fill={INDOOR_COLOR}
-                        opacity={opacity}
-                      />
-                    )}
-                  </>
+                    );
+                  })
                 ) : (
                   <Rect x={barX} y={baseY - 2} width={barWidth} height={2} fill={EMPTY_BAR_COLOR} />
                 )}
@@ -191,7 +179,7 @@ const ExposureTrendChart: React.FC<Props> = ({ segments, title }) => {
             />
           ))}
           {selected && selected.total > 0 && (() => {
-            const labelText = `${selected.label}  Outdoor ${selected.outdoor.toFixed(2)} · Indoor ${selected.indoor.toFixed(2)}`;
+            const labelText = `${selected.label}  ${formatIoBreakdown(selected.byIo)}`;
             const { x, textAnchor } = clampedChartLabelX(
               selected.hour * slotWidth + slotWidth / 2,
               CHART_WIDTH,

@@ -114,10 +114,7 @@ const ExposureRangeReportView: React.FC<Props> = ({
           todayKey={todayKey}
           todayOverride={
             todayReport && todayKey >= rangeStart && todayKey <= rangeEnd
-              ? (() => {
-                  const { indoor, outdoor } = sumExposureByIo(todayReport.segments);
-                  return { date: todayKey, indoor, outdoor };
-                })()
+              ? { date: todayKey, byIo: sumExposureByIo(todayReport.segments).byIo }
               : undefined
           }
         />

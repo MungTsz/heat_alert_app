@@ -19,7 +19,9 @@ describe('bucketExposureByHour', () => {
   it('always returns all 24 hours, zero-filled where there is no data', () => {
     const buckets = bucketExposureByHour([]);
     expect(buckets.length).toBe(24);
-    expect(buckets.every(b => b.total === 0 && b.indoor === 0 && b.outdoor === 0)).toBe(true);
+    expect(
+      buckets.every(b => b.total === 0 && Object.values(b.byIo).every(v => v === 0)),
+    ).toBe(true);
     expect(buckets.map(b => b.hour)).toEqual(Array.from({ length: 24 }, (_, i) => i));
   });
 
@@ -32,17 +34,22 @@ describe('bucketExposureByHour', () => {
       segment(t2, 2.5, 'Outdoor'),
     ]);
     const hour16 = buckets.find(b => b.hour === 16);
-    expect(hour16?.outdoor).toBeCloseTo(4, 5);
+    expect(hour16?.byIo.Outdoor).toBeCloseTo(4, 5);
     expect(hour16?.total).toBeCloseTo(4, 5);
   });
 
-  it('splits indoor and outdoor exposure into separate totals for the same hour', () => {
+  it('splits each io type into its own total for the same hour', () => {
     const t = Date.UTC(2026, 7, 30, 8, 0, 0); // 16:00 HKT
-    const buckets = bucketExposureByHour([segment(t, 1, 'Indoor'), segment(t, 2, 'Outdoor')]);
+    const buckets = bucketExposureByHour([
+      segment(t, 1, 'Home'),
+      segment(t, 0.5, 'Other Indoor'),
+      segment(t, 2, 'Outdoor'),
+    ]);
     const hour16 = buckets.find(b => b.hour === 16);
-    expect(hour16?.indoor).toBeCloseTo(1, 5);
-    expect(hour16?.outdoor).toBeCloseTo(2, 5);
-    expect(hour16?.total).toBeCloseTo(3, 5);
+    expect(hour16?.byIo.Home).toBeCloseTo(1, 5);
+    expect(hour16?.byIo['Other Indoor']).toBeCloseTo(0.5, 5);
+    expect(hour16?.byIo.Outdoor).toBeCloseTo(2, 5);
+    expect(hour16?.total).toBeCloseTo(3.5, 5);
   });
 
   it('excludes non-positive (failed) exposure values', () => {

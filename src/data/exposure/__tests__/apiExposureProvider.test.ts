@@ -63,7 +63,7 @@ describe('apiExposureProvider.getHourlyReport', () => {
       {
         hour_start_hk: '20260830160000',
         start_time_hk: '20260830163000',
-        io: 'Indoor',
+        io: 'Home',
         delta_t_hours: 0.5,
         exposure_value: 0.3,
         lng: 114.2632457,
@@ -76,7 +76,23 @@ describe('apiExposureProvider.getHourlyReport', () => {
     expect(mockedFetch).toHaveBeenCalledWith('local-device');
     expect(report.segments).toHaveLength(2);
     expect(report.totalExposure).toBeCloseTo(1.8, 5);
-    expect(report.segments.map(s => s.io).sort()).toEqual(['Indoor', 'Outdoor']);
+    expect(report.segments.map(s => s.io).sort()).toEqual(['Home', 'Outdoor']);
+  });
+
+  it('maps a legacy "Indoor" io row onto Other Indoor', async () => {
+    mockedFetch.mockResolvedValue([
+      {
+        hour_start_hk: '20260830160000',
+        start_time_hk: '20260830160000',
+        io: 'Indoor',
+        delta_t_hours: 0.5,
+        exposure_value: 0.3,
+        lng: 114.2632457,
+        lat: 22.3399579,
+      },
+    ]);
+    const report = await apiExposureProvider.getHourlyReport('local-device');
+    expect(report.segments[0].io).toBe('Other Indoor');
   });
 
   it('returns an empty report when the backend has no data for this pid', async () => {

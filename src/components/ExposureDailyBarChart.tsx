@@ -2,13 +2,14 @@
 import React, { useMemo, useRef } from 'react';
 import { View, Text, StyleSheet, Dimensions, ScrollView, Pressable } from 'react-native';
 import Svg, { Rect, Line, Text as SvgText } from 'react-native-svg';
-import { DailyExposureEntry } from '../types/exposure';
+import { DailyExposureEntry, EXPOSURE_IO_TYPES, ExposureIo } from '../types/exposure';
 import { addHkDays, formatHkDateLabel } from '../utils/hkDate';
-import { sumExposureByIo } from '../utils/exposureIoTotals';
+import { formatIoBreakdown, sumExposureByIo } from '../utils/exposureIoTotals';
 import { niceAxisTicks } from '../utils/niceAxisTicks';
 import { pickAxisLabelStride } from '../utils/chartAxisLabels';
 import { clampedChartLabelX, estimateSvgTextWidth } from '../utils/svgChartLabel';
 import { EXPOSURE_MAP_CONFIG } from '../config/exposureMapConfig';
+import { EXPOSURE_IO_CONFIG } from '../config/exposureIoConfig';
 
 const SCREEN_WIDTH = Dimensions.get('window').width - 72;
 const SVG_HEIGHT = 170;
@@ -27,18 +28,15 @@ const CHART_WIDTH = SCREEN_WIDTH - Y_TITLE_WIDTH - Y_AXIS_WIDTH;
 const MIN_VISIBLE_DAY_BARS = 3;
 const MAX_VISIBLE_DAY_BARS = 30;
 const SELECTED_LABEL_FONT_SIZE = 11; // matches ExposureTrendChart
-// Shared with ExposureTrendChart/ExposureTrajectoryMap so Indoor/Outdoor
-// read the same color everywhere in the exposure tab.
-const INDOOR_COLOR = EXPOSURE_MAP_CONFIG.indoorColor;
-const OUTDOOR_COLOR = EXPOSURE_MAP_CONFIG.outdoorColor;
 const EMPTY_BAR_COLOR = '#E5E0FA';
 // A day that HAS tracked points but scored 0 (e.g. entirely outside HK) gets
 // the map's outside-HK gray, so it reads as "points, no value" rather than
 // the same placeholder as a day with no data at all.
 const ZERO_DATA_BAR_COLOR = EXPOSURE_MAP_CONFIG.outsideHkColor;
 // Full-height tint behind the selected day — the only visible selection cue
-// for a 0-exposure day, whose bar has no height to dim/undim.
-const SELECTED_SLOT_COLOR = 'rgba(139,92,246,0.10)';
+// for a 0-exposure day, whose bar has no height to dim/undim. Neutral gray,
+// not tinted: a colored tint could be mistaken for one of the io colors.
+const SELECTED_SLOT_COLOR = 'rgba(28,28,30,0.06)';
 const DIVIDER_COLOR = '#FFFFFF';
 
 type Props = {
@@ -47,22 +45,28 @@ type Props = {
   rangeEnd: string; // YYYY-MM-DD, HK local, inclusive
   selectedDate?: string;
   onSelectDay?: (date: string) => void;
-  // Today's Indoor/Outdoor split comes from the live useTodayExposure
-  // report, not the persisted history (which can lag a tick behind) — this
-  // lets that live split override whatever's in `history` for today's slot.
-  todayOverride?: { date: string; indoor: number; outdoor: number };
+  // Today's per-io split comes from the live useTodayExposure report, not
+  // the persisted history (which can lag a tick behind) — this lets that
+  // live split override whatever's in `history` for today's slot.
+  todayOverride?: { date: string; byIo: Record<ExposureIo, number> };
   // Lets the range subtitle read "Today" instead of a bare date when it
   // applies — optional since some callers (e.g. a device workspace with no
   // live tracking) still want plain calendar dates only.
   todayKey?: string;
 };
 
-type DayBar = { date: string; label: string; indoor: number; outdoor: number; total: number | null };
+// total: null = no tracked data that day; 0 = tracked but nothing scored.
+type DayBar = {
+  date: string;
+  label: string;
+  byIo: Record<ExposureIo, number> | null;
+  total: number | null;
+};
 
 // No existing bar-chart precedent in this repo — new, but reuses the same
 // Svg/getX/getY/label conventions the hourly line charts already use. Shows
 // one bar per day in the given [rangeStart, rangeEnd] range (inclusive),
-// rather than a fixed trailing window. Each bar is split Indoor/Outdoor
+// rather than a fixed trailing window. Each bar is stacked per io
 // (same stacked-bar treatment as ExposureTrendChart's hourly bars) rather
 // than one flat total, so the daily and hourly charts read as one
 // consistent system. Bars fill their full day slot (no gap) with a thin
@@ -82,19 +86,18 @@ const ExposureDailyBarChart: React.FC<Props> = ({
     let cursor = rangeStart;
     while (cursor <= rangeEnd) {
       const entry = byDate.get(cursor);
-      const io =
+      const byIo =
         todayOverride?.date === cursor
-          ? { indoor: todayOverride.indoor, outdoor: todayOverride.outdoor }
+          ? todayOverride.byIo
           : entry
-            ? sumExposureByIo(entry.report.segments)
+            ? sumExposureByIo(entry.report.segments).byIo
             : null;
       const [, m, d] = cursor.split('-');
       result.push({
         date: cursor,
         label: `${Number(m)}/${Number(d)}`,
-        indoor: io?.indoor ?? 0,
-        outdoor: io?.outdoor ?? 0,
-        total: io ? io.indoor + io.outdoor : null,
+        byIo,
+        total: byIo ? EXPOSURE_IO_TYPES.reduce((sum, io) => sum + byIo[io], 0) : null,
       });
       cursor = addHkDays(cursor, 1);
     }
@@ -165,12 +168,10 @@ const ExposureDailyBarChart: React.FC<Props> = ({
       ))}
       <Line x1={0} y1={baseY} x2={contentWidth} y2={baseY} stroke="#718096" strokeOpacity={0.25} />
       {days.map((day, i) => {
-        const outdoorHeight = getSegmentHeight(day.outdoor);
-        const indoorHeight = getSegmentHeight(day.indoor);
         const slotX = i * slotWidth;
         const barX = slotX;
-        const outdoorY = baseY - outdoorHeight;
-        const indoorY = outdoorY - indoorHeight;
+        // Running top edge while stacking io layers bottom → top.
+        let stackTop = baseY;
         const isSelected = selectedDate === day.date;
         const opacity = selectedDate && !isSelected ? 0.5 : 1;
         return (
@@ -184,29 +185,24 @@ const ExposureDailyBarChart: React.FC<Props> = ({
                 fill={SELECTED_SLOT_COLOR}
               />
             )}
-            {day.total && day.total > 0 ? (
-              <>
-                {day.outdoor > 0 && (
+            {day.byIo && day.total && day.total > 0 ? (
+              EXPOSURE_IO_TYPES.map(io => {
+                const value = day.byIo?.[io] ?? 0;
+                if (value <= 0) return null;
+                const height = getSegmentHeight(value);
+                stackTop -= height;
+                return (
                   <Rect
+                    key={io}
                     x={barX}
-                    y={outdoorY}
+                    y={stackTop}
                     width={barWidth}
-                    height={outdoorHeight}
-                    fill={OUTDOOR_COLOR}
+                    height={height}
+                    fill={EXPOSURE_IO_CONFIG[io].color}
                     opacity={opacity}
                   />
-                )}
-                {day.indoor > 0 && (
-                  <Rect
-                    x={barX}
-                    y={indoorY}
-                    width={barWidth}
-                    height={indoorHeight}
-                    fill={INDOOR_COLOR}
-                    opacity={opacity}
-                  />
-                )}
-              </>
+                );
+              })
             ) : (
               <Rect
                 x={barX}
@@ -257,8 +253,8 @@ const ExposureDailyBarChart: React.FC<Props> = ({
           day, so tapping it visibly "lands" instead of looking ignored. */}
       {selectedDay && selectedDay.total !== null && (() => {
         const labelText =
-          selectedDay.total > 0
-            ? `${selectedDay.label}  Outdoor ${selectedDay.outdoor.toFixed(2)} · Indoor ${selectedDay.indoor.toFixed(2)}`
+          selectedDay.total > 0 && selectedDay.byIo
+            ? `${selectedDay.label}  ${formatIoBreakdown(selectedDay.byIo)}`
             : `${selectedDay.label}  No exposure (outside HK / not calculated)`;
         const { x, textAnchor } = clampedChartLabelX(
           selectedDayIndex * slotWidth + slotWidth / 2,
@@ -313,14 +309,12 @@ const ExposureDailyBarChart: React.FC<Props> = ({
         </Text>
       </View>
       <View style={styles.legendRow}>
-        <View style={styles.legendItem}>
-          <View style={[styles.legendDot, { backgroundColor: OUTDOOR_COLOR }]} />
-          <Text style={styles.legendText}>Outdoor</Text>
-        </View>
-        <View style={styles.legendItem}>
-          <View style={[styles.legendDot, { backgroundColor: INDOOR_COLOR }]} />
-          <Text style={styles.legendText}>Indoor</Text>
-        </View>
+        {EXPOSURE_IO_TYPES.map(io => (
+          <View key={io} style={styles.legendItem}>
+            <View style={[styles.legendDot, { backgroundColor: EXPOSURE_IO_CONFIG[io].color }]} />
+            <Text style={styles.legendText}>{EXPOSURE_IO_CONFIG[io].label}</Text>
+          </View>
+        ))}
       </View>
       <View style={styles.axisRow}>
         <View style={styles.yTitleColumn}>

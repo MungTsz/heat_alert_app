@@ -6,6 +6,7 @@ import { Maximize2, ArrowLeft } from 'lucide-react-native';
 import MapView, { Marker, Callout, Region } from 'react-native-maps';
 import { ExposureSegmentResult, ExposureStayCluster } from '../types/exposure';
 import { EXPOSURE_MAP_CONFIG } from '../config/exposureMapConfig';
+import { EXPOSURE_IO_CONFIG } from '../config/exposureIoConfig';
 import { clusterStayPoints } from '../utils/geoClustering';
 
 type Props = {
@@ -141,10 +142,7 @@ const ExposureTrajectoryMap: React.FC<Props> = ({ segments }) => {
       >
         {clusters.map((cluster, i) => {
           const size = clusterDotSize(cluster.totalDurationMs);
-          const ioColor =
-            cluster.io === 'Indoor'
-              ? EXPOSURE_MAP_CONFIG.indoorColor
-              : EXPOSURE_MAP_CONFIG.outdoorColor;
+          const ioColor = EXPOSURE_IO_CONFIG[cluster.io].color;
           const dotColor = cluster.inHk ? ioColor : EXPOSURE_MAP_CONFIG.outsideHkColor;
           const ioTextColor = cluster.inHk ? ioColor : EXPOSURE_MAP_CONFIG.outsideHkTextColor;
           return (

@@ -4,6 +4,7 @@ import { DailyExposureEntry } from '../types/exposure';
 import { exposureDataProvider } from '../data/exposure';
 import { splitExposureReportByDay } from '../utils/splitReportByDay';
 import { DEFAULT_PID } from '../utils/exposurePid';
+import { normalizeExposureIo } from '../config/exposureIoConfig';
 
 // The ETL backend is now the source of truth for a pid's full history
 // (GET /exposure/hourly/{pid} returns everything ever ingested, unfiltered
@@ -29,7 +30,16 @@ const historyKeyFor = (deviceId: string): string =>
 const readCache = async (deviceId: string): Promise<HistoryMap> => {
   try {
     const raw = await AsyncStorage.getItem(historyKeyFor(deviceId));
-    return raw ? JSON.parse(raw) : {};
+    const map: HistoryMap = raw ? JSON.parse(raw) : {};
+    // Caches written before the backend split indoor into Home/Other Indoor
+    // still hold io 'Indoor' — normalize so the instant (pre-refresh) paint
+    // never hands an unknown io to the per-io color/totals lookups.
+    for (const entry of Object.values(map)) {
+      for (const segment of entry.report.segments) {
+        segment.io = normalizeExposureIo(segment.io);
+      }
+    }
+    return map;
   } catch (error) {
     console.log('Failed to read cached exposure history:', error);
     return {};

@@ -21,18 +21,27 @@ export type LiveTrackingPing = {
 
 export type ExposureIngestFeature = GeoJsonPointFeature | LiveTrackingPing;
 
+// The backend's io types, in stack/legend order (bottom → top): Outdoor
+// first, then the two indoor kinds adjacent so they read as one group. An
+// indoor stay starting in the 00:00-06:00 HK window is Home, any other
+// indoor stay is Other Indoor (decided by the stay's start time only).
+export const EXPOSURE_IO_TYPES = ['Outdoor', 'Other Indoor', 'Home'] as const;
+export type ExposureIo = (typeof EXPOSURE_IO_TYPES)[number];
+
 // One row of the ETL backend's GET /exposure/hourly/{pid} response — one per
 // dwell run, or one per hour-slice of a run that crosses an hour boundary
 // (prorated delta_t_hours per slice, not reclassified per hour). Rows are
 // keyed by (pid, io, start_time_hk), so multiple rows can now share the same
 // hour_start_hk + io (e.g. two separate outdoor stops inside one clock
 // hour) — each still carries its own coordinates. lat/lng semantics differ
-// by io: Outdoor is the average of the run's pings, Indoor is the run's
-// anchor (its first ping).
+// by io: Outdoor (a "moving" type) is the average of the run's pings; Home /
+// Other Indoor ("stationary" types) are the run's first ping.
 export type ExposureHourlyApiRow = {
   hour_start_hk: string; // YYYYMMDDHHMMSS, HK local, truncated to the hour — group by this (+io) for the bar chart
   start_time_hk: string; // YYYYMMDDHHMMSS, HK local — this row's own precise start; sort by this for the map route
-  io: 'Indoor' | 'Outdoor';
+  // Raw string, not ExposureIo: the backend may add io types (and older
+  // rows said 'Indoor'), so it's mapped via normalizeExposureIo on adapt.
+  io: string;
   delta_t_hours: number;
   // null when in_hk is false (never scored), or expo_calx failed for this row.
   exposure_value: number | null;
@@ -73,7 +82,7 @@ export type ExposureSegmentResult = {
   lat: number;
   lon: number;
   exposure: number;
-  io: 'Indoor' | 'Outdoor';
+  io: ExposureIo;
   // false = outside Hong Kong: drawn on the map (in a neutral color) but
   // exposure is always 0 and must not be read as "zero exposure".
   inHk: boolean;
@@ -120,7 +129,7 @@ export type ExposureStayCluster = {
   totalDurationMs: number;
   mergedSegmentCount: number;
   totalExposure: number; // sum across merged segments, shown in the callout
-  io: 'Indoor' | 'Outdoor';
+  io: ExposureIo;
   inHk: boolean; // runs never mix in/out-of-HK segments (see clusterStayPoints)
 };
 
