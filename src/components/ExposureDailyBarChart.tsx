@@ -32,6 +32,13 @@ const SELECTED_LABEL_FONT_SIZE = 11; // matches ExposureTrendChart
 const INDOOR_COLOR = EXPOSURE_MAP_CONFIG.indoorColor;
 const OUTDOOR_COLOR = EXPOSURE_MAP_CONFIG.outdoorColor;
 const EMPTY_BAR_COLOR = '#E5E0FA';
+// A day that HAS tracked points but scored 0 (e.g. entirely outside HK) gets
+// the map's outside-HK gray, so it reads as "points, no value" rather than
+// the same placeholder as a day with no data at all.
+const ZERO_DATA_BAR_COLOR = EXPOSURE_MAP_CONFIG.outsideHkColor;
+// Full-height tint behind the selected day — the only visible selection cue
+// for a 0-exposure day, whose bar has no height to dim/undim.
+const SELECTED_SLOT_COLOR = 'rgba(139,92,246,0.10)';
 const DIVIDER_COLOR = '#FFFFFF';
 
 type Props = {
@@ -168,6 +175,15 @@ const ExposureDailyBarChart: React.FC<Props> = ({
         const opacity = selectedDate && !isSelected ? 0.5 : 1;
         return (
           <React.Fragment key={day.date}>
+            {isSelected && (
+              <Rect
+                x={slotX}
+                y={PADDING_TOP}
+                width={slotWidth}
+                height={GRAPH_HEIGHT}
+                fill={SELECTED_SLOT_COLOR}
+              />
+            )}
             {day.total && day.total > 0 ? (
               <>
                 {day.outdoor > 0 && (
@@ -192,7 +208,13 @@ const ExposureDailyBarChart: React.FC<Props> = ({
                 )}
               </>
             ) : (
-              <Rect x={barX} y={baseY - 2} width={barWidth} height={2} fill={EMPTY_BAR_COLOR} />
+              <Rect
+                x={barX}
+                y={baseY - 2}
+                width={barWidth}
+                height={2}
+                fill={day.total === 0 ? ZERO_DATA_BAR_COLOR : EMPTY_BAR_COLOR}
+              />
             )}
             {i % labelEvery === 0 && (() => {
               // Edge labels are anchored inward so they never render past
@@ -231,8 +253,13 @@ const ExposureDailyBarChart: React.FC<Props> = ({
           strokeWidth={1.5}
         />
       ))}
-      {selectedDay && selectedDay.total && selectedDay.total > 0 && (() => {
-        const labelText = `${selectedDay.label}  Outdoor ${selectedDay.outdoor.toFixed(2)} · Indoor ${selectedDay.indoor.toFixed(2)}`;
+      {/* Any day with tracked data gets a label — including a 0-exposure
+          day, so tapping it visibly "lands" instead of looking ignored. */}
+      {selectedDay && selectedDay.total !== null && (() => {
+        const labelText =
+          selectedDay.total > 0
+            ? `${selectedDay.label}  Outdoor ${selectedDay.outdoor.toFixed(2)} · Indoor ${selectedDay.indoor.toFixed(2)}`
+            : `${selectedDay.label}  No exposure (outside HK / not calculated)`;
         const { x, textAnchor } = clampedChartLabelX(
           selectedDayIndex * slotWidth + slotWidth / 2,
           contentWidth,

@@ -14,9 +14,26 @@ export const EXPOSURE_MAP_CONFIG = {
   indoorColor: '#8B5CF6',
   outdoorColor: '#C2790C',
   // Points outside Hong Kong (in_hk: false) — expo_calx can't score them, so
-  // they're drawn in a neutral dark gray regardless of io, signalling "no
-  // exposure value" rather than a misleading indoor/outdoor reading.
-  outsideHkColor: '#4A4A4A',
+  // they're drawn in a muted light gray regardless of io. Light gray (not
+  // dark gray/black) follows the common "disabled / no value" UI convention;
+  // a near-black dot read as a strong, valid data point instead.
+  outsideHkColor: '#C4C8CE',
+  // A light fill with the default white border vanishes on light map tiles,
+  // so outside-HK dots get a mid-gray outline to stay visible.
+  outsideHkBorderColor: '#8E8E93',
+  // Slight translucency reinforces the "invalid area" feel.
+  outsideHkDotOpacity: 0.85,
+  // Callout text can't reuse the light fill color — too low contrast on
+  // the white callout background.
+  outsideHkTextColor: '#8E8E93',
+  // Bounding-box fit used to frame a day's stay points: a floor so a single
+  // point isn't zoomed to street level, and padding so edge dots aren't
+  // clipped by the map frame.
+  fitMinDeltaDeg: 0.005,
+  fitPaddingFactor: 1.6,
+  // Camera animation when the shown dataset changes (e.g. picking another
+  // day) — the map flies to the new points instead of staying put.
+  refitAnimationMs: 500,
   // "Same location" judgment threshold for merging consecutive segments into
   // one stay-point cluster — matches deviceTrackingService.ts's existing
   // distanceFilter of 30m.

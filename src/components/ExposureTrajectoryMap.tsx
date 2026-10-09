@@ -1,5 +1,5 @@
 // src/components/ExposureTrajectoryMap.tsx
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Maximize2, ArrowLeft } from 'lucide-react-native';
@@ -89,11 +89,12 @@ const ExposureTrajectoryMap: React.FC<Props> = ({ segments }) => {
     const maxLat = Math.max(...lats);
     const minLon = Math.min(...lons);
     const maxLon = Math.max(...lons);
+    const { fitMinDeltaDeg, fitPaddingFactor } = EXPOSURE_MAP_CONFIG;
     return {
       latitude: (minLat + maxLat) / 2,
       longitude: (minLon + maxLon) / 2,
-      latitudeDelta: Math.max(maxLat - minLat, 0.005) * 1.6,
-      longitudeDelta: Math.max(maxLon - minLon, 0.005) * 1.6,
+      latitudeDelta: Math.max(maxLat - minLat, fitMinDeltaDeg) * fitPaddingFactor,
+      longitudeDelta: Math.max(maxLon - minLon, fitMinDeltaDeg) * fitPaddingFactor,
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [datasetKey]);
@@ -105,13 +106,34 @@ const ExposureTrajectoryMap: React.FC<Props> = ({ segments }) => {
     setRegion(fittedRegion);
   }
 
+  // initialRegion is only read on mount, so when this already-mounted map
+  // is handed a different day's segments (bar-chart tap, date switch) the
+  // camera would otherwise stay put — e.g. still over HK while that day's
+  // points are far away, looking like "no points". Animate to the new fit
+  // whenever the dataset (not just a live re-render) changes; skip the first
+  // run since initialRegion already covers mount.
+  const mapRef = useRef<MapView>(null);
+  const fittedOnceRef = useRef(false);
+  useEffect(() => {
+    if (!fittedRegion) return;
+    if (!fittedOnceRef.current) {
+      fittedOnceRef.current = true;
+      return;
+    }
+    mapRef.current?.animateToRegion(fittedRegion, EXPOSURE_MAP_CONFIG.refitAnimationMs);
+  }, [fittedRegion]);
+
   if (!region) return null;
 
   const mapView = (
     <View style={fullscreen ? styles.mapContainerFullscreen : styles.mapContainer}>
       <MapView
+        ref={mapRef}
         style={StyleSheet.absoluteFill}
-        initialRegion={fittedRegion ?? undefined}
+        // `region` (last settled camera, reset to the fit on dataset change)
+        // rather than fittedRegion, so toggling fullscreen — which remounts
+        // the MapView — keeps the user's current pan/zoom.
+        initialRegion={region}
         onRegionChangeComplete={setRegion}
         // Pins light mode regardless of OS/system dark-mode — Google Maps
         // SDK and MapKit can otherwise switch to a dark theme automatically.
@@ -124,6 +146,7 @@ const ExposureTrajectoryMap: React.FC<Props> = ({ segments }) => {
               ? EXPOSURE_MAP_CONFIG.indoorColor
               : EXPOSURE_MAP_CONFIG.outdoorColor;
           const dotColor = cluster.inHk ? ioColor : EXPOSURE_MAP_CONFIG.outsideHkColor;
+          const ioTextColor = cluster.inHk ? ioColor : EXPOSURE_MAP_CONFIG.outsideHkTextColor;
           return (
             <Marker
               key={`dot-${cluster.startTime}-${i}`}
@@ -140,6 +163,10 @@ const ExposureTrajectoryMap: React.FC<Props> = ({ segments }) => {
                     borderRadius: size / 2,
                     backgroundColor: dotColor,
                   },
+                  !cluster.inHk && {
+                    borderColor: EXPOSURE_MAP_CONFIG.outsideHkBorderColor,
+                    opacity: EXPOSURE_MAP_CONFIG.outsideHkDotOpacity,
+                  },
                 ]}
               />
               <Callout>
@@ -151,7 +178,7 @@ const ExposureTrajectoryMap: React.FC<Props> = ({ segments }) => {
                   <Text style={styles.calloutLocation}>
                     {cluster.lat.toFixed(5)}, {cluster.lon.toFixed(5)}
                   </Text>
-                  <Text style={[styles.calloutIo, { color: dotColor }]}>{cluster.io}</Text>
+                  <Text style={[styles.calloutIo, { color: ioTextColor }]}>{cluster.io}</Text>
                   <Text style={styles.calloutExposure}>
                     {cluster.inHk
                       ? `Total exposure: ${cluster.totalExposure.toFixed(3)} %AR·h`

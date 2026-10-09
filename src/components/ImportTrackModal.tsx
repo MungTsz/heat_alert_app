@@ -44,7 +44,7 @@ type Props = {
   lockedDeviceId?: string;
 };
 
-const MAX_FILES = 30;
+const MAX_FILES = EXPOSURE_API_CONFIG.maxFilesPerImport;
 // Sentinel meaning "preview only, don't attach to a device workspace" — the
 // ETL backend always persists whatever's ingested under a pid (there's no
 // ephemeral/no-save mode), so this path generates a one-off throwaway pid
@@ -147,12 +147,9 @@ const ImportTrackModal: React.FC<Props> = ({ visible, onClose, lockedDeviceId })
         // way to revisit it later — stores the throwaway pid, not the
         // report itself, since the backend is now the source of truth.
         await addImport(sourceLabel, pid);
-      } else {
-        // Fed into this device workspace's own browsable per-day history —
-        // the backend already accumulates across imports under this pid, so
-        // this just re-caches its full history.
-        await refreshHistoryCache(targetDeviceId);
       }
+      // Device imports re-cache their history once after the whole batch
+      // (see handleConfirmImport), not per file — files now run in parallel.
       return undefined;
     } catch (err) {
       // ExposureApiError messages are already user-facing (413 too large,
@@ -237,36 +234,45 @@ const ImportTrackModal: React.FC<Props> = ({ visible, onClose, lockedDeviceId })
       });
     }
 
-    // Sequential, not parallel — each file's exposure calculation is a
-    // real network call, and sequential keeps batching/URL-length
-    // behavior predictable rather than firing several batches at once.
+    // All files at once (capped at MAX_FILES == the server's concurrent
+    // expo_calx limit): /ingest just queues a background batch, and each
+    // batch takes ~20-30s regardless of size, so running them in parallel
+    // finishes the whole import in about one batch's time instead of N.
     let completed = 0;
-    for (const source of sources) {
-      let fileError: string | undefined;
-      try {
-        const text = await (await fetch(source.uri)).text();
-        fileError = await processOne(source.id, source.label, text);
-      } catch {
-        fileError =
-          source.kind === 'url'
-            ? 'Could not fetch the track from that URL.'
-            : 'Could not read the selected file.';
-        updateItem(source.id, { status: 'error', error: fileError });
-      }
-      reportImportFileResult(jobId, source.label, fileError);
-      completed += 1;
-      if (!isInstant) {
-        await setImportJobStatus(targetDeviceId, {
-          jobId,
-          total: sources.length,
-          completed,
-          startedAt,
-          updatedAt: Date.now(),
-        });
-      }
-    }
+    let succeeded = 0;
+    await Promise.all(
+      sources.map(async source => {
+        let fileError: string | undefined;
+        try {
+          const text = await (await fetch(source.uri)).text();
+          fileError = await processOne(source.id, source.label, text);
+        } catch {
+          fileError =
+            source.kind === 'url'
+              ? 'Could not fetch the track from that URL.'
+              : 'Could not read the selected file.';
+          updateItem(source.id, { status: 'error', error: fileError });
+        }
+        reportImportFileResult(jobId, source.label, fileError);
+        completed += 1;
+        if (!fileError) succeeded += 1;
+        if (!isInstant) {
+          await setImportJobStatus(targetDeviceId, {
+            jobId,
+            total: sources.length,
+            completed,
+            startedAt,
+            updatedAt: Date.now(),
+          });
+        }
+      }),
+    );
 
     if (!isInstant) {
+      // Fed into this device workspace's own browsable per-day history — the
+      // backend accumulates every file under this pid, so one re-cache after
+      // the batch picks them all up (per-file refreshes would race).
+      if (succeeded > 0) await refreshHistoryCache(targetDeviceId);
       await clearImportJobStatus(targetDeviceId, jobId);
     }
     finishImportProgress(jobId);
@@ -479,7 +485,7 @@ const ImportTrackModal: React.FC<Props> = ({ visible, onClose, lockedDeviceId })
                 </Text>
               </View>
               <Text style={styles.progressLabel}>
-                Importing file {Math.min(completedCount + 1, total)} of {total}
+                {completedCount} of {total} files processed
               </Text>
               <View style={styles.progressTrack}>
                 <View

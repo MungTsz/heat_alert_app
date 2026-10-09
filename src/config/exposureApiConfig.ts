@@ -21,6 +21,11 @@ export const EXPOSURE_API_CONFIG = {
   // concurrency cap, so poll at a relaxed cadence with a generous ceiling.
   batchPollIntervalMs: Number(Config.EXPOSURE_API_BATCH_POLL_MS) || 3000,
   batchMaxWaitMs: Number(Config.EXPOSURE_API_BATCH_MAX_WAIT_MS) || 15 * 60 * 1000,
+  // Files per import, all uploaded/processed at once. Mirrors the backend's
+  // PRAISE_MAX_CONCURRENT_CALLS (10): a typical one-day file fits in a single
+  // expo_calx call, so 10 parallel files ≈ one call's wait (~20-30s) instead
+  // of queueing behind each other on the server.
+  maxFilesPerImport: Number(Config.EXPOSURE_API_MAX_FILES_PER_IMPORT) || 10,
 };
 
 // Lets exposureDataProvider fall back to mock data gracefully when the
