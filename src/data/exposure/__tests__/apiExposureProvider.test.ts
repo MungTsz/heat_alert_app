@@ -1,27 +1,48 @@
 jest.mock('../../../services/exposureApi', () => ({
   ingestExposurePings: jest.fn(),
+  waitForIngestBatch: jest.fn(),
   fetchHourlyExposure: jest.fn(),
 }));
 
-import { ingestExposurePings, fetchHourlyExposure } from '../../../services/exposureApi';
+import {
+  ingestExposurePings,
+  waitForIngestBatch,
+  fetchHourlyExposure,
+} from '../../../services/exposureApi';
 import { apiExposureProvider } from '../apiExposureProvider';
 import { ExposureIngestFeature } from '../../../types/exposure';
 
 const mockedIngest = ingestExposurePings as jest.Mock;
+const mockedWait = waitForIngestBatch as jest.Mock;
 const mockedFetch = fetchHourlyExposure as jest.Mock;
 
 describe('apiExposureProvider.ingest', () => {
-  beforeEach(() => mockedIngest.mockReset());
+  beforeEach(() => {
+    mockedIngest.mockReset();
+    mockedWait.mockReset();
+  });
 
-  it('forwards pid and features to the ETL backend as-is', async () => {
-    const features: ExposureIngestFeature[] = [
-      { timestamp: '2026-09-07T08:00:00.000Z', coords: { latitude: 22.3, longitude: 114.2 } },
-    ];
-    mockedIngest.mockResolvedValue(undefined);
+  const features: ExposureIngestFeature[] = [
+    { timestamp: '2026-09-07T08:00:00.000Z', coords: { latitude: 22.3, longitude: 114.2 } },
+  ];
+
+  it('forwards pid and features, then waits for the queued batch', async () => {
+    mockedIngest.mockResolvedValue(12);
+    mockedWait.mockResolvedValue({ id: 12, status: 'done' });
 
     await apiExposureProvider.ingest('local-device', features);
 
     expect(mockedIngest).toHaveBeenCalledWith('local-device', features);
+    expect(mockedWait).toHaveBeenCalledWith(12);
+  });
+
+  it('rejects when the background batch fails', async () => {
+    mockedIngest.mockResolvedValue(13);
+    mockedWait.mockRejectedValue(new Error('Server failed to process this upload'));
+
+    await expect(apiExposureProvider.ingest('local-device', features)).rejects.toThrow(
+      'Server failed to process this upload',
+    );
   });
 });
 

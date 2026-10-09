@@ -38,6 +38,7 @@ const buildMockRows = (): ExposureHourlyApiRow[] => {
         exposure_value: Number(((0.4 + Math.random() * 0.3) * indoorShare).toFixed(4)),
         lng: 114.1694,
         lat: 22.3193,
+        in_hk: true,
       });
     }
     const outdoorShare = 1 - indoorShare;
@@ -56,6 +57,7 @@ const buildMockRows = (): ExposureHourlyApiRow[] => {
           ),
           lng: 114.1734 + w * OUTDOOR_WAYPOINT_STEP_DEG,
           lat: 22.3213 + w * OUTDOOR_WAYPOINT_STEP_DEG,
+          in_hk: true,
         });
       }
     }

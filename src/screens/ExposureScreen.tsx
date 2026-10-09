@@ -4,6 +4,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } 
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Footprints, ChevronRight, Plus } from 'lucide-react-native';
 import ImportTrackModal from '../components/ImportTrackModal';
+import ImportProgressBanner from '../components/ImportProgressBanner';
 import DeviceCard from '../components/DeviceCard';
 import DeviceDetailModal from '../components/DeviceDetailModal';
 import LiveDeviceDetailModal from '../components/LiveDeviceDetailModal';
@@ -50,6 +51,8 @@ const ExposureScreen = () => {
             <Plus size={22} color="#fff" />
           </TouchableOpacity>
         </View>
+
+        <ImportProgressBanner />
 
         <Text style={styles.sectionLabel}>THIS DEVICE</Text>
         {!trackingEnabled ? (

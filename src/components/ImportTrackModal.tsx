@@ -26,7 +26,13 @@ import { useImportHistory } from '../hooks/useImportHistory';
 import { useExposureDevices } from '../hooks/useExposureDevices';
 import { refreshHistoryCache } from '../services/exposureHistoryService';
 import { setImportJobStatus, clearImportJobStatus } from '../services/importJobStatusService';
+import {
+  startImportProgress,
+  reportImportFileResult,
+  finishImportProgress,
+} from '../services/importProgressBus';
 import { ExposureReport } from '../types/exposure';
+import { EXPOSURE_API_CONFIG } from '../config/exposureApiConfig';
 import ExposureDaySwitcher from './ExposureDaySwitcher';
 
 type Props = {
@@ -108,21 +114,26 @@ const ImportTrackModal: React.FC<Props> = ({ visible, onClose, lockedDeviceId })
     setCreatingDevice(false);
   };
 
-  const processOne = async (id: string, sourceLabel: string, text: string) => {
+  // Returns the user-facing error for this file (undefined on success) so
+  // the caller can also forward it to the Exposure tab's progress banner.
+  const processOne = async (
+    id: string,
+    sourceLabel: string,
+    text: string,
+  ): Promise<string | undefined> => {
     updateItem(id, { status: 'reading' });
     let features;
     try {
       features = extractGeoJsonFeatures(JSON.parse(text));
     } catch (err) {
-      updateItem(id, {
-        status: 'error',
-        error: err instanceof Error ? err.message : 'Failed to parse track data.',
-      });
-      return;
+      const error = err instanceof Error ? err.message : 'Failed to parse track data.';
+      updateItem(id, { status: 'error', error });
+      return error;
     }
     if (features.length === 0) {
-      updateItem(id, { status: 'error', error: 'No valid GPS points found in that file.' });
-      return;
+      const error = 'No valid GPS points found in that file.';
+      updateItem(id, { status: 'error', error });
+      return error;
     }
     updateItem(id, { status: 'calculating' });
     const isInstant = targetDeviceId === INSTANT_TARGET;
@@ -142,11 +153,13 @@ const ImportTrackModal: React.FC<Props> = ({ visible, onClose, lockedDeviceId })
         // this just re-caches its full history.
         await refreshHistoryCache(targetDeviceId);
       }
+      return undefined;
     } catch (err) {
-      updateItem(id, {
-        status: 'error',
-        error: err instanceof Error ? err.message : 'Failed to calculate exposure.',
-      });
+      // ExposureApiError messages are already user-facing (413 too large,
+      // batch failed server-side, still queued behind other jobs, …).
+      const error = err instanceof Error ? err.message : 'Failed to calculate exposure.';
+      updateItem(id, { status: 'error', error });
+      return error;
     }
   };
 
@@ -206,6 +219,10 @@ const ImportTrackModal: React.FC<Props> = ({ visible, onClose, lockedDeviceId })
     setItems(newItems);
     setPendingSources([]);
     setPhase('importing');
+    const targetLabel = isInstant
+      ? 'Preview'
+      : devices.find(d => d.id === targetDeviceId)?.name ?? 'device';
+    startImportProgress(jobId, targetLabel, sources.length);
 
     // Preview-only imports have no persistent device page to check back on,
     // so there's no job status worth persisting for them — only named
@@ -225,18 +242,18 @@ const ImportTrackModal: React.FC<Props> = ({ visible, onClose, lockedDeviceId })
     // behavior predictable rather than firing several batches at once.
     let completed = 0;
     for (const source of sources) {
+      let fileError: string | undefined;
       try {
         const text = await (await fetch(source.uri)).text();
-        await processOne(source.id, source.label, text);
+        fileError = await processOne(source.id, source.label, text);
       } catch {
-        updateItem(source.id, {
-          status: 'error',
-          error:
-            source.kind === 'url'
-              ? 'Could not fetch the track from that URL.'
-              : 'Could not read the selected file.',
-        });
+        fileError =
+          source.kind === 'url'
+            ? 'Could not fetch the track from that URL.'
+            : 'Could not read the selected file.';
+        updateItem(source.id, { status: 'error', error: fileError });
       }
+      reportImportFileResult(jobId, source.label, fileError);
       completed += 1;
       if (!isInstant) {
         await setImportJobStatus(targetDeviceId, {
@@ -252,6 +269,7 @@ const ImportTrackModal: React.FC<Props> = ({ visible, onClose, lockedDeviceId })
     if (!isInstant) {
       await clearImportJobStatus(targetDeviceId, jobId);
     }
+    finishImportProgress(jobId);
     setPhase('complete');
   };
 
@@ -386,7 +404,9 @@ const ImportTrackModal: React.FC<Props> = ({ visible, onClose, lockedDeviceId })
                 <Text style={styles.actionText}>Add Files</Text>
               </TouchableOpacity>
               <Text style={styles.helperCaption}>
-                .geojson or .json — up to {MAX_FILES} per import
+                .geojson or .json — up to {MAX_FILES} per import, max{' '}
+                {Math.round(EXPOSURE_API_CONFIG.maxIngestBodyBytes / (1024 * 1024))} MB each
+                (about one day of tracking)
               </Text>
 
               <Text style={styles.orText}>or</Text>

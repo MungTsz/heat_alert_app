@@ -119,10 +119,11 @@ const ExposureTrajectoryMap: React.FC<Props> = ({ segments }) => {
       >
         {clusters.map((cluster, i) => {
           const size = clusterDotSize(cluster.totalDurationMs);
-          const dotColor =
+          const ioColor =
             cluster.io === 'Indoor'
               ? EXPOSURE_MAP_CONFIG.indoorColor
               : EXPOSURE_MAP_CONFIG.outdoorColor;
+          const dotColor = cluster.inHk ? ioColor : EXPOSURE_MAP_CONFIG.outsideHkColor;
           return (
             <Marker
               key={`dot-${cluster.startTime}-${i}`}
@@ -152,7 +153,9 @@ const ExposureTrajectoryMap: React.FC<Props> = ({ segments }) => {
                   </Text>
                   <Text style={[styles.calloutIo, { color: dotColor }]}>{cluster.io}</Text>
                   <Text style={styles.calloutExposure}>
-                    Total exposure: {cluster.totalExposure.toFixed(3)} %AR·h
+                    {cluster.inHk
+                      ? `Total exposure: ${cluster.totalExposure.toFixed(3)} %AR·h`
+                      : 'Outside Hong Kong — exposure not calculated'}
                   </Text>
                   {cluster.mergedSegmentCount > 1 && (
                     <Text style={styles.calloutMerged}>

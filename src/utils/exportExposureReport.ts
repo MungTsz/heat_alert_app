@@ -13,6 +13,7 @@ export const buildExposureReportCsv = (report: ExposureReport): string => {
     'duration_hours',
     'exposure',
     'io',
+    'in_hk',
   ].join(',');
 
   const rows = report.segments.map(segment => {
@@ -23,8 +24,10 @@ export const buildExposureReportCsv = (report: ExposureReport): string => {
       segment.lat.toFixed(6),
       segment.lon.toFixed(6),
       durationHours.toFixed(4),
-      segment.exposure.toFixed(4),
+      // Blank for outside-HK rows so a spreadsheet doesn't average in a fake 0.
+      segment.inHk ? segment.exposure.toFixed(4) : '',
       segment.io,
+      String(segment.inHk),
     ].join(',');
   });
 

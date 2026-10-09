@@ -13,6 +13,10 @@ export const EXPOSURE_MAP_CONFIG = {
   // roads/land, roughly halving WCAG contrast vs this shade.
   indoorColor: '#8B5CF6',
   outdoorColor: '#C2790C',
+  // Points outside Hong Kong (in_hk: false) — expo_calx can't score them, so
+  // they're drawn in a neutral dark gray regardless of io, signalling "no
+  // exposure value" rather than a misleading indoor/outdoor reading.
+  outsideHkColor: '#4A4A4A',
   // "Same location" judgment threshold for merging consecutive segments into
   // one stay-point cluster — matches deviceTrackingService.ts's existing
   // distanceFilter of 30m.

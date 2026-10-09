@@ -5,6 +5,7 @@ import { AlertTriangle } from 'lucide-react-native';
 import { ExposureReport } from '../types/exposure';
 import { isExposureDataMocked } from '../data/exposure';
 import { exposureColor } from '../utils/exposureColor';
+import { EXPOSURE_MAP_CONFIG } from '../config/exposureMapConfig';
 import ExposureTrendChart from './ExposureTrendChart';
 import ExposureTrajectoryMap from './ExposureTrajectoryMap';
 
@@ -96,7 +97,11 @@ const ExposureReportView: React.FC<Props> = ({ report, title }) => {
               <View
                 style={[
                   styles.segmentDot,
-                  { backgroundColor: exposureColor(segment.exposure, maxExposure) },
+                  {
+                    backgroundColor: segment.inHk
+                      ? exposureColor(segment.exposure, maxExposure)
+                      : EXPOSURE_MAP_CONFIG.outsideHkColor,
+                  },
                 ]}
               />
               <View style={styles.segmentInfo}>
@@ -106,10 +111,12 @@ const ExposureReportView: React.FC<Props> = ({ report, title }) => {
                 </Text>
                 <Text style={styles.segmentLocation}>
                   {segment.lat.toFixed(5)}, {segment.lon.toFixed(5)}
+                  {!segment.inHk && ' · Outside HK'}
                 </Text>
               </View>
+              {/* "—" not "0.000": outside HK means "not calculated", not zero. */}
               <Text style={styles.segmentExposure}>
-                {segment.exposure.toFixed(3)}
+                {segment.inHk ? segment.exposure.toFixed(3) : '—'}
               </Text>
             </View>
             ))}

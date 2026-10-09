@@ -49,6 +49,9 @@ export const toExposureSegments = (
             ? row.exposure_value
             : 0,
         io: row.io,
+        // Missing in_hk = a row stored before the backend added the field,
+        // when everything ingested was scored as HK — treat as inside.
+        inHk: row.in_hk !== false,
       };
     })
     .sort((a, b) => a.startTime - b.startTime);

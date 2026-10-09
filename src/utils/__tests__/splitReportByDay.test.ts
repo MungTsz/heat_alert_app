@@ -9,6 +9,7 @@ const segment = (
   startTime,
   endTime,
   lat: 22.3,
+  inHk: true,
   lon: 114.2,
   exposure,
   io: 'Outdoor',

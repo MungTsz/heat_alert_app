@@ -38,6 +38,17 @@ describe('toExposureSegments', () => {
     expect(segment.exposure).toBe(0);
   });
 
+  it('maps in_hk:false to an unscored out-of-HK segment', () => {
+    const [segment] = toExposureSegments([row({ in_hk: false, exposure_value: null })]);
+    expect(segment.inHk).toBe(false);
+    expect(segment.exposure).toBe(0);
+  });
+
+  it('treats a row without in_hk (stored before the field existed) as inside HK', () => {
+    const [segment] = toExposureSegments([row()]);
+    expect(segment.inHk).toBe(true);
+  });
+
   it('sorts by start_time_hk, not input order, when rows share an hour_start_hk', () => {
     const segments = toExposureSegments([
       row({ start_time_hk: '20260830163500', lat: 22.31, lng: 114.21 }),

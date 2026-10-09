@@ -53,6 +53,7 @@ export const clusterStayPoints = (
       mergedSegmentCount: run.length,
       totalExposure: run.reduce((sum, s) => sum + s.exposure, 0),
       io: anchor.io,
+      inHk: anchor.inHk,
     });
   };
 
@@ -63,9 +64,11 @@ export const clusterStayPoints = (
     // Also break the run on an io change (e.g. a doorway transition) even
     // when the backend's per-hour reference point hasn't moved — otherwise
     // an Indoor and an Outdoor hour at the same spot would wrongly merge
-    // into one cluster with an arbitrary io label.
+    // into one cluster with an arbitrary io label. Same for crossing the HK
+    // boundary: a scored and an unscored segment must not share one dot/color.
     if (
       segment.io !== anchor.io ||
+      segment.inHk !== anchor.inHk ||
       haversineMeters(anchor.lat, anchor.lon, segment.lat, segment.lon) > radiusMeters
     ) {
       closeRun(run);

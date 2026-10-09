@@ -34,9 +34,32 @@ export type ExposureHourlyApiRow = {
   start_time_hk: string; // YYYYMMDDHHMMSS, HK local — this row's own precise start; sort by this for the map route
   io: 'Indoor' | 'Outdoor';
   delta_t_hours: number;
-  exposure_value: number;
+  // null when in_hk is false (never scored), or expo_calx failed for this row.
+  exposure_value: number | null;
   lng: number;
   lat: number;
+  // expo_calx only scores Hong Kong — rows outside are still returned so
+  // the route can be drawn, but carry no exposure. Optional because rows
+  // ingested before the backend added the field don't have it.
+  in_hk?: boolean;
+};
+
+// POST /ingest's 202 body — the pipeline runs as a background job.
+export type ExposureIngestAccepted = {
+  status: 'queued';
+  batch_id: number;
+};
+
+// GET /ingest/{batch_id} — the background job's progress.
+export type ExposureBatchStatus = {
+  id: number;
+  pid: string;
+  status: 'pending' | 'processing' | 'done' | 'error';
+  error_detail: string | null;
+  hours_processed: number | null;
+  rows: number | null;
+  created_at: string;
+  updated_at: string;
 };
 
 // One hourly-API row adapted into the shape the app's UI already renders
@@ -51,6 +74,9 @@ export type ExposureSegmentResult = {
   lon: number;
   exposure: number;
   io: 'Indoor' | 'Outdoor';
+  // false = outside Hong Kong: drawn on the map (in a neutral color) but
+  // exposure is always 0 and must not be read as "zero exposure".
+  inHk: boolean;
 };
 
 export type ExposureReport = {
@@ -95,6 +121,7 @@ export type ExposureStayCluster = {
   mergedSegmentCount: number;
   totalExposure: number; // sum across merged segments, shown in the callout
   io: 'Indoor' | 'Outdoor';
+  inHk: boolean; // runs never mix in/out-of-HK segments (see clusterStayPoints)
 };
 
 // A named workspace for imported data tagged with its own pid — distinct
