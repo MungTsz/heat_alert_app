@@ -28,8 +28,8 @@ const SELECTED_LABEL_FONT_SIZE = 11;
 type Props = {
   segments: ExposureSegmentResult[];
   // Callers that already show their own "Hourly Exposure"-style header
-  // (e.g. ExposureRangeReportView) omit this to avoid a duplicate title;
-  // callers with no header of their own (single-day views) pass one.
+  // omit this to avoid a duplicate title; callers with no header of their
+  // own (single-day views) pass one.
   title?: string;
 };
 

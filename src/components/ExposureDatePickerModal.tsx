@@ -1,132 +1,53 @@
 // src/components/ExposureDatePickerModal.tsx
-import React, { useState, useEffect, useMemo } from 'react';
-import { Modal, View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import React, { useMemo } from 'react';
+import { Modal, View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { X } from 'lucide-react-native';
 import { Calendar, DateData } from 'react-native-calendars';
-import { toHkDateKey, addHkDays, diffHkDays } from '../utils/hkDate';
-import { MAX_CACHED_DAYS } from '../services/exposureHistoryService';
-
-export type DateSelection =
-  | { mode: 'single'; date: string }
-  | { mode: 'range'; start: string; end: string };
+import { toHkDateKey } from '../utils/hkDate';
+import { WEEK_START_DAY } from '../config/exposureWeekChartConfig';
 
 type Props = {
   visible: boolean;
-  // null = nothing explicitly picked yet on the calling screen — the
-  // calendar should open blank rather than pre-anchored to a computed
-  // default, so both boundaries of a range are always dates the user
-  // actually tapped themselves.
-  initialSelection: DateSelection | null;
+  selectedDate: string | null;
+  // Days that have tracked data — dotted on the calendar so a valid day is
+  // easy to find without tapping around blind.
+  trackedDates: string[];
   onClose: () => void;
-  onApply: (selection: DateSelection) => void;
+  onSelect: (date: string) => void;
 };
 
 const ACCENT = '#8B5CF6';
-// Reuses the history cache's own retention window as the pickable range cap,
-// so the two numbers can't drift apart and a maxed-out pick never outruns
-// what's actually cached (a wider pick would just render empty placeholder
-// days).
-const MAX_RANGE_DAYS = MAX_CACHED_DAYS;
 
-const RANGE_PRESETS: { label: string; days: number }[] = [
-  { label: 'Last week', days: 7 },
-  { label: 'Last 2 weeks', days: 14 },
-  { label: 'Last 30 days', days: 30 },
-  { label: 'Last 90 days', days: 90 },
-];
-
+// Single-day picker: the Exposure tab compares week by week, so picking a
+// date just jumps the weekly chart to that day's week and drills into it.
+// With only one tap to make there's nothing to confirm, so a tap applies and
+// closes immediately (no Apply button).
 const ExposureDatePickerModal: React.FC<Props> = ({
   visible,
-  initialSelection,
+  selectedDate,
+  trackedDates,
   onClose,
-  onApply,
+  onSelect,
 }) => {
   const insets = useSafeAreaInsets();
-  const [start, setStart] = useState<string | null>(null);
-  const [end, setEnd] = useState<string | null>(null);
   const todayKey = toHkDateKey();
 
-  // Re-seed from the screen's current selection each time the sheet opens,
-  // rather than carrying over whatever was mid-pick last time it was closed.
-  useEffect(() => {
-    if (!visible) return;
-    if (!initialSelection) {
-      setStart(null);
-      setEnd(null);
-    } else if (initialSelection.mode === 'single') {
-      setStart(initialSelection.date);
-      setEnd(null);
-    } else {
-      setStart(initialSelection.start);
-      setEnd(initialSelection.end);
-    }
-  }, [visible, initialSelection]);
-
-  const handleDayPress = (day: DateData) => {
-    const date = day.dateString;
-    if (!start || end) {
-      // Starting a fresh pick (nothing selected yet, or a range was already
-      // complete) — this tap becomes the new single-date start.
-      setStart(date);
-      setEnd(null);
-      return;
-    }
-    if (date === start) return; // tapping the same day again keeps it a single date
-    // Whichever date was just tapped always lands exactly where tapped; if
-    // the resulting span would exceed the cap, the OTHER (previously-set)
-    // boundary gets pulled inward toward it instead of rejecting the tap.
-    if (date < start) {
-      const spanDays = diffHkDays(date, start) + 1;
-      setEnd(spanDays > MAX_RANGE_DAYS ? addHkDays(date, MAX_RANGE_DAYS - 1) : start);
-      setStart(date);
-    } else {
-      const spanDays = diffHkDays(start, date) + 1;
-      if (spanDays > MAX_RANGE_DAYS) setStart(addHkDays(date, -(MAX_RANGE_DAYS - 1)));
-      setEnd(date);
-    }
-  };
-
-  const handlePreset = (days: number) => {
-    setStart(addHkDays(todayKey, -(days - 1)));
-    setEnd(todayKey);
-  };
-
   const markedDates = useMemo(() => {
-    if (!start) return {};
-    if (!end) {
-      return { [start]: { selected: true, selectedColor: ACCENT } };
-    }
     const marks: Record<
       string,
-      { color: string; textColor: string; startingDay?: boolean; endingDay?: boolean }
+      { marked?: boolean; dotColor?: string; selected?: boolean; selectedColor?: string }
     > = {};
-    let cursor = start;
-    while (cursor <= end) {
-      marks[cursor] = {
-        color: ACCENT,
-        textColor: '#FFFFFF',
-        startingDay: cursor === start,
-        endingDay: cursor === end,
-      };
-      cursor = addHkDays(cursor, 1);
+    for (const date of trackedDates) marks[date] = { marked: true, dotColor: ACCENT };
+    if (selectedDate) {
+      marks[selectedDate] = { ...marks[selectedDate], selected: true, selectedColor: ACCENT };
     }
     return marks;
-  }, [start, end]);
+  }, [trackedDates, selectedDate]);
 
-  const handleApply = () => {
-    if (!start) return;
-    if (end && end !== start) {
-      onApply({ mode: 'range', start, end });
-    } else {
-      onApply({ mode: 'single', date: start });
-    }
+  const handleSelect = (date: string) => {
+    onSelect(date);
     onClose();
-  };
-
-  const handleToday = () => {
-    setStart(todayKey);
-    setEnd(null);
   };
 
   return (
@@ -139,31 +60,13 @@ const ExposureDatePickerModal: React.FC<Props> = ({
               <X size={22} color="#333" />
             </TouchableOpacity>
           </View>
-          <Text style={styles.hint}>
-            Tap a day for a single date, or tap a second day to select a range
-            (max {MAX_RANGE_DAYS} days).
-          </Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.presetRow}
-            contentContainerStyle={styles.presetRowContent}
-          >
-            {RANGE_PRESETS.map(preset => (
-              <TouchableOpacity
-                key={preset.label}
-                style={styles.presetChip}
-                onPress={() => handlePreset(preset.days)}
-              >
-                <Text style={styles.presetChipText}>{preset.label}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
+          <Text style={styles.hint}>Dotted days have tracked exposure.</Text>
           <Calendar
-            markingType="period"
+            current={selectedDate ?? todayKey}
             markedDates={markedDates}
-            onDayPress={handleDayPress}
+            onDayPress={(day: DateData) => handleSelect(day.dateString)}
             maxDate={todayKey}
+            firstDay={WEEK_START_DAY}
             theme={{
               selectedDayBackgroundColor: ACCENT,
               todayTextColor: ACCENT,
@@ -171,22 +74,9 @@ const ExposureDatePickerModal: React.FC<Props> = ({
               dotColor: ACCENT,
             }}
           />
-          <View style={styles.footerRow}>
-            <TouchableOpacity style={styles.footerButton} onPress={handleToday}>
-              <Text style={styles.footerButtonText}>Today</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.footerButton,
-                styles.applyButton,
-                !start && styles.applyButtonDisabled,
-              ]}
-              onPress={handleApply}
-              disabled={!start}
-            >
-              <Text style={[styles.footerButtonText, styles.applyButtonText]}>Apply</Text>
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity style={styles.todayButton} onPress={() => handleSelect(todayKey)}>
+            <Text style={styles.todayButtonText}>Today</Text>
+          </TouchableOpacity>
         </View>
       </View>
     </Modal>
@@ -209,27 +99,14 @@ const styles = StyleSheet.create({
   },
   headerTitle: { fontSize: 17, fontWeight: '700', color: '#1C1C1E' },
   hint: { fontSize: 12, color: '#8E8E93', marginBottom: 8 },
-  presetRow: { marginBottom: 12 },
-  presetRowContent: { gap: 8 },
-  presetChip: {
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 16,
-    backgroundColor: '#F0EBFF',
-  },
-  presetChipText: { fontSize: 12, fontWeight: '700', color: ACCENT },
-  footerRow: { flexDirection: 'row', gap: 10, marginTop: 12 },
-  footerButton: {
-    flex: 1,
+  todayButton: {
     alignItems: 'center',
     paddingVertical: 14,
     borderRadius: 12,
     backgroundColor: '#F5F5F5',
+    marginTop: 12,
   },
-  footerButtonText: { fontSize: 14, fontWeight: '700', color: '#333' },
-  applyButton: { backgroundColor: ACCENT },
-  applyButtonDisabled: { opacity: 0.5 },
-  applyButtonText: { color: '#FFFFFF' },
+  todayButtonText: { fontSize: 14, fontWeight: '700', color: '#333' },
 });
 
 export default ExposureDatePickerModal;

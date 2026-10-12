@@ -1,4 +1,4 @@
-import { toHkDateKey, addHkDays } from '../hkDate';
+import { toHkDateKey, addHkDays, getHkWeekStartKey } from '../hkDate';
 
 describe('toHkDateKey', () => {
   it('formats a date as YYYY-MM-DD in Hong Kong local time', () => {
@@ -36,5 +36,32 @@ describe('addHkDays', () => {
 
   it('supports negative offsets', () => {
     expect(addHkDays('2026-09-01', -1)).toBe('2026-08-31');
+  });
+});
+
+describe('getHkWeekStartKey', () => {
+  it('returns the same day when it already is the week start', () => {
+    // 2026-10-11 is a Sunday
+    expect(getHkWeekStartKey('2026-10-11', 0)).toBe('2026-10-11');
+  });
+
+  it('walks back to the preceding Sunday', () => {
+    // 2026-10-17 is a Saturday
+    expect(getHkWeekStartKey('2026-10-17', 0)).toBe('2026-10-11');
+  });
+
+  it('crosses a month boundary', () => {
+    // 2026-10-01 is a Thursday
+    expect(getHkWeekStartKey('2026-10-01', 0)).toBe('2026-09-27');
+  });
+
+  it('crosses a year boundary', () => {
+    // 2027-01-01 is a Friday
+    expect(getHkWeekStartKey('2027-01-01', 0)).toBe('2026-12-27');
+  });
+
+  it('supports a Monday week start', () => {
+    // 2026-10-11 is a Sunday, so its Monday-start week began 2026-10-05
+    expect(getHkWeekStartKey('2026-10-11', 1)).toBe('2026-10-05');
   });
 });

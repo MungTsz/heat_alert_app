@@ -1,5 +1,5 @@
 // src/components/DeviceDetailModal.tsx
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Modal,
   View,
@@ -16,11 +16,12 @@ import { ArrowLeft, Trash2, Upload, Calendar as CalendarIcon } from 'lucide-reac
 import { ExposureDevice } from '../types/exposure';
 import { useExposureHistory } from '../hooks/useExposureHistory';
 import { toHkDateKey, formatHkDateLabel } from '../utils/hkDate';
-import { getLastTrackedDate } from '../utils/exposureLastTrackedDate';
+import { formatHkWeekRangeLabel } from '../utils/exposureWeekStats';
 import { usePullToRefresh } from '../hooks/usePullToRefresh';
 import { useImportJobStatus } from '../hooks/useImportJobStatus';
+import { useExposureWeekSelection } from '../hooks/useExposureWeekSelection';
 import ExposureDateScopedView from './ExposureDateScopedView';
-import ExposureDatePickerModal, { DateSelection } from './ExposureDatePickerModal';
+import ExposureDatePickerModal from './ExposureDatePickerModal';
 import ImportTrackModal from './ImportTrackModal';
 
 type Props = {
@@ -46,27 +47,21 @@ const DeviceDetailModal: React.FC<Props> = ({ visible, device, onClose, onDelete
   const { status: jobStatus } = useImportJobStatus(device?.id ?? '__no_device_selected__', refresh);
   const { refreshing, onRefresh } = usePullToRefresh(refresh);
   const todayKey = toHkDateKey();
-  // null = nothing explicitly picked yet — the screen defaults to the last
-  // tracked day (below) rather than forcing "today", but the date PICKER
-  // itself should still open blank in that case (see ExposureDatePickerModal
-  // and LiveDeviceDetailModal for the same pattern), not pre-anchored to
-  // this computed default.
-  const [selection, setSelection] = useState<DateSelection | null>(null);
+  // A device workspace has no live "today" report of its own (todayHasData
+  // is always false) — its default falls through to the newest history
+  // entry, or todayKey if nothing's been imported yet at all. Same
+  // swipe/tap/calendar rules as LiveDeviceDetailModal via the shared hook.
+  const { weekStart, selectedDate, toggleDay, changeWeek, pickDate } =
+    useExposureWeekSelection(history, todayKey, false);
+  const trackedDates = useMemo(() => history.map(entry => entry.date), [history]);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
 
   if (!device) return null;
 
-  // A device workspace has no live "today" report of its own (todayHasData
-  // is always false) — its default falls through to the newest history
-  // entry, or todayKey if nothing's been imported yet at all.
-  const effectiveSelection: DateSelection =
-    selection ?? { mode: 'single', date: getLastTrackedDate(history, todayKey, false) };
-
-  const selectionLabel =
-    effectiveSelection.mode === 'single'
-      ? formatHkDateLabel(effectiveSelection.date, todayKey)
-      : `${formatHkDateLabel(effectiveSelection.start, todayKey)} – ${formatHkDateLabel(effectiveSelection.end, todayKey)}`;
+  const selectionLabel = selectedDate
+    ? formatHkDateLabel(selectedDate, todayKey)
+    : formatHkWeekRangeLabel(weekStart);
 
   const importingHint = jobStatus
     ? 'Still processing your import — this can take a few minutes.'
@@ -140,7 +135,10 @@ const DeviceDetailModal: React.FC<Props> = ({ visible, device, onClose, onDelete
 
           <ExposureDateScopedView
             history={history}
-            selection={effectiveSelection}
+            weekStart={weekStart}
+            selectedDate={selectedDate}
+            onSelectDay={toggleDay}
+            onWeekChange={changeWeek}
             todayKey={todayKey}
             todayReport={null}
             formatDateLabel={date => formatHkDateLabel(date, todayKey)}
@@ -152,9 +150,10 @@ const DeviceDetailModal: React.FC<Props> = ({ visible, device, onClose, onDelete
 
       <ExposureDatePickerModal
         visible={pickerOpen}
-        initialSelection={selection}
+        selectedDate={selectedDate}
+        trackedDates={trackedDates}
         onClose={() => setPickerOpen(false)}
-        onApply={setSelection}
+        onSelect={pickDate}
       />
       <ImportTrackModal
         visible={importOpen}

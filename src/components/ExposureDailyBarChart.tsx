@@ -1,17 +1,16 @@
 // src/components/ExposureDailyBarChart.tsx
-import React, { useMemo, useRef } from 'react';
-import { View, Text, StyleSheet, Dimensions, ScrollView, Pressable } from 'react-native';
+import React from 'react';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
 import Svg, { Rect, Line, Text as SvgText } from 'react-native-svg';
-import { DailyExposureEntry, EXPOSURE_IO_TYPES, ExposureIo } from '../types/exposure';
-import { addHkDays, formatHkDateLabel } from '../utils/hkDate';
-import { formatIoBreakdown, sumExposureByIo } from '../utils/exposureIoTotals';
+import { EXPOSURE_IO_TYPES } from '../types/exposure';
+import { DayBar } from '../utils/exposureWeekStats';
+import { formatIoBreakdown } from '../utils/exposureIoTotals';
 import { niceAxisTicks } from '../utils/niceAxisTicks';
-import { pickAxisLabelStride } from '../utils/chartAxisLabels';
 import { clampedChartLabelX, estimateSvgTextWidth } from '../utils/svgChartLabel';
 import { EXPOSURE_MAP_CONFIG } from '../config/exposureMapConfig';
 import { EXPOSURE_IO_CONFIG } from '../config/exposureIoConfig';
+import { EXPOSURE_WEEK_CHART_CONFIG } from '../config/exposureWeekChartConfig';
 
-const SCREEN_WIDTH = Dimensions.get('window').width - 72;
 const SVG_HEIGHT = 170;
 const PADDING_TOP = 26;
 const PADDING_BOTTOM = 26;
@@ -19,14 +18,13 @@ const GRAPH_HEIGHT = SVG_HEIGHT - PADDING_TOP - PADDING_BOTTOM;
 // Rotated axis-title column + tick-value column to the left of the main
 // bar Svg — same side-by-side-Svg convention AqhiHourlyForecastChart/
 // DailyHeatForecastCard use for their y-axes, and matches ExposureTrendChart.
-const Y_TITLE_WIDTH = 14;
+// The tick column lives INSIDE each page (every week gets its own scale);
+// only the title column stays fixed outside the swipeable pages.
+export const Y_TITLE_WIDTH = 14;
 const Y_AXIS_WIDTH = 32;
-const CHART_WIDTH = SCREEN_WIDTH - Y_TITLE_WIDTH - Y_AXIS_WIDTH;
-// Floor so a 1-2 day range doesn't render one giant bar, and a cap so bars
-// never get thinner than a 30-day-wide window — past that, the rest scrolls
-// instead of shrinking further (mirrors the hourly chart's fixed 24-bar page).
-const MIN_VISIBLE_DAY_BARS = 3;
-const MAX_VISIBLE_DAY_BARS = 30;
+// Right-hand gutter for the average line's "Avg" label, so it never sits on
+// top of Saturday's bar.
+const AVG_LABEL_GUTTER = 26;
 const SELECTED_LABEL_FONT_SIZE = 11; // matches ExposureTrendChart
 const EMPTY_BAR_COLOR = '#E5E0FA';
 // A day that HAS tracked points but scored 0 (e.g. entirely outside HK) gets
@@ -38,142 +36,66 @@ const ZERO_DATA_BAR_COLOR = EXPOSURE_MAP_CONFIG.outsideHkColor;
 // not tinted: a colored tint could be mistaken for one of the io colors.
 const SELECTED_SLOT_COLOR = 'rgba(28,28,30,0.06)';
 const DIVIDER_COLOR = '#FFFFFF';
+const FUTURE_LABEL_COLOR = '#C7C7CC';
 
 type Props = {
-  history: DailyExposureEntry[];
-  rangeStart: string; // YYYY-MM-DD, HK local, inclusive
-  rangeEnd: string; // YYYY-MM-DD, HK local, inclusive
-  selectedDate?: string;
-  onSelectDay?: (date: string) => void;
-  // Today's per-io split comes from the live useTodayExposure report, not
-  // the persisted history (which can lag a tick behind) — this lets that
-  // live split override whatever's in `history` for today's slot.
-  todayOverride?: { date: string; byIo: Record<ExposureIo, number> };
-  // Lets the range subtitle read "Today" instead of a bare date when it
-  // applies — optional since some callers (e.g. a device workspace with no
-  // live tracking) still want plain calendar dates only.
-  todayKey?: string;
+  days: DayBar[]; // exactly one week, see buildWeekDays
+  average: number | null;
+  selectedDate: string | null;
+  onSelectDay: (date: string) => void;
+  todayKey: string;
+  width: number; // full page width, tick column included
 };
 
-// total: null = no tracked data that day; 0 = tracked but nothing scored.
-type DayBar = {
-  date: string;
-  label: string;
-  byIo: Record<ExposureIo, number> | null;
-  total: number | null;
-};
-
-// No existing bar-chart precedent in this repo — new, but reuses the same
-// Svg/getX/getY/label conventions the hourly line charts already use. Shows
-// one bar per day in the given [rangeStart, rangeEnd] range (inclusive),
-// rather than a fixed trailing window. Each bar is stacked per io
-// (same stacked-bar treatment as ExposureTrendChart's hourly bars) rather
-// than one flat total, so the daily and hourly charts read as one
-// consistent system. Bars fill their full day slot (no gap) with a thin
-// white divider between adjacent bars.
+// One Sun→Sat page of the Exposure tab's swipeable weekly chart (paged by
+// ExposureWeekCard). Each bar is stacked per io (same stacked-bar treatment
+// as ExposureTrendChart's hourly bars) rather than one flat total, so the
+// daily and hourly charts read as one consistent system. Bars fill their
+// full day slot (no gap) with a thin white divider between adjacent bars,
+// and a dashed line marks the week's daily average.
 const ExposureDailyBarChart: React.FC<Props> = ({
-  history,
-  rangeStart,
-  rangeEnd,
+  days,
+  average,
   selectedDate,
   onSelectDay,
-  todayOverride,
   todayKey,
+  width,
 }) => {
-  const days = useMemo(() => {
-    const byDate = new Map(history.map(entry => [entry.date, entry]));
-    const result: DayBar[] = [];
-    let cursor = rangeStart;
-    while (cursor <= rangeEnd) {
-      const entry = byDate.get(cursor);
-      const byIo =
-        todayOverride?.date === cursor
-          ? todayOverride.byIo
-          : entry
-            ? sumExposureByIo(entry.report.segments).byIo
-            : null;
-      const [, m, d] = cursor.split('-');
-      result.push({
-        date: cursor,
-        label: `${Number(m)}/${Number(d)}`,
-        byIo,
-        total: byIo ? EXPOSURE_IO_TYPES.reduce((sum, io) => sum + byIo[io], 0) : null,
-      });
-      cursor = addHkDays(cursor, 1);
-    }
-    // Trim untracked days off the START/END of the picked range only — an
-    // all-empty edge just narrows every bar for nothing meaningful to show.
-    // A no-data day strictly BETWEEN two tracked days is a real gap and
-    // still renders as the empty placeholder bar, so only the leading/
-    // trailing run gets dropped, never the middle.
-    const firstDataIdx = result.findIndex(d => d.total !== null);
-    if (firstDataIdx === -1) return result;
-    const lastDataIdx = result.length - 1 - [...result].reverse().findIndex(d => d.total !== null);
-    return result.slice(firstDataIdx, lastDataIdx + 1);
-  }, [history, rangeStart, rangeEnd, todayOverride]);
-
+  const chartWidth = width - Y_AXIS_WIDTH - AVG_LABEL_GUTTER;
   const maxTotal = Math.max(0, ...days.map(d => d.total ?? 0));
-  const { ticks, niceMax } = useMemo(() => niceAxisTicks(maxTotal, 4), [maxTotal]);
-  const dayCount = Math.max(days.length, 1);
-  const isScrollable = dayCount > MAX_VISIBLE_DAY_BARS;
-  // Zooms bars wider for a short range (down to the 3-day floor), and caps
-  // them at the 30-day-wide window once the range grows past that.
-  const visibleCount = Math.min(MAX_VISIBLE_DAY_BARS, Math.max(MIN_VISIBLE_DAY_BARS, dayCount));
-  const slotWidth = CHART_WIDTH / visibleCount;
-  const barWidth = slotWidth;
-  const contentWidth = slotWidth * dayCount;
-  // Once paging (>30 days), match the hourly chart's label density so the
-  // two charts read as one system. Below that, keep the unchanged ceil(n/12)
-  // density — no reason to thin labels on a week/month view that already
-  // fits on screen.
-  const labelEvery = isScrollable
-    ? pickAxisLabelStride(MAX_VISIBLE_DAY_BARS, 6)
-    : pickAxisLabelStride(dayCount, 12);
+  // Per-week scale (not shared across pages): a quiet week would otherwise
+  // flatten into the baseline next to a busy one.
+  const { ticks, niceMax } = niceAxisTicks(maxTotal, 4);
+  const slotWidth = chartWidth / days.length;
 
-  const selectedDay = selectedDate ? days.find(d => d.date === selectedDate) ?? null : null;
-  const selectedDayIndex = selectedDay ? days.indexOf(selectedDay) : -1;
+  const selectedDayIndex = days.findIndex(d => d.date === selectedDate);
+  const selectedDay = selectedDayIndex >= 0 ? days[selectedDayIndex] : null;
 
   const baseY = PADDING_TOP + GRAPH_HEIGHT;
   const getY = (value: number) => baseY - (value / niceMax) * GRAPH_HEIGHT;
   const getSegmentHeight = (value: number) => (value / niceMax) * GRAPH_HEIGHT;
 
-  // Defaults the scroll position to the most recent days whenever the range
-  // changes. Deciding "should I scroll" and "did the native content view
-  // actually finish laying out" in the SAME callback (rather than splitting
-  // that across a separate effect + this native callback) avoids a race
-  // where onContentSizeChange could fire before an effect's flag was set,
-  // silently dropping the initial auto-scroll.
-  const scrollRef = useRef<ScrollView>(null);
-  const scrolledRangeRef = useRef<string | null>(null);
-  const handleContentSizeChange = (w: number) => {
-    if (!isScrollable) return;
-    const rangeId = `${rangeStart}:${rangeEnd}`;
-    if (scrolledRangeRef.current === rangeId) return;
-    scrolledRangeRef.current = rangeId;
-    scrollRef.current?.scrollTo({ x: w - CHART_WIDTH, animated: false });
-  };
-
   const barsSvg = (
-    <Svg width={contentWidth} height={SVG_HEIGHT}>
+    <Svg width={chartWidth + AVG_LABEL_GUTTER} height={SVG_HEIGHT}>
       {ticks.map(v => (
         <Line
           key={v}
           x1={0}
           y1={getY(v)}
-          x2={contentWidth}
+          x2={chartWidth}
           y2={getY(v)}
           stroke="#718096"
           strokeOpacity={0.12}
         />
       ))}
-      <Line x1={0} y1={baseY} x2={contentWidth} y2={baseY} stroke="#718096" strokeOpacity={0.25} />
+      <Line x1={0} y1={baseY} x2={chartWidth} y2={baseY} stroke="#718096" strokeOpacity={0.25} />
       {days.map((day, i) => {
         const slotX = i * slotWidth;
-        const barX = slotX;
         // Running top edge while stacking io layers bottom → top.
         let stackTop = baseY;
         const isSelected = selectedDate === day.date;
         const opacity = selectedDate && !isSelected ? 0.5 : 1;
+        const isToday = day.date === todayKey;
         return (
           <React.Fragment key={day.date}>
             {isSelected && (
@@ -185,54 +107,43 @@ const ExposureDailyBarChart: React.FC<Props> = ({
                 fill={SELECTED_SLOT_COLOR}
               />
             )}
-            {day.byIo && day.total && day.total > 0 ? (
-              EXPOSURE_IO_TYPES.map(io => {
-                const value = day.byIo?.[io] ?? 0;
-                if (value <= 0) return null;
-                const height = getSegmentHeight(value);
-                stackTop -= height;
-                return (
+            {day.byIo && day.total && day.total > 0
+              ? EXPOSURE_IO_TYPES.map(io => {
+                  const value = day.byIo?.[io] ?? 0;
+                  if (value <= 0) return null;
+                  const height = getSegmentHeight(value);
+                  stackTop -= height;
+                  return (
+                    <Rect
+                      key={io}
+                      x={slotX}
+                      y={stackTop}
+                      width={slotWidth}
+                      height={height}
+                      fill={EXPOSURE_IO_CONFIG[io].color}
+                      opacity={opacity}
+                    />
+                  );
+                })
+              : !day.isFuture && (
                   <Rect
-                    key={io}
-                    x={barX}
-                    y={stackTop}
-                    width={barWidth}
-                    height={height}
-                    fill={EXPOSURE_IO_CONFIG[io].color}
-                    opacity={opacity}
+                    x={slotX}
+                    y={baseY - 2}
+                    width={slotWidth}
+                    height={2}
+                    fill={day.total === 0 ? ZERO_DATA_BAR_COLOR : EMPTY_BAR_COLOR}
                   />
-                );
-              })
-            ) : (
-              <Rect
-                x={barX}
-                y={baseY - 2}
-                width={barWidth}
-                height={2}
-                fill={day.total === 0 ? ZERO_DATA_BAR_COLOR : EMPTY_BAR_COLOR}
-              />
-            )}
-            {i % labelEvery === 0 && (() => {
-              // Edge labels are anchored inward so they never render past
-              // the chart's left/right bounds and get clipped — same
-              // convention as AqhiHourlyForecastChart/ExposureTrendChart.
-              const isFirst = i === 0;
-              const isLast = i === days.length - 1;
-              const textAnchor = isFirst ? 'start' : isLast ? 'end' : 'middle';
-              const x = isFirst ? slotX : isLast ? slotX + slotWidth : slotX + slotWidth / 2;
-              return (
-                <SvgText
-                  x={x}
-                  y={SVG_HEIGHT - 8}
-                  fontSize={9}
-                  fontWeight={isSelected ? '700' : '400'}
-                  fill={isSelected ? '#1C1C1E' : '#8E8E93'}
-                  textAnchor={textAnchor}
-                >
-                  {day.label}
-                </SvgText>
-              );
-            })()}
+                )}
+            <SvgText
+              x={slotX + slotWidth / 2}
+              y={SVG_HEIGHT - 8}
+              fontSize={9}
+              fontWeight={isSelected || isToday ? '700' : '400'}
+              fill={day.isFuture ? FUTURE_LABEL_COLOR : isSelected ? '#1C1C1E' : '#8E8E93'}
+              textAnchor="middle"
+            >
+              {day.label}
+            </SvgText>
           </React.Fragment>
         );
       })}
@@ -249,6 +160,30 @@ const ExposureDailyBarChart: React.FC<Props> = ({
           strokeWidth={1.5}
         />
       ))}
+      {/* Drawn after the bars so it stays visible across tall bars. */}
+      {average !== null && average > 0 && (
+        <>
+          <Line
+            x1={0}
+            y1={getY(average)}
+            x2={chartWidth}
+            y2={getY(average)}
+            stroke={EXPOSURE_WEEK_CHART_CONFIG.avgLineColor}
+            strokeWidth={1.5}
+            strokeDasharray={EXPOSURE_WEEK_CHART_CONFIG.avgLineDash}
+          />
+          <SvgText
+            x={chartWidth + 4}
+            y={getY(average) + 3}
+            fontSize={9}
+            fontWeight="700"
+            fill={EXPOSURE_WEEK_CHART_CONFIG.avgLineColor}
+            textAnchor="start"
+          >
+            {EXPOSURE_WEEK_CHART_CONFIG.avgLabel}
+          </SvgText>
+        </>
+      )}
       {/* Any day with tracked data gets a label — including a 0-exposure
           day, so tapping it visibly "lands" instead of looking ignored. */}
       {selectedDay && selectedDay.total !== null && (() => {
@@ -258,7 +193,7 @@ const ExposureDailyBarChart: React.FC<Props> = ({
             : `${selectedDay.label}  No exposure (outside HK / not calculated)`;
         const { x, textAnchor } = clampedChartLabelX(
           selectedDayIndex * slotWidth + slotWidth / 2,
-          contentWidth,
+          chartWidth,
           estimateSvgTextWidth(labelText, SELECTED_LABEL_FONT_SIZE),
         );
         return (
@@ -277,98 +212,58 @@ const ExposureDailyBarChart: React.FC<Props> = ({
     </Svg>
   );
 
-  // A real RN Pressable per day-slot, absolutely positioned over the Svg,
-  // rather than an onPress on an Svg Rect: react-native-svg's own touch
-  // handling doesn't reliably compose with a horizontal ScrollView's gesture
-  // responder (the SVG shape can lose the touch to the ScrollView's pan
-  // detection), whereas Pressable is the standard RN primitive built to
-  // nest correctly inside ScrollView.
-  const chartContent = (
-    <View style={{ width: contentWidth, height: SVG_HEIGHT }}>
-      {barsSvg}
-      <View style={[styles.tapOverlay, { width: contentWidth }]}>
-        {days.map(day => (
-          <Pressable
-            key={day.date}
-            style={{ width: slotWidth }}
-            onPress={() => onSelectDay?.(day.date)}
-          />
-        ))}
-      </View>
-    </View>
-  );
-
   return (
-    <View>
-      <View style={styles.headerRow}>
-        <Text style={styles.title}>Daily Exposure</Text>
-        <Text style={styles.subtitle}>
-          {rangeStart === rangeEnd
-            ? formatHkDateLabel(rangeStart, todayKey)
-            : `${formatHkDateLabel(rangeStart, todayKey)} – ${formatHkDateLabel(rangeEnd, todayKey)}`}
-        </Text>
-      </View>
-      <View style={styles.legendRow}>
-        {EXPOSURE_IO_TYPES.map(io => (
-          <View key={io} style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: EXPOSURE_IO_CONFIG[io].color }]} />
-            <Text style={styles.legendText}>{EXPOSURE_IO_CONFIG[io].label}</Text>
-          </View>
-        ))}
-      </View>
-      <View style={styles.axisRow}>
-        <View style={styles.yTitleColumn}>
-          <Text style={styles.yTitleText} numberOfLines={1}>
-            Exposure (%AR·h)
-          </Text>
-        </View>
-        <Svg width={Y_AXIS_WIDTH} height={SVG_HEIGHT}>
-          {ticks.map(v => (
-            <SvgText
-              key={v}
-              x={Y_AXIS_WIDTH - 6}
-              y={getY(v) + 4}
-              fontSize={10}
-              fill="#333"
-              textAnchor="end"
-            >
-              {v.toFixed(niceMax < 1 ? 2 : niceMax < 10 ? 1 : 0)}
-            </SvgText>
-          ))}
-        </Svg>
-        {isScrollable ? (
-          <ScrollView
-            ref={scrollRef}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={{ width: CHART_WIDTH }}
-            onContentSizeChange={handleContentSizeChange}
+    <View style={[styles.page, { width }]}>
+      <Svg width={Y_AXIS_WIDTH} height={SVG_HEIGHT}>
+        {ticks.map(v => (
+          <SvgText
+            key={v}
+            x={Y_AXIS_WIDTH - 6}
+            y={getY(v) + 4}
+            fontSize={10}
+            fill="#333"
+            textAnchor="end"
           >
-            {chartContent}
-          </ScrollView>
-        ) : (
-          chartContent
-        )}
+            {v.toFixed(niceMax < 1 ? 2 : niceMax < 10 ? 1 : 0)}
+          </SvgText>
+        ))}
+      </Svg>
+      <View>
+        {barsSvg}
+        {/* A real RN Pressable per day-slot, absolutely positioned over the
+            Svg, rather than an onPress on an Svg Rect: react-native-svg's own
+            touch handling doesn't reliably compose with a horizontal
+            scroller's gesture responder (the SVG shape can lose the touch to
+            the pager's pan detection), whereas Pressable is the standard RN
+            primitive built to nest correctly inside a FlatList/ScrollView. */}
+        <View style={[styles.tapOverlay, { width: chartWidth }]}>
+          {days.map(day => (
+            <Pressable
+              key={day.date}
+              style={{ width: slotWidth }}
+              disabled={day.isFuture}
+              onPress={() => onSelectDay(day.date)}
+            />
+          ))}
+        </View>
       </View>
-      <Text style={styles.xTitleText}>Date</Text>
     </View>
   );
 };
 
+// The fixed rotated y-axis title beside the swipeable pages — exported from
+// here so it shares this chart's vertical layout constants instead of
+// duplicating them in ExposureWeekCard.
+export const WeekChartYTitle: React.FC = () => (
+  <View style={styles.yTitleColumn}>
+    <Text style={styles.yTitleText} numberOfLines={1}>
+      Exposure (%AR·h)
+    </Text>
+  </View>
+);
+
 const styles = StyleSheet.create({
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'baseline',
-    marginBottom: 8,
-  },
-  title: { fontSize: 15, fontWeight: '700', color: '#1C1C1E' },
-  subtitle: { fontSize: 12, fontWeight: '600', color: '#8E8E93' },
-  legendRow: { flexDirection: 'row', gap: 14, marginBottom: 6 },
-  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  legendDot: { width: 8, height: 8, borderRadius: 4 },
-  legendText: { fontSize: 11, color: '#8E8E93' },
-  axisRow: { flexDirection: 'row', alignItems: 'flex-start' },
+  page: { flexDirection: 'row', alignItems: 'flex-start', height: SVG_HEIGHT },
   tapOverlay: {
     position: 'absolute',
     left: 0,
@@ -390,15 +285,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#8E8E93',
     transform: [{ rotate: '-90deg' }],
-  },
-  xTitleText: {
-    width: CHART_WIDTH,
-    fontSize: 10,
-    fontWeight: '600',
-    color: '#8E8E93',
-    textAlign: 'center',
-    marginTop: 2,
-    marginLeft: Y_TITLE_WIDTH + Y_AXIS_WIDTH,
   },
 });
 

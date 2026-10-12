@@ -1,5 +1,5 @@
 // src/components/LiveDeviceDetailModal.tsx
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Modal,
   View,
@@ -14,10 +14,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArrowLeft, Calendar as CalendarIcon } from 'lucide-react-native';
 import { DailyExposureEntry, ExposureReport } from '../types/exposure';
 import { formatHkDateLabel } from '../utils/hkDate';
-import { getLastTrackedDate } from '../utils/exposureLastTrackedDate';
+import { formatHkWeekRangeLabel } from '../utils/exposureWeekStats';
 import { usePullToRefresh } from '../hooks/usePullToRefresh';
+import { useExposureWeekSelection } from '../hooks/useExposureWeekSelection';
 import ExposureDateScopedView from './ExposureDateScopedView';
-import ExposureDatePickerModal, { DateSelection } from './ExposureDatePickerModal';
+import ExposureDatePickerModal from './ExposureDatePickerModal';
 
 type Props = {
   visible: boolean;
@@ -45,21 +46,23 @@ const LiveDeviceDetailModal: React.FC<Props> = ({
 }) => {
   const insets = useSafeAreaInsets();
   const { refreshing, onRefresh } = usePullToRefresh(refresh);
-  // null = nothing explicitly picked yet — the screen defaults to the last
-  // tracked day (below) rather than forcing "today", but the date PICKER
-  // itself should still open blank in that case (see ExposureDatePickerModal
-  // and DeviceDetailModal for the same pattern), not pre-anchored to this
-  // computed default.
-  const [selection, setSelection] = useState<DateSelection | null>(null);
+  // Defaults to the last tracked day and its week — see
+  // useExposureWeekSelection for the swipe/tap/calendar rules shared with
+  // DeviceDetailModal.
+  const { weekStart, selectedDate, toggleDay, changeWeek, pickDate } =
+    useExposureWeekSelection(history, todayKey, !!todayReport);
   const [pickerOpen, setPickerOpen] = useState(false);
 
-  const effectiveSelection: DateSelection =
-    selection ?? { mode: 'single', date: getLastTrackedDate(history, todayKey, !!todayReport) };
+  // Today counts as tracked as soon as the live report exists, even before
+  // it's been persisted into history.
+  const trackedDates = useMemo(
+    () => [...history.map(entry => entry.date), ...(todayReport ? [todayKey] : [])],
+    [history, todayReport, todayKey],
+  );
 
-  const selectionLabel =
-    effectiveSelection.mode === 'single'
-      ? formatHkDateLabel(effectiveSelection.date, todayKey)
-      : `${formatHkDateLabel(effectiveSelection.start, todayKey)} – ${formatHkDateLabel(effectiveSelection.end, todayKey)}`;
+  const selectionLabel = selectedDate
+    ? formatHkDateLabel(selectedDate, todayKey)
+    : formatHkWeekRangeLabel(weekStart);
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
@@ -101,7 +104,10 @@ const LiveDeviceDetailModal: React.FC<Props> = ({
 
           <ExposureDateScopedView
             history={history}
-            selection={effectiveSelection}
+            weekStart={weekStart}
+            selectedDate={selectedDate}
+            onSelectDay={toggleDay}
+            onWeekChange={changeWeek}
             todayKey={todayKey}
             todayReport={todayReport}
             todayLoading={todayLoading}
@@ -113,9 +119,10 @@ const LiveDeviceDetailModal: React.FC<Props> = ({
 
       <ExposureDatePickerModal
         visible={pickerOpen}
-        initialSelection={selection}
+        selectedDate={selectedDate}
+        trackedDates={trackedDates}
         onClose={() => setPickerOpen(false)}
-        onApply={setSelection}
+        onSelect={pickDate}
       />
     </Modal>
   );

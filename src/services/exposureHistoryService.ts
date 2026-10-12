@@ -12,10 +12,7 @@ import { normalizeExposureIo } from '../config/exposureIoConfig';
 // fetch, for instant paint and an offline fallback, not an accumulating log.
 const HISTORY_KEY = 'exposure_daily_history';
 // Bounds cache size for long-lived devices — the backend itself is the
-// unbounded store; this only needs enough days for recent browsing. Also
-// reused by ExposureDatePickerModal as the date picker's max range cap, so
-// the two numbers can't drift apart — a maxed-out range pick should never
-// outrun what's actually cached.
+// unbounded store; this only needs enough days for recent browsing.
 export const MAX_CACHED_DAYS = 90;
 
 type HistoryMap = Record<string, DailyExposureEntry>;

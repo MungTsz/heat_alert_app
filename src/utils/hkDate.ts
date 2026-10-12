@@ -35,6 +35,15 @@ export const diffHkDays = (a: string, b: string): number => {
   return Math.round((bMs - aMs) / 86400000);
 };
 
+// The first day of the week containing dateKey, for a week that starts on
+// weekStartDay (0 = Sunday … 6 = Saturday, Date#getUTCDay's numbering) —
+// plain calendar-date math like addHkDays, so it's stable across timezones.
+export const getHkWeekStartKey = (dateKey: string, weekStartDay: number): string => {
+  const [y, m, d] = dateKey.split('-').map(Number);
+  const weekday = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+  return addHkDays(dateKey, -((weekday - weekStartDay + 7) % 7));
+};
+
 // The one human-readable date label used across every exposure screen —
 // "Today" when it matches todayKey, otherwise a short "Sep 9" style label
 // with no year (all exposure history is recent, near-term data). Was

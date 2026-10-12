@@ -2,14 +2,18 @@
 import React from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { DailyExposureEntry, ExposureReport } from '../types/exposure';
-import { DateSelection } from './ExposureDatePickerModal';
 import ExposureReportView from './ExposureReportView';
 import ExposureCompactDayView from './ExposureCompactDayView';
-import ExposureRangeReportView from './ExposureRangeReportView';
+import ExposureWeekCard from './ExposureWeekCard';
 
 type Props = {
   history: DailyExposureEntry[];
-  selection: DateSelection;
+  // The visible week and the drilled-into day (null = none) — see
+  // useExposureWeekSelection for how these move together.
+  weekStart: string;
+  selectedDate: string | null;
+  onSelectDay: (date: string) => void;
+  onWeekChange: (weekStart: string) => void;
   todayKey: string;
   // Only the live self-tracked device has a "today" report still being
   // polled — pass null/false for a device workspace, which has no live
@@ -28,12 +32,15 @@ type Props = {
   importingHint?: string;
 };
 
-// The single/range/loading/empty branching shared by the main Exposure
+// The weekly chart + selected-day branching shared by the main Exposure
 // screen (live device) and a device workspace's detail view — extracted so
 // both stay in sync rather than duplicating this ternary.
 const ExposureDateScopedView: React.FC<Props> = ({
   history,
-  selection,
+  weekStart,
+  selectedDate,
+  onSelectDay,
+  onWeekChange,
   todayKey,
   todayReport,
   todayLoading = false,
@@ -48,39 +55,57 @@ const ExposureDateScopedView: React.FC<Props> = ({
       <ExposureReportView report={report} title={title} />
     );
 
-  if (selection.mode === 'range') {
-    return (
-      <ExposureRangeReportView
-        history={history}
-        rangeStart={selection.start}
-        rangeEnd={selection.end}
-        todayKey={todayKey}
-        todayReport={todayReport}
-      />
-    );
-  }
+  const renderDetail = () => {
+    // No day drilled into (after a swipe) — the map/hourly detail only
+    // appears for a day the user explicitly tapped, instead of re-rendering
+    // a whole map on every swipe.
+    if (selectedDate === null) {
+      return (
+        <View style={styles.emptyCard}>
+          <Text style={styles.emptyText}>
+            Tap a day in the chart to see its map and hourly breakdown.
+          </Text>
+        </View>
+      );
+    }
 
-  if (selection.date === todayKey && todayReport) {
-    return renderDay(todayReport, "Today's Exposure");
-  }
+    if (selectedDate === todayKey && todayReport) {
+      return renderDay(todayReport, "Today's Exposure");
+    }
 
-  if (selection.date === todayKey && todayLoading) {
-    return (
-      <View style={styles.loadingBox}>
-        <ActivityIndicator style={styles.loadingIndicator} />
-        <Text style={styles.loadingText}>Calculating today's exposure…</Text>
+    if (selectedDate === todayKey && todayLoading) {
+      return (
+        <View style={styles.loadingBox}>
+          <ActivityIndicator style={styles.loadingIndicator} />
+          <Text style={styles.loadingText}>Calculating today's exposure…</Text>
+        </View>
+      );
+    }
+
+    const entry = history.find(h => h.date === selectedDate);
+    return entry ? (
+      renderDay(entry.report, formatDateLabel(selectedDate))
+    ) : (
+      <View style={styles.emptyCard}>
+        <Text style={styles.emptyText}>
+          {importingHint ?? 'No tracked exposure for this day yet.'}
+        </Text>
       </View>
     );
-  }
+  };
 
-  const entry = history.find(h => h.date === selection.date);
-  return entry ? (
-    renderDay(entry.report, formatDateLabel(selection.date))
-  ) : (
-    <View style={styles.emptyCard}>
-      <Text style={styles.emptyText}>
-        {importingHint ?? 'No tracked exposure for this day yet.'}
-      </Text>
+  return (
+    <View>
+      <ExposureWeekCard
+        history={history}
+        todayKey={todayKey}
+        todayReport={todayReport}
+        weekStart={weekStart}
+        selectedDate={selectedDate}
+        onSelectDay={onSelectDay}
+        onWeekChange={onWeekChange}
+      />
+      {renderDetail()}
     </View>
   );
 };
