@@ -1,5 +1,26 @@
 // src/utils/gpsTrackParser.ts
-import { GeoJsonPointFeature } from '../types/exposure';
+import { GeoJsonPointFeature, TrackFileFormat } from '../types/exposure';
+
+const UTF8_BOM = '﻿';
+// `\b` so <trkpts>-style lookalikes don't count, while <trkpt .../> and
+// <trkpt>…</trkpt> both do; <trkseg>/<wpt>/<rtept> never match.
+const GPX_TRACK_POINT_TAG = /<trkpt\b/g;
+
+// Sniffs the content rather than the file name: URL sources often have no
+// extension, and the picker accepts any file type. Any XML document (GPX
+// starts with `<?xml` or `<gpx`) begins with `<`, JSON never does — the
+// server does the real GPX validation, so this only routes the upload.
+export const detectTrackFormat = (text: string): TrackFileFormat => {
+  const head = text.startsWith(UTF8_BOM) ? text.slice(UTF8_BOM.length) : text;
+  return head.trimStart().startsWith('<') ? 'gpx' : 'geojson';
+};
+
+// Counts every <trkpt> in the file — the GPX equivalent of a GeoJSON file's
+// features.length, for the "N GPS points received" summary. Deliberately a
+// regex instead of an XML parse: RN has no built-in XML parser and the
+// server parses (and filters) the points itself.
+export const countGpxTrackPoints = (gpxText: string): number =>
+  gpxText.match(GPX_TRACK_POINT_TAG)?.length ?? 0;
 
 type RawGeoJsonFeature = {
   type?: string;

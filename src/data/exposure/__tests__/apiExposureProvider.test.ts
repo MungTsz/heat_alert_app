@@ -1,11 +1,13 @@
 jest.mock('../../../services/exposureApi', () => ({
   ingestExposurePings: jest.fn(),
+  ingestExposureGpx: jest.fn(),
   waitForIngestBatch: jest.fn(),
   fetchHourlyExposure: jest.fn(),
 }));
 
 import {
   ingestExposurePings,
+  ingestExposureGpx,
   waitForIngestBatch,
   fetchHourlyExposure,
 } from '../../../services/exposureApi';
@@ -13,6 +15,7 @@ import { apiExposureProvider } from '../apiExposureProvider';
 import { ExposureIngestFeature } from '../../../types/exposure';
 
 const mockedIngest = ingestExposurePings as jest.Mock;
+const mockedIngestGpx = ingestExposureGpx as jest.Mock;
 const mockedWait = waitForIngestBatch as jest.Mock;
 const mockedFetch = fetchHourlyExposure as jest.Mock;
 
@@ -51,6 +54,35 @@ describe('apiExposureProvider.ingest', () => {
     mockedWait.mockRejectedValue(new Error('Server failed to process this upload'));
 
     await expect(apiExposureProvider.ingest('local-device', features)).rejects.toThrow(
+      'Server failed to process this upload',
+    );
+  });
+});
+
+describe('apiExposureProvider.ingestGpx', () => {
+  beforeEach(() => {
+    mockedIngestGpx.mockReset();
+    mockedWait.mockReset();
+  });
+
+  const gpx = '<gpx><trk><trkseg><trkpt lat="22.3" lon="114.2"/></trkseg></trk></gpx>';
+
+  it('uploads the raw GPX text, then waits for the queued batch', async () => {
+    mockedIngestGpx.mockResolvedValue(21);
+    mockedWait.mockResolvedValue({ id: 21, status: 'done', rows: 70 });
+
+    const result = await apiExposureProvider.ingestGpx('local-device', gpx);
+
+    expect(mockedIngestGpx).toHaveBeenCalledWith('local-device', gpx);
+    expect(mockedWait).toHaveBeenCalledWith(21);
+    expect(result).toEqual({ processedRows: 70 });
+  });
+
+  it('rejects when the background batch fails', async () => {
+    mockedIngestGpx.mockResolvedValue(22);
+    mockedWait.mockRejectedValue(new Error('Server failed to process this upload'));
+
+    await expect(apiExposureProvider.ingestGpx('local-device', gpx)).rejects.toThrow(
       'Server failed to process this upload',
     );
   });

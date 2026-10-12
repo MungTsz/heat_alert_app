@@ -72,21 +72,28 @@ const utf8ByteLength = (str: string): number => {
 const tooLargeMessage = (limitBytes: number): string =>
   `File is too large to upload (limit ${formatMb(limitBytes)}). Split it into smaller files, e.g. one day each.`;
 
-// Sends the raw pings (GeoJSON Point features and/or live-tracking pings) to
-// the ETL backend. The server only validates and stores them here, answering
-// 202 with a batch_id; the pipeline itself runs as a background job — see
-// waitForIngestBatch.
-export const ingestExposurePings = async (
-  pid: string,
-  features: ExposureIngestFeature[],
+const NO_VALID_PINGS_MESSAGE = 'No valid GPS points found in that file.';
+// The server doesn't check it, but the API doc asks for it on /ingest/gpx.
+const GPX_CONTENT_TYPE = 'application/gpx+xml';
+// /ingest/gpx answers 400 both for unparseable XML and for a file with no
+// usable <trkpt>; only the former's detail starts with this prefix.
+const INVALID_GPX_DETAIL_PREFIX = 'invalid gpx';
+
+// Shared by every ingest endpoint so the size pre-check and error → message
+// mapping stay in one place. Returns the queued batch_id. `map400` lets each
+// endpoint word its own 400s (the GPX one has two distinct causes).
+const postIngestBody = async (
+  url: string,
+  body: string,
+  contentType: string,
+  map400: (detail: string | null) => string,
 ): Promise<number> => {
-  const body = JSON.stringify({ pid, features });
   if (utf8ByteLength(body) > EXPOSURE_API_CONFIG.maxIngestBodyBytes) {
     throw new ExposureApiError(tooLargeMessage(EXPOSURE_API_CONFIG.maxIngestBodyBytes), 413);
   }
-  const response = await fetchWithTimeout(`${EXPOSURE_API_CONFIG.baseUrl}/ingest`, {
+  const response = await fetchWithTimeout(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': contentType },
     body,
   });
   if (!response.ok) {
@@ -101,7 +108,7 @@ export const ingestExposurePings = async (
       );
     }
     if (response.status === 400) {
-      throw new ExposureApiError('No valid GPS points found in that file.', 400);
+      throw new ExposureApiError(map400(detail), 400);
     }
     throw new ExposureApiError(
       `Upload failed (${response.status})${detail ? `: ${detail}` : ''}`,
@@ -111,6 +118,35 @@ export const ingestExposurePings = async (
   const accepted: ExposureIngestAccepted = await response.json();
   return accepted.batch_id;
 };
+
+// Sends the raw pings (GeoJSON Point features and/or live-tracking pings) to
+// the ETL backend. The server only validates and stores them here, answering
+// 202 with a batch_id; the pipeline itself runs as a background job — see
+// waitForIngestBatch.
+export const ingestExposurePings = (
+  pid: string,
+  features: ExposureIngestFeature[],
+): Promise<number> =>
+  postIngestBody(
+    `${EXPOSURE_API_CONFIG.baseUrl}/ingest`,
+    JSON.stringify({ pid, features }),
+    'application/json',
+    () => NO_VALID_PINGS_MESSAGE,
+  );
+
+// Uploads a whole GPX file as-is — the server reads every <trkpt> itself, so
+// the app never parses the XML. Otherwise identical to ingestExposurePings:
+// same 202 + batch_id, same background job.
+export const ingestExposureGpx = (pid: string, gpxText: string): Promise<number> =>
+  postIngestBody(
+    `${EXPOSURE_API_CONFIG.baseUrl}/ingest/gpx?pid=${encodeURIComponent(pid)}`,
+    gpxText,
+    GPX_CONTENT_TYPE,
+    detail =>
+      detail?.toLowerCase().startsWith(INVALID_GPX_DETAIL_PREFIX)
+        ? 'Not a readable GPX file.'
+        : NO_VALID_PINGS_MESSAGE,
+  );
 
 export const fetchIngestBatch = async (batchId: number): Promise<ExposureBatchStatus> => {
   const response = await fetchWithTimeout(`${EXPOSURE_API_CONFIG.baseUrl}/ingest/${batchId}`);

@@ -21,6 +21,10 @@ export type LiveTrackingPing = {
 
 export type ExposureIngestFeature = GeoJsonPointFeature | LiveTrackingPing;
 
+// An imported track file's format — decides which ingest endpoint it goes
+// to (GeoJSON → POST /ingest as JSON, GPX → POST /ingest/gpx as raw XML).
+export type TrackFileFormat = 'geojson' | 'gpx';
+
 // The backend's io types, in stack/legend order (bottom → top): Outdoor
 // first, then the two indoor kinds adjacent so they read as one group. An
 // indoor stay starting in the 00:00-06:00 HK window is Home, any other

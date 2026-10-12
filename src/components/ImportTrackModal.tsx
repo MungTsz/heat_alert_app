@@ -20,7 +20,11 @@ import {
   Plus,
 } from 'lucide-react-native';
 import { pick, types, isErrorWithCode, errorCodes } from '@react-native-documents/picker';
-import { extractGeoJsonFeatures } from '../utils/gpsTrackParser';
+import {
+  countGpxTrackPoints,
+  detectTrackFormat,
+  extractGeoJsonFeatures,
+} from '../utils/gpsTrackParser';
 import { exposureDataProvider } from '../data/exposure';
 import { useImportHistory } from '../hooks/useImportHistory';
 import { useExposureDevices } from '../hooks/useExposureDevices';
@@ -31,7 +35,7 @@ import {
   reportImportFileResult,
   finishImportProgress,
 } from '../services/importProgressBus';
-import { ExposureReport } from '../types/exposure';
+import { ExposureReport, GeoJsonPointFeature } from '../types/exposure';
 import { EXPOSURE_API_CONFIG } from '../config/exposureApiConfig';
 import ExposureDaySwitcher from './ExposureDaySwitcher';
 
@@ -136,20 +140,27 @@ const ImportTrackModal: React.FC<Props> = ({ visible, onClose, lockedDeviceId })
     text: string,
   ): Promise<string | undefined> => {
     updateItem(id, { status: 'reading' });
-    let features;
+    const isGpx = detectTrackFormat(text) === 'gpx';
+    let features: GeoJsonPointFeature[] = [];
     let rawPointCount: number;
-    try {
-      const json = JSON.parse(text);
-      features = extractGeoJsonFeatures(json);
-      // Counted before client-side filtering — "everything in your file".
-      // extractGeoJsonFeatures already guaranteed features is an array.
-      rawPointCount = json.features.length;
-    } catch (err) {
-      const error = err instanceof Error ? err.message : 'Failed to parse track data.';
-      updateItem(id, { status: 'error', error });
-      return error;
+    if (isGpx) {
+      // GPX goes up as-is (the server parses the XML), so only the points
+      // are counted here — for the summary and to skip a pointless upload.
+      rawPointCount = countGpxTrackPoints(text);
+    } else {
+      try {
+        const json = JSON.parse(text);
+        features = extractGeoJsonFeatures(json);
+        // Counted before client-side filtering — "everything in your file".
+        // extractGeoJsonFeatures already guaranteed features is an array.
+        rawPointCount = json.features.length;
+      } catch (err) {
+        const error = err instanceof Error ? err.message : 'Failed to parse track data.';
+        updateItem(id, { status: 'error', error });
+        return error;
+      }
     }
-    if (features.length === 0) {
+    if ((isGpx ? rawPointCount : features.length) === 0) {
       const error = 'No valid GPS points found in that file.';
       updateItem(id, { status: 'error', error });
       return error;
@@ -158,7 +169,9 @@ const ImportTrackModal: React.FC<Props> = ({ visible, onClose, lockedDeviceId })
     const isInstant = targetDeviceId === INSTANT_TARGET;
     const pid = isInstant ? makePreviewPid() : targetDeviceId;
     try {
-      const { processedRows } = await exposureDataProvider.ingest(pid, features);
+      const { processedRows } = isGpx
+        ? await exposureDataProvider.ingestGpx(pid, text)
+        : await exposureDataProvider.ingest(pid, features);
       const report = await exposureDataProvider.getHourlyReport(pid);
       updateItem(id, {
         status: 'done',
@@ -434,7 +447,7 @@ const ImportTrackModal: React.FC<Props> = ({ visible, onClose, lockedDeviceId })
                 <Text style={styles.actionText}>Add Files</Text>
               </TouchableOpacity>
               <Text style={styles.helperCaption}>
-                .geojson or .json — up to {MAX_FILES} per import, max{' '}
+                .geojson, .json or .gpx — up to {MAX_FILES} per import, max{' '}
                 {Math.round(EXPOSURE_API_CONFIG.maxIngestBodyBytes / (1024 * 1024))} MB each
                 (about one day of tracking)
               </Text>
@@ -445,7 +458,7 @@ const ImportTrackModal: React.FC<Props> = ({ visible, onClose, lockedDeviceId })
                 <LinkIcon size={16} color="#8E8E93" style={styles.urlIcon} />
                 <TextInput
                   style={styles.urlInput}
-                  placeholder="https://.../track.geojson"
+                  placeholder="https://.../track.geojson or .gpx"
                   placeholderTextColor="#8E8E93"
                   autoCapitalize="none"
                   autoCorrect={false}
