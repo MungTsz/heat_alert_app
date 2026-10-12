@@ -74,6 +74,10 @@ type ImportItem = {
   report?: ExposureReport;
   error?: string;
   expanded: boolean;
+  // Only feed the one-off "points received → time segments" line on the
+  // complete screen; intentionally not persisted or sent to importProgressBus.
+  rawPointCount?: number;
+  processedRowCount?: number | null;
 };
 
 type Phase = 'select' | 'importing' | 'complete';
@@ -102,6 +106,16 @@ const ImportTrackModal: React.FC<Props> = ({ visible, onClose, lockedDeviceId })
   const errorCount = items.filter(item => item.status === 'error').length;
   const completedCount = doneCount + errorCount;
 
+  // Totals over successful files only — a failed file has no processed
+  // count, so including its raw points would overstate the drop-off.
+  const doneItems = items.filter(item => item.status === 'done');
+  const totalRawPoints = doneItems.reduce((sum, item) => sum + (item.rawPointCount ?? 0), 0);
+  const processedKnown = doneItems.every(item => typeof item.processedRowCount === 'number');
+  const totalProcessedRows = doneItems.reduce(
+    (sum, item) => sum + (item.processedRowCount ?? 0),
+    0,
+  );
+
   const updateItem = (id: string, patch: Partial<ImportItem>) =>
     setItems(prev => prev.map(item => (item.id === id ? { ...item, ...patch } : item)));
 
@@ -123,8 +137,13 @@ const ImportTrackModal: React.FC<Props> = ({ visible, onClose, lockedDeviceId })
   ): Promise<string | undefined> => {
     updateItem(id, { status: 'reading' });
     let features;
+    let rawPointCount: number;
     try {
-      features = extractGeoJsonFeatures(JSON.parse(text));
+      const json = JSON.parse(text);
+      features = extractGeoJsonFeatures(json);
+      // Counted before client-side filtering — "everything in your file".
+      // extractGeoJsonFeatures already guaranteed features is an array.
+      rawPointCount = json.features.length;
     } catch (err) {
       const error = err instanceof Error ? err.message : 'Failed to parse track data.';
       updateItem(id, { status: 'error', error });
@@ -139,9 +158,14 @@ const ImportTrackModal: React.FC<Props> = ({ visible, onClose, lockedDeviceId })
     const isInstant = targetDeviceId === INSTANT_TARGET;
     const pid = isInstant ? makePreviewPid() : targetDeviceId;
     try {
-      await exposureDataProvider.ingest(pid, features);
+      const { processedRows } = await exposureDataProvider.ingest(pid, features);
       const report = await exposureDataProvider.getHourlyReport(pid);
-      updateItem(id, { status: 'done', report });
+      updateItem(id, {
+        status: 'done',
+        report,
+        rawPointCount,
+        processedRowCount: processedRows,
+      });
       if (isInstant) {
         // Not tied to any device workspace, so the import log is the only
         // way to revisit it later — stores the throwaway pid, not the
@@ -505,6 +529,13 @@ const ImportTrackModal: React.FC<Props> = ({ visible, onClose, lockedDeviceId })
                   ? `Imported ${total} of ${total} files`
                   : `${doneCount} of ${total} imported, ${errorCount} failed`}
               </Text>
+              {doneCount > 0 && (
+                <Text style={styles.summaryStatText}>
+                  {totalRawPoints.toLocaleString()} GPS points received
+                  {processedKnown &&
+                    ` → ${totalProcessedRows.toLocaleString()} time segments after processing`}
+                </Text>
+              )}
             </View>
           )}
 
@@ -721,6 +752,7 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   summaryBannerText: { fontSize: 15, fontWeight: '700', color: '#1C1C1E' },
+  summaryStatText: { fontSize: 12, color: '#8E8E93', marginTop: 6, textAlign: 'center' },
   itemCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,

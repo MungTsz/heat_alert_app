@@ -28,12 +28,22 @@ describe('apiExposureProvider.ingest', () => {
 
   it('forwards pid and features, then waits for the queued batch', async () => {
     mockedIngest.mockResolvedValue(12);
-    mockedWait.mockResolvedValue({ id: 12, status: 'done' });
+    mockedWait.mockResolvedValue({ id: 12, status: 'done', rows: 86 });
 
-    await apiExposureProvider.ingest('local-device', features);
+    const result = await apiExposureProvider.ingest('local-device', features);
 
     expect(mockedIngest).toHaveBeenCalledWith('local-device', features);
     expect(mockedWait).toHaveBeenCalledWith(12);
+    expect(result).toEqual({ processedRows: 86 });
+  });
+
+  it('reports a null processed count when the batch has no row count', async () => {
+    mockedIngest.mockResolvedValue(14);
+    mockedWait.mockResolvedValue({ id: 14, status: 'done', rows: null });
+
+    await expect(apiExposureProvider.ingest('local-device', features)).resolves.toEqual({
+      processedRows: null,
+    });
   });
 
   it('rejects when the background batch fails', async () => {

@@ -70,7 +70,8 @@ const buildMockRows = (): ExposureHourlyApiRow[] => {
 };
 
 export const mockExposureProvider: ExposureDataProvider = {
-  ingest: () => Promise.resolve(),
+  // No real ETL runs, so there's no honest processed count to report.
+  ingest: () => Promise.resolve({ processedRows: null }),
   getHourlyReport: () =>
     new Promise(resolve => {
       setTimeout(() => resolve(buildExposureReport(buildMockRows())), MOCK_DELAY_MS);

@@ -71,6 +71,15 @@ export type ExposureBatchStatus = {
   updated_at: string;
 };
 
+// What an ingest call reports back once its batch is done — lets the import
+// screen show "N GPS points received → M time segments" so a much smaller
+// output count doesn't read as lost data. processedRows is the batch's own
+// `rows`: time segments (stays / thinned route points, split per HK clock
+// hour) this upload wrote, incl. out-of-HK and failed-PRAISE rows — not
+// "valid GPS points". The API always returns an integer once done; null
+// only comes from the mock provider.
+export type ExposureIngestResult = { processedRows: number | null };
+
 // One hourly-API row adapted into the shape the app's UI already renders
 // (map clustering, trend chart, segment list, CSV export). startTime is the
 // row's precise start (from start_time_hk); endTime approximates it as
