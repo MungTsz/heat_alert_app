@@ -18,7 +18,8 @@ import { distanceMiles } from '../utils/distance';
 import BookmarkCard from '../components/BookmarkCard';
 import AddBookmarkModal from '../components/AddBookmarkModal';
 import BookmarkMapModal from '../components/BookmarkMapModal';
-import { BookmarkEntry, BookmarkType } from '../types/bookmark';
+import RenamePlaceModal from '../components/RenamePlaceModal';
+import { BookmarkEntry } from '../types/bookmark';
 
 const FALLBACK_LAT = 22.3375;
 const FALLBACK_LNG = 114.263;
@@ -26,10 +27,11 @@ const SKY_BLUE = '#BEE7FB';
 
 const CommunityScreen = () => {
   const { coords } = useLocation();
-  const { bookmarks, addBookmark, removeBookmark } = useBookmarkList();
+  const { bookmarks, addBookmark, removeBookmark, renameBookmark } = useBookmarkList();
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedBookmark, setSelectedBookmark] =
     useState<BookmarkEntry | null>(null);
+  const [renamingBookmark, setRenamingBookmark] = useState<BookmarkEntry | null>(null);
 
   const center = coords ?? { latitude: FALLBACK_LAT, longitude: FALLBACK_LNG };
   const { points: heatPoints } = useHeatData(center);
@@ -91,15 +93,10 @@ const CommunityScreen = () => {
     center.longitude,
   ]);
 
-  const handleAdd = (
-    label: string,
-    address: string,
-    latitude: number,
-    longitude: number,
-    type: BookmarkType,
-  ) => {
-    addBookmark({ label, address, latitude, longitude, type });
-  };
+  const renameOtherNames = useMemo(
+    () => bookmarks.filter(b => b.id !== renamingBookmark?.id).map(b => b.label),
+    [bookmarks, renamingBookmark],
+  );
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -116,7 +113,8 @@ const CommunityScreen = () => {
       {rankedBookmarks.length === 0 ? (
         <View style={styles.emptyState}>
           <Text style={styles.emptyText}>
-            No bookmarks yet. Tap + to start monitoring a house or place.
+            Tap + to add your Home, Office or School — it helps us calculate your exposure
+            more accurately.
           </Text>
         </View>
       ) : (
@@ -127,11 +125,13 @@ const CommunityScreen = () => {
           renderItem={({ item }) => (
             <BookmarkCard
               label={item.label}
-              type={item.type}
+              category={item.category}
+              radiusMeters={item.radiusMeters}
               temperature={item.temperature}
               aqhi={item.aqhi}
               distance={item.distance}
               onPress={() => setSelectedBookmark(item)}
+              onRename={() => setRenamingBookmark(item)}
               onRemove={() => removeBookmark(item.id)}
             />
           )}
@@ -141,7 +141,20 @@ const CommunityScreen = () => {
       <AddBookmarkModal
         visible={modalVisible}
         onClose={() => setModalVisible(false)}
-        onAdd={handleAdd}
+        existingPlaces={bookmarks}
+        currentLocation={coords}
+        onAdd={addBookmark}
+      />
+
+      <RenamePlaceModal
+        visible={renamingBookmark !== null}
+        initialName={renamingBookmark?.label ?? ''}
+        otherNames={renameOtherNames}
+        onSave={name => {
+          if (renamingBookmark) renameBookmark(renamingBookmark.id, name);
+          setRenamingBookmark(null);
+        }}
+        onCancel={() => setRenamingBookmark(null)}
       />
 
       <BookmarkMapModal

@@ -9,6 +9,8 @@ import { ExposureIo } from '../../types/exposure';
 const byIo = (outdoor: number, home = 0): Record<ExposureIo, number> => ({
   Outdoor: outdoor,
   'Other Indoor': 0,
+  School: 0,
+  Office: 0,
   Home: home,
 });
 

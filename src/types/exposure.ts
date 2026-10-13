@@ -26,10 +26,12 @@ export type ExposureIngestFeature = GeoJsonPointFeature | LiveTrackingPing;
 export type TrackFileFormat = 'geojson' | 'gpx';
 
 // The backend's io types, in stack/legend order (bottom → top): Outdoor
-// first, then the two indoor kinds adjacent so they read as one group. An
-// indoor stay starting in the 00:00-06:00 HK window is Home, any other
-// indoor stay is Other Indoor (decided by the stay's start time only).
-export const EXPOSURE_IO_TYPES = ['Outdoor', 'Other Indoor', 'Home'] as const;
+// first, then the indoor kinds adjacent so they read as one group. An indoor
+// stay inside a user-labelled place circle (see PlaceCategory in
+// types/bookmark.ts) takes that place's category; an unlabelled one falls
+// back to the start-time rule — starting in the 00:00-06:00 HK window is
+// Home, anything else is Other Indoor.
+export const EXPOSURE_IO_TYPES = ['Outdoor', 'Other Indoor', 'School', 'Office', 'Home'] as const;
 export type ExposureIo = (typeof EXPOSURE_IO_TYPES)[number];
 
 // One row of the ETL backend's GET /exposure/hourly/{pid} response — one per

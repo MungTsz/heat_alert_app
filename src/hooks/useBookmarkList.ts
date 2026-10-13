@@ -1,8 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BookmarkEntry } from '../types/bookmark';
+import { readBookmarks, writeBookmarks } from '../services/bookmarkStorage';
+import { syncPlaceLabels } from '../services/placeLabelSyncService';
 
-const STORAGE_KEY = 'monitored_bookmarks';
+// Fire-and-forget: sync failures must never block the UI, and the next
+// load/add/remove re-runs the full diff anyway.
+const syncInBackground = () => {
+  syncPlaceLabels().catch(error => console.log('Place label sync failed:', error));
+};
 
 export const useBookmarkList = () => {
   const [bookmarks, setBookmarks] = useState<BookmarkEntry[]>([]);
@@ -10,8 +15,9 @@ export const useBookmarkList = () => {
 
   const loadBookmarks = useCallback(async () => {
     try {
-      const raw = await AsyncStorage.getItem(STORAGE_KEY);
-      setBookmarks(raw ? JSON.parse(raw) : []);
+      setBookmarks(await readBookmarks());
+      // Also the retry path for anything a previous session failed to sync.
+      syncInBackground();
     } catch (error) {
       console.log('Failed to load bookmarks:', error);
       setBookmarks([]);
@@ -24,21 +30,27 @@ export const useBookmarkList = () => {
     loadBookmarks();
   }, [loadBookmarks]);
 
-  const addBookmark = async (bookmark: Omit<BookmarkEntry, 'id'>) => {
-    const newBookmark: BookmarkEntry = {
-      ...bookmark,
-      id: `bookmark-${Date.now()}`,
-    };
-    const updated = [...bookmarks, newBookmark];
+  const persist = async (updated: BookmarkEntry[]) => {
     setBookmarks(updated);
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    await writeBookmarks(updated);
+  };
+
+  const addBookmark = async (bookmark: Omit<BookmarkEntry, 'id' | 'updatedAt'>) => {
+    const now = Date.now();
+    await persist([...bookmarks, { ...bookmark, id: `bookmark-${now}`, updatedAt: now }]);
+    syncInBackground();
   };
 
   const removeBookmark = async (id: string) => {
-    const updated = bookmarks.filter(b => b.id !== id);
-    setBookmarks(updated);
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    await persist(bookmarks.filter(b => b.id !== id));
+    syncInBackground();
   };
 
-  return { bookmarks, loading, addBookmark, removeBookmark };
+  // Leaves updatedAt alone: the name is never uploaded, so a rename has
+  // nothing to sync.
+  const renameBookmark = async (id: string, label: string) => {
+    await persist(bookmarks.map(b => (b.id === id ? { ...b, label } : b)));
+  };
+
+  return { bookmarks, loading, addBookmark, removeBookmark, renameBookmark };
 };

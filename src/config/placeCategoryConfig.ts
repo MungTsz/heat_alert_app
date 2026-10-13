@@ -1,0 +1,31 @@
+// src/config/placeCategoryConfig.ts
+import { Building2, DoorOpen, House, LucideIcon, School } from 'lucide-react-native';
+import { PlaceCategory } from '../types/bookmark';
+
+// Order the category tiles appear in on the Add place sheet — the most
+// common places first.
+export const PLACE_CATEGORIES: readonly PlaceCategory[] = ['Home', 'Office', 'School', 'Other Indoor'];
+
+type PlaceCategoryConfig = {
+  label: string;
+  // Shown once a tile is tapped, so the user knows exactly what the icon
+  // means before confirming — a wrong category feeds a wrong io type to the
+  // exposure API.
+  description: string;
+  Icon: LucideIcon;
+};
+
+// UI presentation only. Colors are intentionally NOT here: each category
+// reuses its io color from EXPOSURE_IO_CONFIG so a place reads the same
+// color everywhere. Default-naming rules live in placeLabelConfig.ts so the
+// pure naming util doesn't depend on icon components.
+export const PLACE_CATEGORY_CONFIG: Record<PlaceCategory, PlaceCategoryConfig> = {
+  Home: { label: 'Home', description: 'Where you live', Icon: House },
+  Office: { label: 'Office', description: 'Where you work', Icon: Building2 },
+  School: { label: 'School', description: 'Where you study', Icon: School },
+  'Other Indoor': {
+    label: 'Other Indoor',
+    description: "Gym, mall, a friend's home…",
+    Icon: DoorOpen,
+  },
+};

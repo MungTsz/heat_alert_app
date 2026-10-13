@@ -207,7 +207,8 @@ const ExposureTrendChart: React.FC<Props> = ({ segments, title }) => {
 
 const styles = StyleSheet.create({
   title: { fontSize: 13, fontWeight: '700', color: '#1C1C1E', marginBottom: 4 },
-  legendRow: { flexDirection: 'row', gap: 14, marginBottom: 6 },
+  // Wraps: five io types no longer fit on one line on narrow phones.
+  legendRow: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 14, rowGap: 4, marginBottom: 6 },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   legendDot: { width: 8, height: 8, borderRadius: 4 },
   legendText: { fontSize: 11, color: '#8E8E93' },

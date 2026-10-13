@@ -1,32 +1,40 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
-import { Trash2, Home, MapPin } from 'lucide-react-native';
+import { Trash2, Pencil } from 'lucide-react-native';
 import { getHeatIndexInfo } from '../utils/heatIndexUtils';
 import { getAqhiInfo } from '../utils/aqhiUtils';
-import { BookmarkType } from '../types/bookmark';
+import { PlaceCategory } from '../types/bookmark';
+import { PLACE_CATEGORY_CONFIG } from '../config/placeCategoryConfig';
+import { EXPOSURE_IO_CONFIG } from '../config/exposureIoConfig';
 
 type Props = {
   label: string;
-  type: BookmarkType;
+  category: PlaceCategory;
+  radiusMeters: number;
   temperature: number;
   aqhi: number;
   distance: number;
   onPress: () => void;
+  onRename: () => void;
   onRemove: () => void;
 };
 
+const ACTION_HIT_SLOP = { top: 8, bottom: 8, left: 8, right: 8 };
+
 const BookmarkCard = ({
   label,
-  type,
+  category,
+  radiusMeters,
   temperature,
   aqhi,
   distance,
   onPress,
+  onRename,
   onRemove,
 }: Props) => {
   const heatInfo = getHeatIndexInfo(temperature);
   const aqhiInfo = getAqhiInfo(aqhi);
-  const Icon = type === 'house' ? Home : MapPin;
+  const { Icon } = PLACE_CATEGORY_CONFIG[category];
 
   const handleRemovePress = () => {
     Alert.alert('Delete Bookmark', `Remove "${label}" from your bookmarks?`, [
@@ -39,20 +47,28 @@ const BookmarkCard = ({
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.7}>
       <View style={styles.topRow}>
         <View style={styles.labelRow}>
-          <Icon size={16} color="#555" />
+          <Icon size={16} color={EXPOSURE_IO_CONFIG[category].color} />
           <Text style={styles.label} numberOfLines={1}>
             {label}
           </Text>
         </View>
-        <TouchableOpacity
-          onPress={handleRemovePress}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <Trash2 size={16} color="#999" />
-        </TouchableOpacity>
+        <View style={styles.actionRow}>
+          <TouchableOpacity onPress={onRename} hitSlop={ACTION_HIT_SLOP} accessibilityLabel="Rename">
+            <Pencil size={16} color="#999" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={handleRemovePress}
+            hitSlop={ACTION_HIT_SLOP}
+            accessibilityLabel="Delete"
+          >
+            <Trash2 size={16} color="#999" />
+          </TouchableOpacity>
+        </View>
       </View>
 
-      <Text style={styles.distance}>{distance.toFixed(1)} miles away</Text>
+      <Text style={styles.distance}>
+        {distance.toFixed(1)} miles away · {radiusMeters} m area
+      </Text>
 
       <View style={styles.badgeRow}>
         <View style={[styles.badge, { backgroundColor: heatInfo.color }]}>
@@ -91,6 +107,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     flex: 1,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    marginLeft: 12,
   },
   label: {
     fontSize: 15,

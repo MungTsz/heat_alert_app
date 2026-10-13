@@ -1,5 +1,7 @@
 // src/services/exposureApi.ts
 import { EXPOSURE_API_CONFIG } from '../config/exposureApiConfig';
+import { fetchWithTimeout as fetchWithTimeoutMs } from '../utils/fetchWithTimeout';
+import { PlaceLabel } from '../data/placeLabels/types';
 import {
   ExposureBatchStatus,
   ExposureHourlyApiRow,
@@ -7,21 +9,10 @@ import {
   ExposureIngestFeature,
 } from '../types/exposure';
 
-// react-native's fetch has no request timeout of its own — without this,
-// slow uploads get cut off by the underlying platform networking default
-// instead of EXPOSURE_API_CONFIG.timeoutMs.
-const fetchWithTimeout = async (
-  input: string,
-  init: RequestInit = {},
-): Promise<Response> => {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), EXPOSURE_API_CONFIG.timeoutMs);
-  try {
-    return await fetch(input, { ...init, signal: controller.signal });
-  } finally {
-    clearTimeout(timer);
-  }
-};
+// Every exposure-backend call shares one timeout — long, since /ingest
+// uploads can be large.
+const fetchWithTimeout = (input: string, init: RequestInit = {}): Promise<Response> =>
+  fetchWithTimeoutMs(input, init, EXPOSURE_API_CONFIG.timeoutMs);
 
 const BYTES_PER_MB = 1024 * 1024;
 const formatMb = (bytes: number): string => `${(bytes / BYTES_PER_MB).toFixed(1)} MB`;
@@ -202,4 +193,48 @@ export const fetchHourlyExposure = async (
     );
   }
   return response.json();
+};
+
+const placeLabelUrl = (labelId: string): string =>
+  `${EXPOSURE_API_CONFIG.baseUrl}/place-labels/${encodeURIComponent(labelId)}`;
+
+// Idempotent create-or-update of one crowd-sourced place label. Only the
+// category and circle are sent — never the user's name for the place or its
+// address.
+export const upsertPlaceLabel = async (label: PlaceLabel): Promise<void> => {
+  const response = await fetchWithTimeout(placeLabelUrl(label.labelId), {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contributor_id: label.contributorId,
+      category: label.category,
+      lat: label.latitude,
+      lng: label.longitude,
+      radius_m: label.radiusMeters,
+      updated_at: new Date(label.updatedAt).toISOString(),
+    }),
+  });
+  if (!response.ok) {
+    const detail = await readErrorDetail(response);
+    throw new ExposureApiError(
+      `Place label upload failed (${response.status})${detail ? `: ${detail}` : ''}`,
+      response.status,
+    );
+  }
+};
+
+// 404 counts as success: the goal is "this label no longer exists", and a
+// retried delete (or one for a label whose upload never landed) hits it.
+export const deletePlaceLabel = async (labelId: string, contributorId: string): Promise<void> => {
+  const response = await fetchWithTimeout(
+    `${placeLabelUrl(labelId)}?contributor_id=${encodeURIComponent(contributorId)}`,
+    { method: 'DELETE' },
+  );
+  if (!response.ok && response.status !== 404) {
+    const detail = await readErrorDetail(response);
+    throw new ExposureApiError(
+      `Place label delete failed (${response.status})${detail ? `: ${detail}` : ''}`,
+      response.status,
+    );
+  }
 };

@@ -16,8 +16,9 @@ export const WEEKDAY_LABELS = [
 ];
 
 export const EXPOSURE_WEEK_CHART_CONFIG = {
-  // Green so the average line can't be mistaken for any io color in
-  // EXPOSURE_IO_CONFIG (amber / purple / navy).
+  // Bright system green, drawn dashed, so the average line can't be mistaken
+  // for any io color in EXPOSURE_IO_CONFIG (amber / purple / dark green /
+  // teal / navy) — School's green is much darker and only ever a solid bar.
   avgLineColor: '#34C759',
   avgLineDash: '4,4',
   avgLabel: 'Avg',

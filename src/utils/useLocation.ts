@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { PermissionsAndroid, Platform } from 'react-native';
 import Geolocation from 'react-native-geolocation-service';
+import { reverseGeocode } from './geocode';
 
 export type Coordinates = {
   latitude: number;
@@ -18,35 +19,11 @@ export const useLocation = () => {
 
     // Fetch concise area / district name
     const fetchPlaceName = async (latitude: number, longitude: number) => {
-      try {
-        const response = await fetch(
-          `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${latitude}&lon=${longitude}`,
-          {
-            headers: {
-              'User-Agent': 'HeatAlertApp/1.0',
-            },
-          },
-        );
-        const data = await response.json();
-
-        if (isMounted) {
-          if (data && data.address) {
-            const addr = data.address;
-
-            const area = addr.suburb || addr.road;
-
-            setLocationText(area);
-          } else {
-            setLocationText('Hong Kong');
-          }
-          setLoading(false);
-        }
-      } catch (error) {
-        console.log('Reverse Geocode Fetch Error:', error);
-        if (isMounted) {
-          setLocationText('Hong Kong');
-          setLoading(false);
-        }
+      const result = await reverseGeocode(latitude, longitude);
+      if (isMounted) {
+        const addr = result?.address;
+        setLocationText(addr?.suburb || addr?.road || 'Hong Kong');
+        setLoading(false);
       }
     };
 
