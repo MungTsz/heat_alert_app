@@ -48,26 +48,6 @@ export const getAqhiInfo = (aqhi: number): AqhiInfo => {
   };
 };
 
-export const getAqhiTextColor = (aqhi: number): string => {
-  const v = clampAqhiValue(aqhi);
-  // Darkened variants for text-on-light-background legibility, keeping the
-  // same hue family as the official color per value.
-  const textColors: Record<number, string> = {
-    1: '#255E20',
-    2: '#2E7D1F',
-    3: '#3F8F2A',
-    4: '#9C9200',
-    5: '#A67D0A',
-    6: '#B36A15',
-    7: '#A81A1F',
-    8: '#7A3F30',
-    9: '#5F3329',
-    10: '#2E1C1A',
-    11: '#000000',
-  };
-  return textColors[v];
-};
-
 export const valueToAqhiColor = (aqhi: number, alpha: number = 0.9): string => {
   const { color } = getAqhiInfo(aqhi);
   const r = parseInt(color.slice(1, 3), 16);

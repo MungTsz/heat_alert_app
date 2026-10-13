@@ -28,7 +28,7 @@ import FullscreenMapModal from '../components/FullscreenMapModal';
 import MapScreen from './MapScreen';
 import { useLocation } from '../utils/useLocation';
 import { getHeatIndexInfo } from '../utils/heatIndexUtils';
-import { getAqhiTextColor, getAqhiInfo } from '../utils/aqhiUtils';
+import { getAqhiInfo } from '../utils/aqhiUtils';
 import HeatScene from '../components/scene/HeatScene';
 import { computeSceneLayout } from '../utils/sceneLayout';
 import { useForecastData } from '../hooks/useForecastData';
@@ -167,7 +167,11 @@ const HomeScreen = () => {
               label="AQHI"
               value={`${currentAqhi}`}
               classification={aqhiInfo.classification}
-              valueColor={getAqhiTextColor(currentAqhi)} // dark, readable, still hazard-coded
+              // Same per-value color as the AQHI map layer and legend
+              // (aqhiUtils' AQHI_COLOR_BY_VALUE), so the number reads as the
+              // band the map shows — like the heat card's heatInfo.color.
+              // Deliberately NOT the forecast chart's own background bands.
+              valueColor={aqhiInfo.color}
               onPress={() => setAqhiSheetOpen(true)}
             />
           </View>
