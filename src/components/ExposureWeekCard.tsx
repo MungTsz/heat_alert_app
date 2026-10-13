@@ -1,17 +1,8 @@
 // src/components/ExposureWeekCard.tsx
-import React, { useCallback, useEffect, useMemo, useRef } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  Dimensions,
-  FlatList,
-  TouchableOpacity,
-  NativeScrollEvent,
-  NativeSyntheticEvent,
-} from 'react-native';
+import React, { useCallback, useMemo } from 'react';
+import { View, Text, StyleSheet, Dimensions, FlatList, TouchableOpacity } from 'react-native';
 import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight } from 'lucide-react-native';
-import { DailyExposureEntry, EXPOSURE_IO_TYPES, ExposureReport } from '../types/exposure';
+import { DailyExposureEntry, ExposureReport } from '../types/exposure';
 import { getHkWeekStartKey } from '../utils/hkDate';
 import { sumExposureByIo } from '../utils/exposureIoTotals';
 import {
@@ -23,9 +14,10 @@ import {
   formatHkWeekRangeLabel,
   listWeekStarts,
 } from '../utils/exposureWeekStats';
-import { EXPOSURE_IO_CONFIG } from '../config/exposureIoConfig';
 import { EXPOSURE_WEEK_CHART_CONFIG, WEEK_START_DAY } from '../config/exposureWeekChartConfig';
+import { useSyncedPager } from '../hooks/useSyncedPager';
 import ExposureDailyBarChart, { WeekChartYTitle, Y_TITLE_WIDTH } from './ExposureDailyBarChart';
+import ExposureIoLegend from './ExposureIoLegend';
 
 // Screen padding (20 × 2) + card padding (16 × 2) — same inner-width
 // convention ExposureTrendChart uses.
@@ -81,36 +73,18 @@ const ExposureWeekCard: React.FC<Props> = ({
       weekStart > currentWeek ? weekStart : currentWeek,
     );
   }, [history, todayKey, weekStart]);
-  const weekIndex = Math.max(0, weeks.indexOf(weekStart));
+  const {
+    listRef,
+    index: weekIndex,
+    onMomentumScrollEnd,
+    getItemLayout,
+  } = useSyncedPager(weeks, weekStart, PAGE_WIDTH, onWeekChange);
 
   const currentStats = computeWeekStats(buildWeekDays(weekStart, dailyMap, todayKey));
   const previousStats = computeWeekStats(
     buildWeekDays(addHkWeeks(weekStart, -1), dailyMap, todayKey),
   );
   const comparison = compareWeeks(currentStats.dailyAverage, previousStats.dailyAverage);
-
-  // Keeps the pager in sync when weekStart changes from OUTSIDE a swipe (a
-  // calendar pick or the ‹ › buttons), or when older history loads and
-  // prepends pages (shifting the visible week's index). pageRef tracks the
-  // page the list is actually showing, so a swipe — which already landed on
-  // the right page — doesn't trigger a redundant scroll back.
-  const listRef = useRef<FlatList<string>>(null);
-  const pageRef = useRef(weekIndex);
-  const lastWeekStartRef = useRef(weekStart);
-  useEffect(() => {
-    const weekChanged = lastWeekStartRef.current !== weekStart;
-    lastWeekStartRef.current = weekStart;
-    if (pageRef.current === weekIndex) return;
-    pageRef.current = weekIndex;
-    listRef.current?.scrollToOffset({ offset: weekIndex * PAGE_WIDTH, animated: weekChanged });
-  }, [weekIndex, weekStart]);
-
-  const handleMomentumEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const page = Math.round(e.nativeEvent.contentOffset.x / PAGE_WIDTH);
-    pageRef.current = page;
-    const landed = weeks[page];
-    if (landed && landed !== weekStart) onWeekChange(landed);
-  };
 
   const renderWeek = useCallback(
     ({ item }: { item: string }) => {
@@ -175,14 +149,7 @@ const ExposureWeekCard: React.FC<Props> = ({
         </TouchableOpacity>
       </View>
 
-      <View style={styles.legendRow}>
-        {EXPOSURE_IO_TYPES.map(io => (
-          <View key={io} style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: EXPOSURE_IO_CONFIG[io].color }]} />
-            <Text style={styles.legendText}>{EXPOSURE_IO_CONFIG[io].label}</Text>
-          </View>
-        ))}
-      </View>
+      <ExposureIoLegend />
 
       <View style={styles.chartRow}>
         <WeekChartYTitle />
@@ -197,9 +164,9 @@ const ExposureWeekCard: React.FC<Props> = ({
           pagingEnabled
           showsHorizontalScrollIndicator={false}
           initialScrollIndex={weekIndex}
-          getItemLayout={(_, index) => ({ length: PAGE_WIDTH, offset: PAGE_WIDTH * index, index })}
+          getItemLayout={getItemLayout}
           windowSize={PAGER_WINDOW_SIZE}
-          onMomentumScrollEnd={handleMomentumEnd}
+          onMomentumScrollEnd={onMomentumScrollEnd}
         />
       </View>
     </View>
@@ -231,11 +198,6 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   weekRangeText: { fontSize: 13, fontWeight: '700', color: '#1C1C1E' },
-  // Wraps: five io types no longer fit on one line on narrow phones.
-  legendRow: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 14, rowGap: 4, marginBottom: 6 },
-  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  legendDot: { width: 8, height: 8, borderRadius: 4 },
-  legendText: { fontSize: 11, color: '#8E8E93' },
   chartRow: { flexDirection: 'row', alignItems: 'flex-start' },
 });
 

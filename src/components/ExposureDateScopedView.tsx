@@ -1,10 +1,12 @@
 // src/components/ExposureDateScopedView.tsx
-import React from 'react';
-import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import React, { useCallback, useMemo } from 'react';
+import { View, Text, StyleSheet } from 'react-native';
 import { DailyExposureEntry, ExposureReport } from '../types/exposure';
+import { listHkDays } from '../utils/hkDate';
 import ExposureReportView from './ExposureReportView';
 import ExposureCompactDayView from './ExposureCompactDayView';
 import ExposureWeekCard from './ExposureWeekCard';
+import ExposureHourlyPager, { HourlyPageContent } from './ExposureHourlyPager';
 
 type Props = {
   history: DailyExposureEntry[];
@@ -14,6 +16,9 @@ type Props = {
   selectedDate: string | null;
   onSelectDay: (date: string) => void;
   onWeekChange: (weekStart: string) => void;
+  // A swipe / ‹ › on the hourly pager — selects that day and moves the week
+  // card to its week (useExposureWeekSelection's pickDate).
+  onPickDate: (date: string) => void;
   todayKey: string;
   // Only the live self-tracked device has a "today" report still being
   // polled — pass null/false for a device workspace, which has no live
@@ -41,6 +46,7 @@ const ExposureDateScopedView: React.FC<Props> = ({
   selectedDate,
   onSelectDay,
   onWeekChange,
+  onPickDate,
   todayKey,
   todayReport,
   todayLoading = false,
@@ -48,12 +54,38 @@ const ExposureDateScopedView: React.FC<Props> = ({
   variant = 'full',
   importingHint,
 }) => {
-  const renderDay = (report: ExposureReport, title: string) =>
-    variant === 'compact' ? (
-      <ExposureCompactDayView report={report} />
-    ) : (
-      <ExposureReportView report={report} title={title} />
+  const reportsByDate = useMemo(
+    () => new Map(history.map(entry => [entry.date, entry.report])),
+    [history],
+  );
+  // The live poll's report beats the persisted copy, which can lag a tick.
+  const reportFor = useCallback(
+    (date: string): ExposureReport | undefined =>
+      (date === todayKey && todayReport) || reportsByDate.get(date),
+    [todayKey, todayReport, reportsByDate],
+  );
+
+  // Oldest tracked day (or the selected one, if a calendar pick landed
+  // earlier) through today — every day in between gets a page, so a swipe is
+  // always exactly one day, mirroring the week card's paging.
+  const pagerDates = useMemo(() => {
+    const anchor = selectedDate ?? todayKey;
+    const earliest = history.reduce(
+      (min, entry) => (entry.date < min ? entry.date : min),
+      anchor < todayKey ? anchor : todayKey,
     );
+    return listHkDays(earliest, anchor > todayKey ? anchor : todayKey);
+  }, [history, selectedDate, todayKey]);
+
+  const getHourlyPage = useCallback(
+    (date: string): HourlyPageContent => {
+      const report = reportFor(date);
+      if (report) return report.segments;
+      if (date === todayKey && todayLoading) return "Calculating today's exposure…";
+      return importingHint ?? 'No tracked exposure for this day yet.';
+    },
+    [reportFor, todayKey, todayLoading, importingHint],
+  );
 
   const renderDetail = () => {
     // No day drilled into (after a swipe) — the map/hourly detail only
@@ -69,28 +101,30 @@ const ExposureDateScopedView: React.FC<Props> = ({
       );
     }
 
-    if (selectedDate === todayKey && todayReport) {
-      return renderDay(todayReport, "Today's Exposure");
+    const hourlyPager = (
+      <ExposureHourlyPager
+        dates={pagerDates}
+        selectedDate={selectedDate}
+        todayKey={todayKey}
+        getPage={getHourlyPage}
+        onDateChange={onPickDate}
+      />
+    );
+
+    const report = reportFor(selectedDate);
+    // A day with nothing to map still shows the pager on its own (its page
+    // carries the "no data" / "calculating" message), so the user can keep
+    // swiping instead of hitting a dead end on an untracked day.
+    if (!report || report.segments.length === 0) {
+      return <View style={styles.pagerCard}>{hourlyPager}</View>;
     }
 
-    if (selectedDate === todayKey && todayLoading) {
-      return (
-        <View style={styles.loadingBox}>
-          <ActivityIndicator style={styles.loadingIndicator} />
-          <Text style={styles.loadingText}>Calculating today's exposure…</Text>
-        </View>
-      );
-    }
-
-    const entry = history.find(h => h.date === selectedDate);
-    return entry ? (
-      renderDay(entry.report, formatDateLabel(selectedDate))
+    const title =
+      selectedDate === todayKey && todayReport ? "Today's Exposure" : formatDateLabel(selectedDate);
+    return variant === 'compact' ? (
+      <ExposureCompactDayView report={report} hourlyChart={hourlyPager} />
     ) : (
-      <View style={styles.emptyCard}>
-        <Text style={styles.emptyText}>
-          {importingHint ?? 'No tracked exposure for this day yet.'}
-        </Text>
-      </View>
+      <ExposureReportView report={report} title={title} hourlyChart={hourlyPager} />
     );
   };
 
@@ -120,9 +154,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   emptyText: { fontSize: 13, color: '#8E8E93', textAlign: 'center' },
-  loadingBox: { alignItems: 'center', marginVertical: 30 },
-  loadingIndicator: { marginBottom: 10 },
-  loadingText: { fontSize: 13, color: '#8E8E93' },
+  pagerCard: { backgroundColor: '#FFFFFF', borderRadius: 16, padding: 16, marginBottom: 12 },
 });
 
 export default ExposureDateScopedView;

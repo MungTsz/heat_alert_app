@@ -9,9 +9,17 @@ import { pickAxisLabelStride } from '../utils/chartAxisLabels';
 import { clampedChartLabelX, estimateSvgTextWidth } from '../utils/svgChartLabel';
 import { niceAxisTicks } from '../utils/niceAxisTicks';
 import { EXPOSURE_IO_CONFIG } from '../config/exposureIoConfig';
+import ExposureIoLegend from './ExposureIoLegend';
 
 const SCREEN_WIDTH = Dimensions.get('window').width - 72;
 const SVG_HEIGHT = 160;
+const X_TITLE_HEIGHT = 14;
+const X_TITLE_MARGIN_TOP = 2;
+// Exported so ExposureHourlyPager can size its pages (and its "no data"
+// placeholder pages) to exactly one chart, keeping the pager height steady
+// while swiping between days with and without data.
+export const TREND_CHART_WIDTH = SCREEN_WIDTH;
+export const TREND_CHART_BODY_HEIGHT = SVG_HEIGHT + X_TITLE_MARGIN_TOP + X_TITLE_HEIGHT;
 const PADDING_TOP = 26;
 const PADDING_BOTTOM = 26;
 const GRAPH_HEIGHT = SVG_HEIGHT - PADDING_TOP - PADDING_BOTTOM;
@@ -31,6 +39,9 @@ type Props = {
   // omit this to avoid a duplicate title; callers with no header of their
   // own (single-day views) pass one.
   title?: string;
+  // A pager draws one shared legend above its pages instead, so the legend
+  // doesn't slide with every swipe.
+  showLegend?: boolean;
 };
 
 // One stacked bar per hour-of-day (0-23, HK local) — one layer per io in
@@ -41,7 +52,7 @@ type Props = {
 // total. Bars fill their full hour slot (no gap) with a thin white divider
 // between adjacent bars, so the chart reads as one continuous strip rather
 // than 24 separate columns.
-const ExposureTrendChart: React.FC<Props> = ({ segments, title }) => {
+const ExposureTrendChart: React.FC<Props> = ({ segments, title, showLegend = true }) => {
   const [selectedHour, setSelectedHour] = useState<number | null>(null);
 
   const hours = useMemo(() => bucketExposureByHour(segments), [segments]);
@@ -62,14 +73,7 @@ const ExposureTrendChart: React.FC<Props> = ({ segments, title }) => {
   return (
     <View>
       {title && <Text style={styles.title}>{title}</Text>}
-      <View style={styles.legendRow}>
-        {EXPOSURE_IO_TYPES.map(io => (
-          <View key={io} style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: EXPOSURE_IO_CONFIG[io].color }]} />
-            <Text style={styles.legendText}>{EXPOSURE_IO_CONFIG[io].label}</Text>
-          </View>
-        ))}
-      </View>
+      {showLegend && <ExposureIoLegend />}
       <View style={styles.axisRow}>
         <View style={styles.yTitleColumn}>
           <Text style={styles.yTitleText} numberOfLines={1}>
@@ -207,11 +211,6 @@ const ExposureTrendChart: React.FC<Props> = ({ segments, title }) => {
 
 const styles = StyleSheet.create({
   title: { fontSize: 13, fontWeight: '700', color: '#1C1C1E', marginBottom: 4 },
-  // Wraps: five io types no longer fit on one line on narrow phones.
-  legendRow: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 14, rowGap: 4, marginBottom: 6 },
-  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  legendDot: { width: 8, height: 8, borderRadius: 4 },
-  legendText: { fontSize: 11, color: '#8E8E93' },
   axisRow: { flexDirection: 'row', alignItems: 'flex-start' },
   yTitleColumn: {
     width: Y_TITLE_WIDTH,
@@ -234,7 +233,9 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#8E8E93',
     textAlign: 'center',
-    marginTop: 2,
+    height: X_TITLE_HEIGHT,
+    lineHeight: X_TITLE_HEIGHT,
+    marginTop: X_TITLE_MARGIN_TOP,
     marginLeft: Y_TITLE_WIDTH + Y_AXIS_WIDTH,
   },
 });

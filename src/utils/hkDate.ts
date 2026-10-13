@@ -56,3 +56,9 @@ export const formatHkDateLabel = (dateKey: string, todayKey?: string): string =>
     day: 'numeric',
   });
 };
+
+// Every YYYY-MM-DD key from first through last, inclusive — one entry per
+// calendar day, so a day pager steps exactly one day per page even across
+// days with no data.
+export const listHkDays = (first: string, last: string): string[] =>
+  Array.from({ length: Math.max(0, diffHkDays(first, last)) + 1 }, (_, i) => addHkDays(first, i));

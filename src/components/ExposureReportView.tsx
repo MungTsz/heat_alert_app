@@ -12,6 +12,9 @@ import ExposureTrajectoryMap from './ExposureTrajectoryMap';
 type Props = {
   report: ExposureReport;
   title: string;
+  // Replaces the single-day hourly chart (e.g. with the swipeable day
+  // pager), keeping it in the same spot between the map and segment list.
+  hourlyChart?: React.ReactNode;
 };
 
 const formatDuration = (ms: number): string => {
@@ -25,7 +28,7 @@ const formatDuration = (ms: number): string => {
 const formatTime = (ms: number): string =>
   new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-const ExposureReportView: React.FC<Props> = ({ report, title }) => {
+const ExposureReportView: React.FC<Props> = ({ report, title, hourlyChart }) => {
   const maxExposure = useMemo(
     () => Math.max(0, ...report.segments.map(s => s.exposure)),
     [report.segments],
@@ -72,10 +75,14 @@ const ExposureReportView: React.FC<Props> = ({ report, title }) => {
 
       <ExposureTrajectoryMap segments={report.segments} />
 
-      {report.segments.length > 0 && (
-        <View style={styles.trendCard}>
-          <ExposureTrendChart segments={report.segments} title="Hourly Exposure" />
-        </View>
+      {hourlyChart ? (
+        <View style={styles.trendCard}>{hourlyChart}</View>
+      ) : (
+        report.segments.length > 0 && (
+          <View style={styles.trendCard}>
+            <ExposureTrendChart segments={report.segments} title="Hourly Exposure" />
+          </View>
+        )
       )}
 
       {report.segments.length === 0 ? (
