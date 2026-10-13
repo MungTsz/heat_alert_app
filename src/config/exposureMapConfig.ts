@@ -17,8 +17,8 @@ export const EXPOSURE_MAP_CONFIG = {
   outsideHkBorderColor: '#8E8E93',
   // Slight translucency reinforces the "invalid area" feel.
   outsideHkDotOpacity: 0.85,
-  // Callout text can't reuse the light fill color — too low contrast on
-  // the white callout background.
+  // Stay-sheet text/chip can't reuse the light fill color — too low
+  // contrast on the white sheet background.
   outsideHkTextColor: '#8E8E93',
   // Bounding-box fit used to frame a day's stay points: a floor so a single
   // point isn't zoomed to street level, and padding so edge dots aren't

@@ -1,33 +1,20 @@
 // src/components/ExposureTrajectoryMap.tsx
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, Modal, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Maximize2, ArrowLeft } from 'lucide-react-native';
-import MapView, { Marker, Callout, Region } from 'react-native-maps';
+import MapView, { Marker, Region } from 'react-native-maps';
 import { ExposureSegmentResult, ExposureStayCluster } from '../types/exposure';
 import { EXPOSURE_MAP_CONFIG } from '../config/exposureMapConfig';
 import { EXPOSURE_IO_CONFIG } from '../config/exposureIoConfig';
 import { clusterStayPoints } from '../utils/geoClustering';
+import { useBookmarkList } from '../hooks/useBookmarkList';
+import ExposureStaySheet from './ExposureStaySheet';
+import AddBookmarkModal from './AddBookmarkModal';
 
 type Props = {
   segments: ExposureSegmentResult[];
 };
-
-const formatDuration = (ms: number): string => {
-  const totalMinutes = Math.round(ms / 60000);
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  if (hours === 0) return `${minutes}m`;
-  return `${hours}h ${minutes}m`;
-};
-
-const formatDateTime = (ms: number): string =>
-  new Date(ms).toLocaleString([], {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
 
 // Maps dwell duration to a dot diameter via sqrt (not linear/log): the dot is
 // a circle, so scaling its radius by sqrt(duration) makes the rendered AREA
@@ -54,6 +41,12 @@ const ExposureTrajectoryMap: React.FC<Props> = ({ segments }) => {
   // full-screen (Modal) depending on this flag — avoids a second parallel
   // implementation of the marker JSX for the expand button feature.
   const [fullscreen, setFullscreen] = useState(false);
+  // Tapped dot → details sheet → (optionally) the Add place flow, seeded at
+  // that dot. Two separate states so the sheet is closed before the Add
+  // place modals open — stacking a third modal on top is unreliable on iOS.
+  const [selectedCluster, setSelectedCluster] = useState<ExposureStayCluster | null>(null);
+  const [bookmarkCluster, setBookmarkCluster] = useState<ExposureStayCluster | null>(null);
+  const { bookmarks, addBookmark } = useBookmarkList();
 
   const clusters = useMemo<ExposureStayCluster[]>(
     () => clusterStayPoints(segments, EXPOSURE_MAP_CONFIG.stayRadiusMeters),
@@ -144,13 +137,13 @@ const ExposureTrajectoryMap: React.FC<Props> = ({ segments }) => {
           const size = clusterDotSize(cluster.totalDurationMs);
           const ioColor = EXPOSURE_IO_CONFIG[cluster.io].color;
           const dotColor = cluster.inHk ? ioColor : EXPOSURE_MAP_CONFIG.outsideHkColor;
-          const ioTextColor = cluster.inHk ? ioColor : EXPOSURE_MAP_CONFIG.outsideHkTextColor;
           return (
             <Marker
               key={`dot-${cluster.startTime}-${i}`}
               coordinate={{ latitude: cluster.lat, longitude: cluster.lon }}
               anchor={{ x: 0.5, y: 0.5 }}
               tracksViewChanges={!snapshotsReady}
+              onPress={() => setSelectedCluster(cluster)}
             >
               <View
                 style={[
@@ -167,28 +160,6 @@ const ExposureTrajectoryMap: React.FC<Props> = ({ segments }) => {
                   },
                 ]}
               />
-              <Callout>
-                <View style={styles.calloutBox}>
-                  <Text style={styles.calloutTime}>
-                    {formatDateTime(cluster.startTime)} – {formatDateTime(cluster.endTime)}{' '}
-                    ({formatDuration(cluster.totalDurationMs)})
-                  </Text>
-                  <Text style={styles.calloutLocation}>
-                    {cluster.lat.toFixed(5)}, {cluster.lon.toFixed(5)}
-                  </Text>
-                  <Text style={[styles.calloutIo, { color: ioTextColor }]}>{cluster.io}</Text>
-                  <Text style={styles.calloutExposure}>
-                    {cluster.inHk
-                      ? `Total exposure: ${cluster.totalExposure.toFixed(3)} %AR·h`
-                      : 'Outside Hong Kong — exposure not calculated'}
-                  </Text>
-                  {cluster.mergedSegmentCount > 1 && (
-                    <Text style={styles.calloutMerged}>
-                      Visits merged: {cluster.mergedSegmentCount}
-                    </Text>
-                  )}
-                </View>
-              </Callout>
             </Marker>
           );
         })}
@@ -207,6 +178,29 @@ const ExposureTrajectoryMap: React.FC<Props> = ({ segments }) => {
           <Maximize2 size={18} color="#333" />
         )}
       </TouchableOpacity>
+
+      {/* Rendered inside mapView so they stack above the fullscreen Modal
+          too, not just the inline card. */}
+      <ExposureStaySheet
+        cluster={selectedCluster}
+        onClose={() => setSelectedCluster(null)}
+        onBookmark={cluster => {
+          setSelectedCluster(null);
+          setBookmarkCluster(cluster);
+        }}
+      />
+      <AddBookmarkModal
+        visible={bookmarkCluster !== null}
+        onClose={() => setBookmarkCluster(null)}
+        existingPlaces={bookmarks}
+        currentLocation={null}
+        initialCenter={
+          bookmarkCluster
+            ? { latitude: bookmarkCluster.lat, longitude: bookmarkCluster.lon }
+            : undefined
+        }
+        onAdd={addBookmark}
+      />
     </View>
   );
 
@@ -259,12 +253,6 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: 'rgba(255,255,255,0.9)',
   },
-  calloutBox: { minWidth: 160, padding: 4 },
-  calloutTime: { fontSize: 12, fontWeight: '700', color: '#1C1C1E' },
-  calloutLocation: { fontSize: 11, color: '#8E8E93', marginTop: 2 },
-  calloutIo: { fontSize: 11, fontWeight: '700', marginTop: 4 },
-  calloutExposure: { fontSize: 12, fontWeight: '600', color: '#1C1C1E', marginTop: 4 },
-  calloutMerged: { fontSize: 11, color: '#8E8E93', marginTop: 2 },
 });
 
 export default ExposureTrajectoryMap;

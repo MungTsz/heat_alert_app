@@ -14,6 +14,9 @@ type Props = {
   onClose: () => void;
   existingPlaces: readonly BookmarkEntry[];
   currentLocation: Coordinates | null;
+  // Where the map step opens instead of the current location — e.g. a stay
+  // dot tapped on the exposure map, so the pin starts on that spot.
+  initialCenter?: Coordinates;
   onAdd: (place: Omit<BookmarkEntry, 'id' | 'updatedAt'>) => void;
 };
 
@@ -22,7 +25,14 @@ type Step = 'category' | 'location';
 // Two focused steps, most important first: (1) what kind of place — the
 // data the exposure API uses, (2) where it is and how big, on a map. The
 // name is generated from the location, so nothing has to be typed.
-const AddBookmarkModal = ({ visible, onClose, existingPlaces, currentLocation, onAdd }: Props) => {
+const AddBookmarkModal = ({
+  visible,
+  onClose,
+  existingPlaces,
+  currentLocation,
+  initialCenter,
+  onAdd,
+}: Props) => {
   const insets = useSafeAreaInsets();
   const [step, setStep] = useState<Step>('category');
   const [category, setCategory] = useState<PlaceCategory | null>(null);
@@ -77,7 +87,7 @@ const AddBookmarkModal = ({ visible, onClose, existingPlaces, currentLocation, o
       {visible && step === 'location' && category && (
         <MapPickerModal
           visible
-          initialCenter={currentLocation ?? PLACE_LABEL_CONFIG.fallbackCenter}
+          initialCenter={initialCenter ?? currentLocation ?? PLACE_LABEL_CONFIG.fallbackCenter}
           category={category}
           otherPlaces={existingPlaces}
           onBack={() => setStep('category')}
