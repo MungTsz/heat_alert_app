@@ -1,5 +1,4 @@
 // src/config/placeLabelConfig.ts
-import Config from 'react-native-config';
 import { isExposureApiConfigured } from './exposureApiConfig';
 import { PlaceCategory } from '../types/bookmark';
 import { PlaceNameLevel } from '../types/placeLookup';
@@ -47,11 +46,9 @@ export const PLACE_LABEL_CONFIG = {
   // Overlap math tolerates this much — haversine rounding shouldn't turn a
   // "shrink to 15 m" suggestion into 10 m over a few centimetres.
   overlapToleranceM: 0.5,
-  // The place-labels endpoint doesn't exist on the backend yet, so syncing
-  // stays off until explicitly enabled — otherwise every bookmark change
-  // would log a 404.
-  syncEnabled: Config.PLACE_LABEL_SYNC_ENABLED === 'true',
 };
 
-export const isPlaceLabelApiConfigured = (): boolean =>
-  isExposureApiConfigured() && PLACE_LABEL_CONFIG.syncEnabled;
+// /place-labels is served by the same exposure ETL backend as /ingest, so
+// labels sync whenever that backend is configured — no separate switch that
+// could silently be left off.
+export const isPlaceLabelApiConfigured = (): boolean => isExposureApiConfigured();

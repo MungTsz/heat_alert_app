@@ -98,9 +98,9 @@ const reconcile = async (): Promise<void> => {
 let queue: Promise<void> = Promise.resolve();
 
 export const syncPlaceLabels = (): Promise<void> => {
-  // While the backend endpoint doesn't exist there's nothing to sync to —
-  // and recording mock "successes" would stop those labels from ever being
-  // uploaded once the real API is switched on.
+  // With no exposure backend configured there's nothing to sync to — and
+  // recording mock "successes" would stop those labels from ever being
+  // uploaded once a backend URL is set.
   if (isPlaceLabelDataMocked) return Promise.resolve();
   const run = queue.then(reconcile);
   queue = run.catch(() => {});
