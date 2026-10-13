@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { BookmarkEntry, PlaceCategory } from '../types/bookmark';
 import { readBookmarks, writeBookmarks } from '../services/bookmarkStorage';
 import { syncPlaceLabels } from '../services/placeLabelSyncService';
-import { moveBookmark as moveInList } from '../utils/bookmarkOrder';
+import { moveBookmarkTo } from '../utils/bookmarkOrder';
 
 // Fire-and-forget: sync failures must never block the UI, and the next
 // load/add/remove re-runs the full diff anyway.
@@ -63,8 +63,8 @@ export const useBookmarkList = () => {
 
   // Order and visibility are local display preferences — like a rename,
   // neither is uploaded, so neither bumps updatedAt or triggers a sync.
-  const moveBookmark = async (id: string, direction: -1 | 1) => {
-    await persist(moveInList(bookmarks, id, direction));
+  const moveBookmark = async (id: string, toIndex: number) => {
+    await persist(moveBookmarkTo(bookmarks, id, toIndex));
   };
 
   const setBookmarkHidden = async (id: string, hidden: boolean) => {

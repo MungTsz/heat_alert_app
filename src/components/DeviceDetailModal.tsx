@@ -24,6 +24,9 @@ import ExposureDateScopedView from './ExposureDateScopedView';
 import ExposureDatePickerModal from './ExposureDatePickerModal';
 import ImportTrackModal from './ImportTrackModal';
 
+// Same red as the Community tab's + button — the app's destructive accent.
+const DELETE_DAY_COLOR = '#D9534F';
+
 type Props = {
   visible: boolean;
   device: ExposureDevice | null;
@@ -43,7 +46,9 @@ const DeviceDetailModal: React.FC<Props> = ({ visible, device, onClose, onDelete
   // `visible` toggles) — fall back to a placeholder id rather than
   // useExposureHistory's own default, which would otherwise read the live
   // device's own history for no reason.
-  const { history, loading, refresh } = useExposureHistory(device?.id ?? '__no_device_selected__');
+  const { history, loading, refresh, deleteDay } = useExposureHistory(
+    device?.id ?? '__no_device_selected__',
+  );
   const { status: jobStatus } = useImportJobStatus(device?.id ?? '__no_device_selected__', refresh);
   const { refreshing, onRefresh } = usePullToRefresh(refresh);
   const todayKey = toHkDateKey();
@@ -56,6 +61,7 @@ const DeviceDetailModal: React.FC<Props> = ({ visible, device, onClose, onDelete
   const trackedDates = useMemo(() => history.map(entry => entry.date), [history]);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [deletingDay, setDeletingDay] = useState(false);
 
   if (!device) return null;
 
@@ -67,13 +73,49 @@ const DeviceDetailModal: React.FC<Props> = ({ visible, device, onClose, onDelete
     ? 'Still processing your import — this can take a few minutes.'
     : undefined;
 
+  // Only a single selected day that actually has data can be deleted — a
+  // whole-week selection is too coarse a target for an undo-less action.
+  const deletableDay =
+    selectedDate && history.some(entry => entry.date === selectedDate) ? selectedDate : null;
+
+  // Places saved to Community from this device's stays live in their own
+  // store (bookmarkStorage.ts) and are never touched here — said explicitly
+  // because the user may have built them from this very device's map.
   const handleDelete = () => {
     Alert.alert(
       'Delete Device',
-      `Delete "${device.name}" and all of its imported history? This can't be undone.`,
+      `Delete "${device.name}" and all of its imported history? This can't be undone.\n\nPlaces you saved to Community are kept.`,
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Delete', style: 'destructive', onPress: () => onDelete(device.id) },
+      ],
+    );
+  };
+
+  const runDeleteDay = async (dateKey: string, reimport: boolean) => {
+    setDeletingDay(true);
+    try {
+      await deleteDay(dateKey);
+      if (reimport) setImportOpen(true);
+    } catch (error) {
+      Alert.alert(
+        "Couldn't delete this day",
+        error instanceof Error ? error.message : 'Please try again.',
+      );
+    } finally {
+      setDeletingDay(false);
+    }
+  };
+
+  const handleDeleteDay = (dateKey: string) => {
+    const label = formatHkDateLabel(dateKey, todayKey);
+    Alert.alert(
+      `Delete ${label}?`,
+      `Removes ${label}'s exposure data from "${device.name}". Other days and your saved places are kept. You can import a file for this day again afterwards.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: () => runDeleteDay(dateKey, false) },
+        { text: 'Delete & re-import', onPress: () => runDeleteDay(dateKey, true) },
       ],
     );
   };
@@ -146,6 +188,25 @@ const DeviceDetailModal: React.FC<Props> = ({ visible, device, onClose, onDelete
             variant="compact"
             importingHint={importingHint}
           />
+
+          {deletableDay && (
+            <TouchableOpacity
+              style={[styles.deleteDayButton, (deletingDay || !!jobStatus) && styles.deleteDayDisabled]}
+              onPress={() => handleDeleteDay(deletableDay)}
+              // A day can't be deleted mid-import: the backend would refuse
+              // (409) since the import's rows would land after the delete.
+              disabled={deletingDay || !!jobStatus}
+            >
+              {deletingDay ? (
+                <ActivityIndicator size="small" color={DELETE_DAY_COLOR} />
+              ) : (
+                <Trash2 size={16} color={DELETE_DAY_COLOR} />
+              )}
+              <Text style={styles.deleteDayText}>
+                Delete {formatHkDateLabel(deletableDay, todayKey)}'s data
+              </Text>
+            </TouchableOpacity>
+          )}
         </ScrollView>
       </View>
 
@@ -205,6 +266,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   datePillText: { fontSize: 13, fontWeight: '700', color: '#8B5CF6' },
+  deleteDayButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: DELETE_DAY_COLOR,
+    backgroundColor: '#FFFFFF',
+  },
+  deleteDayDisabled: { opacity: 0.5 },
+  deleteDayText: { fontSize: 14, fontWeight: '600', color: DELETE_DAY_COLOR },
 });
 
 export default DeviceDetailModal;

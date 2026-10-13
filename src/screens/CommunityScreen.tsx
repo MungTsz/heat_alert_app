@@ -5,6 +5,7 @@ import {
   Text,
   StyleSheet,
   FlatList,
+  ScrollView,
   TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -17,6 +18,7 @@ import { idwInterpolate } from '../utils/idw';
 import { distanceMiles } from '../utils/distance';
 import BookmarkCard from '../components/BookmarkCard';
 import PlaceEditRow from '../components/PlaceEditRow';
+import DraggableList from '../components/DraggableList';
 import AddBookmarkModal from '../components/AddBookmarkModal';
 import BookmarkMapModal from '../components/BookmarkMapModal';
 import RenamePlaceModal from '../components/RenamePlaceModal';
@@ -45,6 +47,7 @@ const CommunityScreen = () => {
   const [retypingBookmark, setRetypingBookmark] = useState<BookmarkEntry | null>(null);
   const [editing, setEditing] = useState(false);
   const [hiddenExpanded, setHiddenExpanded] = useState(false);
+  const [dragging, setDragging] = useState(false);
 
   const center = coords ?? { latitude: FALLBACK_LAT, longitude: FALLBACK_LNG };
   const { points: heatPoints } = useHeatData(center);
@@ -97,6 +100,13 @@ const CommunityScreen = () => {
     [bookmarks, renamingBookmark],
   );
 
+  const allHiddenNotice =
+    visibleRows.length === 0 ? (
+      <Text style={styles.allHiddenText}>
+        All your places are hidden — they still count towards your exposure.
+      </Text>
+    ) : null;
+
   // Hidden places are usually ones saved only to label exposure stays —
   // collapsed by default so they don't pull focus from the watch list, but
   // always reachable to unhide or open.
@@ -134,7 +144,15 @@ const CommunityScreen = () => {
         <Text style={styles.title}>Community</Text>
         <View style={styles.headerActions}>
           {bookmarks.length > 0 && (
-            <TouchableOpacity onPress={() => setEditing(e => !e)} hitSlop={10}>
+            <TouchableOpacity
+              onPress={() => {
+                setEditing(e => !e);
+                // Leaving Edit mid-drag unmounts the list before it can
+                // report the drop — don't leave the next ScrollView frozen.
+                setDragging(false);
+              }}
+              hitSlop={10}
+            >
               <Text style={styles.editText}>{editing ? 'Done' : 'Edit'}</Text>
             </TouchableOpacity>
           )}
@@ -154,46 +172,51 @@ const CommunityScreen = () => {
             more accurately.
           </Text>
         </View>
-      ) : (
-        <FlatList
-          data={visibleRows}
-          keyExtractor={item => item.id}
-          contentContainerStyle={styles.listContent}
-          ListHeaderComponent={
-            visibleRows.length === 0 ? (
-              <Text style={styles.allHiddenText}>
-                All your places are hidden — they still count towards your exposure.
-              </Text>
-            ) : null
-          }
-          ListFooterComponent={renderHiddenSection()}
-          renderItem={({ item, index }) =>
-            editing ? (
+      ) : editing ? (
+        // A plain ScrollView rather than the FlatList below: drag-reordering
+        // needs every row mounted at a fixed slot, and the list is short.
+        // Scrolling stops while a row is lifted so the drag keeps the touch.
+        <ScrollView contentContainerStyle={styles.listContent} scrollEnabled={!dragging}>
+          {allHiddenNotice}
+          <DraggableList
+            items={visibleRows}
+            keyExtractor={item => item.id}
+            onReorder={moveBookmark}
+            onDragActiveChange={setDragging}
+            renderItem={(item, dragHandle, lifted) => (
               <PlaceEditRow
                 label={item.label}
                 category={item.category}
                 hidden={false}
                 onToggleHidden={() => setBookmarkHidden(item.id, true)}
-                onMoveUp={() => moveBookmark(item.id, -1)}
-                onMoveDown={() => moveBookmark(item.id, 1)}
-                canMoveUp={index > 0}
-                canMoveDown={index < visibleRows.length - 1}
+                dragHandle={dragHandle}
+                lifted={lifted}
               />
-            ) : (
-              <BookmarkCard
-                label={item.label}
-                category={item.category}
-                radiusMeters={item.radiusMeters}
-                temperature={item.temperature}
-                aqhi={item.aqhi}
-                distance={item.distance}
-                onPress={() => setSelectedBookmark(item)}
-                onChangeType={() => setRetypingBookmark(item)}
-                onRename={() => setRenamingBookmark(item)}
-                onRemove={() => removeBookmark(item.id)}
-              />
-            )
-          }
+            )}
+          />
+          {renderHiddenSection()}
+        </ScrollView>
+      ) : (
+        <FlatList
+          data={visibleRows}
+          keyExtractor={item => item.id}
+          contentContainerStyle={styles.listContent}
+          ListHeaderComponent={allHiddenNotice}
+          ListFooterComponent={renderHiddenSection()}
+          renderItem={({ item }) => (
+            <BookmarkCard
+              label={item.label}
+              category={item.category}
+              radiusMeters={item.radiusMeters}
+              temperature={item.temperature}
+              aqhi={item.aqhi}
+              distance={item.distance}
+              onPress={() => setSelectedBookmark(item)}
+              onChangeType={() => setRetypingBookmark(item)}
+              onRename={() => setRenamingBookmark(item)}
+              onRemove={() => removeBookmark(item.id)}
+            />
+          )}
         />
       )}
 

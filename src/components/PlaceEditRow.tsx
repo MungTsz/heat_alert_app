@@ -1,42 +1,42 @@
 // src/components/PlaceEditRow.tsx
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { ArrowDown, ArrowUp, Eye, EyeOff } from 'lucide-react-native';
+import { Eye, EyeOff, GripVertical } from 'lucide-react-native';
 import { PlaceCategory } from '../types/bookmark';
 import { PLACE_CATEGORY_CONFIG } from '../config/placeCategoryConfig';
 import { EXPOSURE_IO_CONFIG } from '../config/exposureIoConfig';
+import { DRAG_REORDER_CONFIG } from '../config/dragReorderConfig';
+import { DragHandleProps } from './DraggableList';
 
 const ACTION_HIT_SLOP = { top: 8, bottom: 8, left: 8, right: 8 };
 const ACTIVE_COLOR = '#333';
-const DISABLED_COLOR = '#C7C7CC';
+const GRIP_COLOR = '#8E8E93';
 
 type Props = {
   label: string;
   category: PlaceCategory;
   hidden: boolean;
   onToggleHidden: () => void;
-  // Omitted in the Hidden places section — order is only edited for the
-  // places shown in the watch list.
-  onMoveUp?: () => void;
-  onMoveDown?: () => void;
-  canMoveUp?: boolean;
-  canMoveDown?: boolean;
+  // From DraggableList — omitted in the Hidden places section, since order
+  // is only edited for the places shown in the watch list.
+  dragHandle?: DragHandleProps;
+  // Picked up and being dragged.
+  lifted?: boolean;
   onPress?: () => void;
 };
 
 // A compact one-line place row for the Community tab's Edit mode and its
 // Hidden places section. No heat/AQHI badges or rename/type/delete actions:
 // while reordering, a short row fits more places on screen and the
-// destructive actions are out of reach of a mis-tap.
+// destructive actions are out of reach of a mis-tap. Single-line on
+// purpose — DraggableList assumes every row has the same height.
 const PlaceEditRow: React.FC<Props> = ({
   label,
   category,
   hidden,
   onToggleHidden,
-  onMoveUp,
-  onMoveDown,
-  canMoveUp = false,
-  canMoveDown = false,
+  dragHandle,
+  lifted = false,
   onPress,
 }) => {
   const { Icon } = PLACE_CATEGORY_CONFIG[category];
@@ -44,7 +44,7 @@ const PlaceEditRow: React.FC<Props> = ({
 
   return (
     <TouchableOpacity
-      style={styles.row}
+      style={[styles.row, lifted && styles.rowLifted]}
       onPress={onPress}
       disabled={!onPress}
       activeOpacity={0.7}
@@ -56,26 +56,6 @@ const PlaceEditRow: React.FC<Props> = ({
         </Text>
       </View>
 
-      {onMoveUp && (
-        <TouchableOpacity
-          onPress={onMoveUp}
-          disabled={!canMoveUp}
-          hitSlop={ACTION_HIT_SLOP}
-          accessibilityLabel="Move up"
-        >
-          <ArrowUp size={18} color={canMoveUp ? ACTIVE_COLOR : DISABLED_COLOR} />
-        </TouchableOpacity>
-      )}
-      {onMoveDown && (
-        <TouchableOpacity
-          onPress={onMoveDown}
-          disabled={!canMoveDown}
-          hitSlop={ACTION_HIT_SLOP}
-          accessibilityLabel="Move down"
-        >
-          <ArrowDown size={18} color={canMoveDown ? ACTIVE_COLOR : DISABLED_COLOR} />
-        </TouchableOpacity>
-      )}
       <TouchableOpacity
         onPress={onToggleHidden}
         hitSlop={ACTION_HIT_SLOP}
@@ -83,6 +63,12 @@ const PlaceEditRow: React.FC<Props> = ({
       >
         <VisibilityIcon size={18} color={ACTIVE_COLOR} />
       </TouchableOpacity>
+      {/* Trailing edge, like the iOS reorder control: hold it, then drag. */}
+      {dragHandle && (
+        <View {...dragHandle} hitSlop={ACTION_HIT_SLOP}>
+          <GripVertical size={20} color={lifted ? ACTIVE_COLOR : GRIP_COLOR} />
+        </View>
+      )}
     </TouchableOpacity>
   );
 };
@@ -99,6 +85,13 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 14,
     marginBottom: 8,
+  },
+  rowLifted: {
+    elevation: DRAG_REORDER_CONFIG.liftElevation,
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
   },
   // Same icon/label spacing as BookmarkCard's title row.
   labelRow: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 },

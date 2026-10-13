@@ -1,4 +1,5 @@
 import {
+  deleteExposureDay,
   fetchHourlyExposure,
   ingestExposureGpx,
   ingestExposurePings,
@@ -20,4 +21,5 @@ export const apiExposureProvider: ExposureDataProvider = {
   ingest: async (pid, features) => waitForResult(await ingestExposurePings(pid, features)),
   ingestGpx: async (pid, gpxText) => waitForResult(await ingestExposureGpx(pid, gpxText)),
   getHourlyReport: async pid => buildExposureReport(await fetchHourlyExposure(pid)),
+  deleteDay: deleteExposureDay,
 };

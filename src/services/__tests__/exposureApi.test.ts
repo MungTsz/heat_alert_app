@@ -10,6 +10,7 @@ jest.mock('../../config/exposureApiConfig', () => ({
 }));
 
 import {
+  deleteExposureDay,
   deletePlaceLabel,
   ExposureApiError,
   ingestExposureGpx,
@@ -128,5 +129,35 @@ describe('place labels', () => {
       'http://etl.test/place-labels/bookmark-1?contributor_id=c-abc',
     );
     expect(fetchMock.mock.calls[0][1].method).toBe('DELETE');
+  });
+});
+
+describe('deleteExposureDay', () => {
+  const fetchMock = jest.fn();
+
+  beforeEach(() => {
+    fetchMock.mockReset();
+    globalThis.fetch = fetchMock;
+  });
+
+  it('DELETEs one HK day of the encoded pid', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse(200, { pid: 'my device', date: '2026-08-30', rows_deleted: 12 }),
+    );
+    await expect(deleteExposureDay('my device', '2026-08-30')).resolves.toBeUndefined();
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('http://etl.test/exposure/hourly/my%20device?date=2026-08-30');
+    expect(init.method).toBe('DELETE');
+  });
+
+  it('maps a 409 (import still processing) to a wait-and-retry message', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse(409, { detail: 'an upload for this day is still being processed' }),
+    );
+    const error = await deleteExposureDay('p', '2026-08-30').catch(e => e);
+    expect(error).toBeInstanceOf(ExposureApiError);
+    expect(error.status).toBe(409);
+    expect(error.message).toMatch(/still processing/);
   });
 });

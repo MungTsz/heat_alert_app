@@ -69,12 +69,30 @@ const buildMockRows = (): ExposureHourlyApiRow[] => {
   return rows;
 };
 
-export const mockExposureProvider: ExposureDataProvider = {
+// pid → YYYYMMDD day keys deleted this session, so delete-day → re-import
+// can be walked through without a backend. Any mock import of a pid brings
+// its days back, since the mock can't tell which day a file covers.
+const deletedDays = new Map<string, Set<string>>();
+
+const mockIngest = (pid: string) => {
+  deletedDays.delete(pid);
   // No real ETL runs, so there's no honest processed count to report.
-  ingest: () => Promise.resolve({ processedRows: null }),
-  ingestGpx: () => Promise.resolve({ processedRows: null }),
-  getHourlyReport: () =>
+  return Promise.resolve({ processedRows: null });
+};
+
+export const mockExposureProvider: ExposureDataProvider = {
+  ingest: pid => mockIngest(pid),
+  ingestGpx: pid => mockIngest(pid),
+  getHourlyReport: pid =>
     new Promise(resolve => {
-      setTimeout(() => resolve(buildExposureReport(buildMockRows())), MOCK_DELAY_MS);
+      const deleted = deletedDays.get(pid);
+      const rows = buildMockRows().filter(row => !deleted?.has(row.start_time_hk.slice(0, 8)));
+      setTimeout(() => resolve(buildExposureReport(rows)), MOCK_DELAY_MS);
     }),
+  deleteDay: (pid, dateKey) => {
+    const days = deletedDays.get(pid) ?? new Set<string>();
+    days.add(dateKey.replace(/-/g, ''));
+    deletedDays.set(pid, days);
+    return Promise.resolve();
+  },
 };

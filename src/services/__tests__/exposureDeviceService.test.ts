@@ -41,4 +41,20 @@ describe('exposureDeviceService', () => {
     expect(await getDevices()).toEqual([]);
     expect(mockStore.has(`exposure_daily_history:${device.id}`)).toBe(false);
   });
+
+  // Places can be saved to Community straight from a device's exposure
+  // map, but they belong to the user, not the device — deleting the device
+  // must leave them (and their place-label sync state) alone.
+  it('keeps the Community bookmarks when a device is deleted', async () => {
+    const device = await createDevice('Test device');
+    const bookmarks = '[{"id":"bookmark-1","label":"Office"}]';
+    const syncState = '{"bookmark-1":1}';
+    mockStore.set('monitored_bookmarks', bookmarks);
+    mockStore.set('place_label_sync_state', syncState);
+
+    await deleteDevice(device.id);
+
+    expect(mockStore.get('monitored_bookmarks')).toBe(bookmarks);
+    expect(mockStore.get('place_label_sync_state')).toBe(syncState);
+  });
 });

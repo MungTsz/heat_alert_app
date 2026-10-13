@@ -1,4 +1,4 @@
-import { moveBookmark } from '../bookmarkOrder';
+import { moveBookmarkTo } from '../bookmarkOrder';
 import { BookmarkEntry } from '../../types/bookmark';
 
 const place = (id: string, hidden?: boolean): BookmarkEntry => ({
@@ -15,39 +15,45 @@ const place = (id: string, hidden?: boolean): BookmarkEntry => ({
 
 const ids = (list: BookmarkEntry[]) => list.map(b => b.id);
 
-describe('moveBookmark', () => {
-  it('swaps a place with its neighbour', () => {
-    const list = [place('a'), place('b'), place('c')];
-    expect(ids(moveBookmark(list, 'b', -1))).toEqual(['b', 'a', 'c']);
-    expect(ids(moveBookmark(list, 'b', 1))).toEqual(['a', 'c', 'b']);
+describe('moveBookmarkTo', () => {
+  it('moves a place to any position, shifting the ones in between', () => {
+    const list = [place('a'), place('b'), place('c'), place('d')];
+    expect(ids(moveBookmarkTo(list, 'a', 3))).toEqual(['b', 'c', 'd', 'a']);
+    expect(ids(moveBookmarkTo(list, 'd', 0))).toEqual(['d', 'a', 'b', 'c']);
+    expect(ids(moveBookmarkTo(list, 'b', 2))).toEqual(['a', 'c', 'b', 'd']);
   });
 
-  it('skips over places in the other section', () => {
-    const list = [place('a'), place('x', true), place('b')];
-    expect(ids(moveBookmark(list, 'b', -1))).toEqual(['b', 'x', 'a']);
+  it('counts toIndex within the place’s own section', () => {
+    // Shown section is [a, b, c]; index 2 is its last slot.
+    const list = [place('a'), place('x', true), place('b'), place('c')];
+    expect(ids(moveBookmarkTo(list, 'a', 2))).toEqual(['b', 'x', 'c', 'a']);
   });
 
-  it('keeps hidden places in their slots when shown places move', () => {
-    const list = [place('a'), place('x', true), place('b'), place('y', true)];
-    const moved = moveBookmark(list, 'a', 1);
-    expect(ids(moved)).toEqual(['b', 'x', 'a', 'y']);
+  it('keeps hidden places in their absolute slots when shown places move', () => {
+    const list = [place('a'), place('x', true), place('b'), place('y', true), place('c')];
+    expect(ids(moveBookmarkTo(list, 'c', 0))).toEqual(['c', 'x', 'a', 'y', 'b']);
   });
 
   it('moves hidden places only among hidden places', () => {
     const list = [place('x', true), place('a'), place('y', true)];
-    expect(ids(moveBookmark(list, 'y', -1))).toEqual(['y', 'a', 'x']);
+    expect(ids(moveBookmarkTo(list, 'y', 0))).toEqual(['y', 'a', 'x']);
   });
 
-  it('is a no-op at either end of a section, or for an unknown id', () => {
+  it('clamps toIndex to the section', () => {
     const list = [place('a'), place('b'), place('x', true)];
-    expect(ids(moveBookmark(list, 'a', -1))).toEqual(['a', 'b', 'x']);
-    expect(ids(moveBookmark(list, 'b', 1))).toEqual(['a', 'b', 'x']);
-    expect(ids(moveBookmark(list, 'missing', 1))).toEqual(['a', 'b', 'x']);
+    expect(ids(moveBookmarkTo(list, 'a', 99))).toEqual(['b', 'a', 'x']);
+    expect(ids(moveBookmarkTo(list, 'b', -5))).toEqual(['b', 'a', 'x']);
+  });
+
+  it('is a no-op for the same position or an unknown id', () => {
+    const list = [place('a'), place('b')];
+    expect(ids(moveBookmarkTo(list, 'a', 0))).toEqual(['a', 'b']);
+    expect(ids(moveBookmarkTo(list, 'missing', 1))).toEqual(['a', 'b']);
   });
 
   it('does not mutate the input list', () => {
     const list = [place('a'), place('b')];
-    moveBookmark(list, 'a', 1);
+    moveBookmarkTo(list, 'a', 1);
     expect(ids(list)).toEqual(['a', 'b']);
   });
 });

@@ -69,6 +69,18 @@ export const refreshHistoryCache = async (
   return toSortedEntries(map);
 };
 
+// Deletes one day on the backend, then re-fetches so the cache (and the
+// returned history) drops the day too. Throws if the backend delete fails —
+// unlike a refresh, there's no stale-cache fallback that would be honest
+// here, so the caller must tell the user the day is still there.
+export const deleteHistoryDay = async (
+  deviceId: string,
+  dateKey: string,
+): Promise<DailyExposureEntry[]> => {
+  await exposureDataProvider.deleteDay(deviceId, dateKey);
+  return refreshHistoryCache(deviceId);
+};
+
 // Cache-only read — no network call, so it renders instantly and still
 // works if the backend is unreachable.
 export const getCachedDailyExposureHistory = async (

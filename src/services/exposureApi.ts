@@ -195,6 +195,31 @@ export const fetchHourlyExposure = async (
   return response.json();
 };
 
+const DAY_BUSY_MESSAGE =
+  "This day's import is still processing — try again once it's finished.";
+
+// Deletes one HK-local day (YYYY-MM-DD) of the pid's rows. The backend also
+// cuts that day out of the uploads it keeps for place-label re-runs, so the
+// day doesn't come back later on its own; re-importing a file for the day
+// is how it comes back. A day with no data is a 200 too (0 rows), so a
+// retried delete is harmless.
+export const deleteExposureDay = async (pid: string, dateKey: string): Promise<void> => {
+  const response = await fetchWithTimeout(
+    `${EXPOSURE_API_CONFIG.baseUrl}/exposure/hourly/${encodeURIComponent(pid)}?date=${encodeURIComponent(dateKey)}`,
+    { method: 'DELETE' },
+  );
+  if (response.status === 409) {
+    throw new ExposureApiError(DAY_BUSY_MESSAGE, 409);
+  }
+  if (!response.ok) {
+    const detail = await readErrorDetail(response);
+    throw new ExposureApiError(
+      `Deleting the day failed (${response.status})${detail ? `: ${detail}` : ''}`,
+      response.status,
+    );
+  }
+};
+
 const placeLabelUrl = (labelId: string): string =>
   `${EXPOSURE_API_CONFIG.baseUrl}/place-labels/${encodeURIComponent(labelId)}`;
 

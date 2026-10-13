@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { DailyExposureEntry } from '../types/exposure';
 import {
+  deleteHistoryDay,
   getCachedDailyExposureHistory,
   refreshHistoryCache,
 } from '../services/exposureHistoryService';
@@ -30,5 +31,14 @@ export const useExposureHistory = (deviceId: string = DEFAULT_PID) => {
     refresh();
   }, [refresh]);
 
-  return { history, loading, refresh };
+  // Rethrows on failure (unlike refresh) so the caller can tell the user
+  // the day wasn't deleted.
+  const deleteDay = useCallback(
+    async (dateKey: string) => {
+      setHistory(await deleteHistoryDay(deviceId, dateKey));
+    },
+    [deviceId],
+  );
+
+  return { history, loading, refresh, deleteDay };
 };

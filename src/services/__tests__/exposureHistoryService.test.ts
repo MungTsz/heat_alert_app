@@ -12,10 +12,11 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
 }));
 
 jest.mock('../../data/exposure', () => ({
-  exposureDataProvider: { getHourlyReport: jest.fn() },
+  exposureDataProvider: { getHourlyReport: jest.fn(), deleteDay: jest.fn() },
 }));
 
 import {
+  deleteHistoryDay,
   refreshHistoryCache,
   getCachedDailyExposureHistory,
 } from '../exposureHistoryService';
@@ -23,6 +24,7 @@ import { exposureDataProvider } from '../../data/exposure';
 import { ExposureReport, ExposureSegmentResult } from '../../types/exposure';
 
 const mockedGetHourlyReport = exposureDataProvider.getHourlyReport as jest.Mock;
+const mockedDeleteDay = exposureDataProvider.deleteDay as jest.Mock;
 
 const segment = (startTime: number, exposure: number): ExposureSegmentResult => ({
   startTime,
@@ -46,6 +48,7 @@ describe('exposureHistoryService', () => {
   beforeEach(() => {
     mockStore.clear();
     mockedGetHourlyReport.mockReset();
+    mockedDeleteDay.mockReset();
   });
 
   it('fetches, day-slices, and caches the backend report', async () => {
@@ -88,6 +91,32 @@ describe('exposureHistoryService', () => {
 
     expect((await getCachedDailyExposureHistory('local-device'))[0].report.totalExposure).toBe(5);
     expect((await getCachedDailyExposureHistory('device-abc'))[0].report.totalExposure).toBe(3);
+  });
+
+  it('deleteHistoryDay deletes on the backend, then re-caches without that day', async () => {
+    mockedGetHourlyReport.mockResolvedValueOnce(
+      reportFrom([segment(Date.UTC(2026, 8, 7, 2, 0), 5), segment(Date.UTC(2026, 8, 8, 2, 0), 3)]),
+    );
+    await refreshHistoryCache('device-abc');
+    mockedDeleteDay.mockResolvedValue(undefined);
+    mockedGetHourlyReport.mockResolvedValueOnce(reportFrom([segment(Date.UTC(2026, 8, 8, 2, 0), 3)]));
+
+    const history = await deleteHistoryDay('device-abc', '2026-09-07');
+
+    expect(mockedDeleteDay).toHaveBeenCalledWith('device-abc', '2026-09-07');
+    expect(history.map(entry => entry.date)).toEqual(['2026-09-08']);
+    expect((await getCachedDailyExposureHistory('device-abc')).map(entry => entry.date)).toEqual([
+      '2026-09-08',
+    ]);
+  });
+
+  it('deleteHistoryDay leaves the cache alone when the backend delete fails', async () => {
+    mockedGetHourlyReport.mockResolvedValueOnce(reportFrom([segment(Date.UTC(2026, 8, 7, 2, 0), 5)]));
+    await refreshHistoryCache('device-abc');
+    mockedDeleteDay.mockRejectedValue(new Error('offline'));
+
+    await expect(deleteHistoryDay('device-abc', '2026-09-07')).rejects.toThrow('offline');
+    expect(await getCachedDailyExposureHistory('device-abc')).toHaveLength(1);
   });
 
   it('returns an empty cache before any refresh has happened', async () => {
