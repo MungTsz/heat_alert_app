@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
-import { Trash2, Pencil } from 'lucide-react-native';
+import { Trash2, Pencil, ChevronDown } from 'lucide-react-native';
 import { getHeatIndexInfo } from '../utils/heatIndexUtils';
 import { getAqhiInfo } from '../utils/aqhiUtils';
 import { PlaceCategory } from '../types/bookmark';
@@ -15,6 +15,7 @@ type Props = {
   aqhi: number;
   distance: number;
   onPress: () => void;
+  onChangeType: () => void;
   onRename: () => void;
   onRemove: () => void;
 };
@@ -29,12 +30,14 @@ const BookmarkCard = ({
   aqhi,
   distance,
   onPress,
+  onChangeType,
   onRename,
   onRemove,
 }: Props) => {
   const heatInfo = getHeatIndexInfo(temperature);
   const aqhiInfo = getAqhiInfo(aqhi);
-  const { Icon } = PLACE_CATEGORY_CONFIG[category];
+  const { Icon, label: categoryLabel } = PLACE_CATEGORY_CONFIG[category];
+  const categoryColor = EXPOSURE_IO_CONFIG[category].color;
 
   const handleRemovePress = () => {
     Alert.alert('Delete Bookmark', `Remove "${label}" from your bookmarks?`, [
@@ -47,7 +50,7 @@ const BookmarkCard = ({
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.7}>
       <View style={styles.topRow}>
         <View style={styles.labelRow}>
-          <Icon size={16} color={EXPOSURE_IO_CONFIG[category].color} />
+          <Icon size={16} color={categoryColor} />
           <Text style={styles.label} numberOfLines={1}>
             {label}
           </Text>
@@ -66,9 +69,22 @@ const BookmarkCard = ({
         </View>
       </View>
 
-      <Text style={styles.distance}>
-        {distance.toFixed(1)} miles away · {radiusMeters} m area
-      </Text>
+      <View style={styles.metaRow}>
+        {/* The type is spelled out (not just the icon) and tappable — it's the
+            data that feeds exposure, so it should be easy to check and fix. */}
+        <TouchableOpacity
+          style={[styles.typeChip, { borderColor: categoryColor }]}
+          onPress={onChangeType}
+          hitSlop={ACTION_HIT_SLOP}
+          accessibilityLabel={`Place type: ${categoryLabel}. Tap to change`}
+        >
+          <Text style={[styles.typeChipText, { color: categoryColor }]}>{categoryLabel}</Text>
+          <ChevronDown size={12} color={categoryColor} />
+        </TouchableOpacity>
+        <Text style={styles.distance} numberOfLines={1}>
+          {distance.toFixed(1)} miles away · {radiusMeters} m area
+        </Text>
+      </View>
 
       <View style={styles.badgeRow}>
         <View style={[styles.badge, { backgroundColor: heatInfo.color }]}>
@@ -120,11 +136,31 @@ const styles = StyleSheet.create({
     color: '#222',
     flexShrink: 1,
   },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 6,
+    marginBottom: 10,
+  },
+  typeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingVertical: 2,
+    paddingLeft: 8,
+    paddingRight: 5,
+  },
+  typeChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
   distance: {
+    flexShrink: 1,
     fontSize: 12,
     color: '#888',
-    marginTop: 2,
-    marginBottom: 10,
   },
   badgeRow: {
     flexDirection: 'row',

@@ -19,6 +19,7 @@ import BookmarkCard from '../components/BookmarkCard';
 import AddBookmarkModal from '../components/AddBookmarkModal';
 import BookmarkMapModal from '../components/BookmarkMapModal';
 import RenamePlaceModal from '../components/RenamePlaceModal';
+import ChangePlaceTypeModal from '../components/ChangePlaceTypeModal';
 import { BookmarkEntry } from '../types/bookmark';
 
 const FALLBACK_LAT = 22.3375;
@@ -27,11 +28,13 @@ const SKY_BLUE = '#BEE7FB';
 
 const CommunityScreen = () => {
   const { coords } = useLocation();
-  const { bookmarks, addBookmark, removeBookmark, renameBookmark } = useBookmarkList();
+  const { bookmarks, addBookmark, removeBookmark, renameBookmark, changeBookmarkCategory } =
+    useBookmarkList();
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedBookmark, setSelectedBookmark] =
     useState<BookmarkEntry | null>(null);
   const [renamingBookmark, setRenamingBookmark] = useState<BookmarkEntry | null>(null);
+  const [retypingBookmark, setRetypingBookmark] = useState<BookmarkEntry | null>(null);
 
   const center = coords ?? { latitude: FALLBACK_LAT, longitude: FALLBACK_LNG };
   const { points: heatPoints } = useHeatData(center);
@@ -131,6 +134,7 @@ const CommunityScreen = () => {
               aqhi={item.aqhi}
               distance={item.distance}
               onPress={() => setSelectedBookmark(item)}
+              onChangeType={() => setRetypingBookmark(item)}
               onRename={() => setRenamingBookmark(item)}
               onRemove={() => removeBookmark(item.id)}
             />
@@ -156,6 +160,19 @@ const CommunityScreen = () => {
         }}
         onCancel={() => setRenamingBookmark(null)}
       />
+
+      {retypingBookmark && (
+        <ChangePlaceTypeModal
+          key={retypingBookmark.id}
+          place={retypingBookmark}
+          otherPlaces={bookmarks.filter(b => b.id !== retypingBookmark.id)}
+          onSave={category => {
+            changeBookmarkCategory(retypingBookmark.id, category);
+            setRetypingBookmark(null);
+          }}
+          onCancel={() => setRetypingBookmark(null)}
+        />
+      )}
 
       <BookmarkMapModal
         visible={selectedBookmark !== null}

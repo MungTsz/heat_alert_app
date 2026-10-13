@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { BookmarkEntry } from '../types/bookmark';
+import { BookmarkEntry, PlaceCategory } from '../types/bookmark';
 import { readBookmarks, writeBookmarks } from '../services/bookmarkStorage';
 import { syncPlaceLabels } from '../services/placeLabelSyncService';
 
@@ -46,11 +46,26 @@ export const useBookmarkList = () => {
     syncInBackground();
   };
 
+  // The category IS what the place-labels API receives, so bump updatedAt —
+  // that's what makes placeLabelSyncService re-upload this label.
+  const changeBookmarkCategory = async (id: string, category: PlaceCategory) => {
+    const now = Date.now();
+    await persist(bookmarks.map(b => (b.id === id ? { ...b, category, updatedAt: now } : b)));
+    syncInBackground();
+  };
+
   // Leaves updatedAt alone: the name is never uploaded, so a rename has
   // nothing to sync.
   const renameBookmark = async (id: string, label: string) => {
     await persist(bookmarks.map(b => (b.id === id ? { ...b, label } : b)));
   };
 
-  return { bookmarks, loading, addBookmark, removeBookmark, renameBookmark };
+  return {
+    bookmarks,
+    loading,
+    addBookmark,
+    removeBookmark,
+    renameBookmark,
+    changeBookmarkCategory,
+  };
 };
