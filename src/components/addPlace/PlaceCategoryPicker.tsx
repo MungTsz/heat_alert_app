@@ -11,6 +11,11 @@ type Props = {
 };
 
 const TILE_ICON_SIZE = 34;
+// Fixed rather than aspectRatio: Yoga mis-sizes aspectRatio + percentage
+// width inside a wrapping row (the row reserves one height, the tile draws
+// another), which pushed the icon to the tile's bottom edge and left a gap
+// under the grid.
+const TILE_HEIGHT = 100;
 
 // The 2×2 icon tiles shared by Add place (step 1) and Change place type, so
 // a category looks and reads the same wherever it's chosen.
@@ -64,7 +69,7 @@ const styles = StyleSheet.create({
   grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 12 },
   tile: {
     width: '48%',
-    aspectRatio: 1.6,
+    height: TILE_HEIGHT,
     borderWidth: 2,
     borderColor: '#E4E4E4',
     borderRadius: 16,
