@@ -19,6 +19,14 @@ export type BookmarkEntry = {
   // Bumped only when a field the place-labels API receives changes
   // (category / position / radius) — drives placeLabelSyncService's diff.
   updatedAt: number;
+  // Taken out of the Community watch list (kept in a collapsed "Hidden
+  // places" section) — e.g. a place saved from the exposure map only so the
+  // backend can classify stays there. Purely a local display preference:
+  // the place still syncs as a label and still triggers community alerts,
+  // and it's never uploaded, so toggling it must NOT bump updatedAt.
+  // Optional so entries stored before it existed need no migration
+  // (undefined = shown).
+  hidden?: boolean;
 };
 
 // The pre-category shape still sitting in AsyncStorage on older installs —

@@ -8,7 +8,7 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Plus } from 'lucide-react-native';
+import { ChevronDown, ChevronUp, Plus } from 'lucide-react-native';
 import { useLocation } from '../utils/useLocation';
 import { useHeatData } from '../hooks/useHeatData';
 import { useAqhiData } from '../hooks/useAqhiData';
@@ -16,6 +16,7 @@ import { useBookmarkList } from '../hooks/useBookmarkList';
 import { idwInterpolate } from '../utils/idw';
 import { distanceMiles } from '../utils/distance';
 import BookmarkCard from '../components/BookmarkCard';
+import PlaceEditRow from '../components/PlaceEditRow';
 import AddBookmarkModal from '../components/AddBookmarkModal';
 import BookmarkMapModal from '../components/BookmarkMapModal';
 import RenamePlaceModal from '../components/RenamePlaceModal';
@@ -28,13 +29,22 @@ const SKY_BLUE = '#BEE7FB';
 
 const CommunityScreen = () => {
   const { coords } = useLocation();
-  const { bookmarks, addBookmark, removeBookmark, renameBookmark, changeBookmarkCategory } =
-    useBookmarkList();
+  const {
+    bookmarks,
+    addBookmark,
+    removeBookmark,
+    renameBookmark,
+    changeBookmarkCategory,
+    moveBookmark,
+    setBookmarkHidden,
+  } = useBookmarkList();
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedBookmark, setSelectedBookmark] =
     useState<BookmarkEntry | null>(null);
   const [renamingBookmark, setRenamingBookmark] = useState<BookmarkEntry | null>(null);
   const [retypingBookmark, setRetypingBookmark] = useState<BookmarkEntry | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [hiddenExpanded, setHiddenExpanded] = useState(false);
 
   const center = coords ?? { latitude: FALLBACK_LAT, longitude: FALLBACK_LNG };
   const { points: heatPoints } = useHeatData(center);
@@ -51,69 +61,93 @@ const CommunityScreen = () => {
     value: p.aqhi,
   }));
 
-  const rankedBookmarks = useMemo(() => {
-    return (
-      bookmarks
-        .map(bookmark => {
-          const temperature = Math.round(
-            idwInterpolate(
-              bookmark.latitude,
-              bookmark.longitude,
-              weightedHeatPoints,
-            ),
-          );
-          const aqhi = Math.round(
-            idwInterpolate(
-              bookmark.latitude,
-              bookmark.longitude,
-              weightedAqhiPoints,
-            ),
-          );
-          return {
-            ...bookmark,
-            temperature,
-            aqhi,
-            distance: distanceMiles(
-              center.latitude,
-              center.longitude,
-              bookmark.latitude,
-              bookmark.longitude,
-            ),
-          };
-        })
-        // Rank by whichever metric is proportionally more severe on its own scale
-        .sort((a, b) => {
-          const scoreA = Math.max(a.temperature / 50, a.aqhi / 11);
-          const scoreB = Math.max(b.temperature / 50, b.aqhi / 11);
-          return scoreB - scoreA;
-        })
-    );
-  }, [
-    bookmarks,
-    weightedHeatPoints,
-    weightedAqhiPoints,
-    center.latitude,
-    center.longitude,
-  ]);
+  // Kept in the user's own (stored) order rather than ranked by severity —
+  // the order is now theirs to set in Edit mode, and a list that re-sorts
+  // itself on every data refresh would undo it.
+  const bookmarkRows = useMemo(
+    () =>
+      bookmarks.map(bookmark => ({
+        ...bookmark,
+        temperature: Math.round(
+          idwInterpolate(bookmark.latitude, bookmark.longitude, weightedHeatPoints),
+        ),
+        aqhi: Math.round(
+          idwInterpolate(bookmark.latitude, bookmark.longitude, weightedAqhiPoints),
+        ),
+        distance: distanceMiles(
+          center.latitude,
+          center.longitude,
+          bookmark.latitude,
+          bookmark.longitude,
+        ),
+      })),
+    [
+      bookmarks,
+      weightedHeatPoints,
+      weightedAqhiPoints,
+      center.latitude,
+      center.longitude,
+    ],
+  );
+  const visibleRows = bookmarkRows.filter(row => !row.hidden);
+  const hiddenRows = bookmarkRows.filter(row => row.hidden);
 
   const renameOtherNames = useMemo(
     () => bookmarks.filter(b => b.id !== renamingBookmark?.id).map(b => b.label),
     [bookmarks, renamingBookmark],
   );
 
+  // Hidden places are usually ones saved only to label exposure stays —
+  // collapsed by default so they don't pull focus from the watch list, but
+  // always reachable to unhide or open.
+  const renderHiddenSection = () =>
+    hiddenRows.length === 0 ? null : (
+      <View style={styles.hiddenSection}>
+        <TouchableOpacity
+          style={styles.hiddenHeader}
+          onPress={() => setHiddenExpanded(expanded => !expanded)}
+        >
+          <Text style={styles.hiddenHeaderText}>Hidden places ({hiddenRows.length})</Text>
+          {hiddenExpanded ? (
+            <ChevronUp size={18} color="#3A3A3A" />
+          ) : (
+            <ChevronDown size={18} color="#3A3A3A" />
+          )}
+        </TouchableOpacity>
+        {hiddenExpanded &&
+          hiddenRows.map(row => (
+            <PlaceEditRow
+              key={row.id}
+              label={row.label}
+              category={row.category}
+              hidden
+              onToggleHidden={() => setBookmarkHidden(row.id, false)}
+              onPress={() => setSelectedBookmark(row)}
+            />
+          ))}
+      </View>
+    );
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.header}>
         <Text style={styles.title}>Community</Text>
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => setModalVisible(true)}
-        >
-          <Plus size={22} color="#fff" />
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          {bookmarks.length > 0 && (
+            <TouchableOpacity onPress={() => setEditing(e => !e)} hitSlop={10}>
+              <Text style={styles.editText}>{editing ? 'Done' : 'Edit'}</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity
+            style={styles.addButton}
+            onPress={() => setModalVisible(true)}
+          >
+            <Plus size={22} color="#fff" />
+          </TouchableOpacity>
+        </View>
       </View>
 
-      {rankedBookmarks.length === 0 ? (
+      {bookmarkRows.length === 0 ? (
         <View style={styles.emptyState}>
           <Text style={styles.emptyText}>
             Tap + to add your Home, Office or School — it helps us calculate your exposure
@@ -122,23 +156,44 @@ const CommunityScreen = () => {
         </View>
       ) : (
         <FlatList
-          data={rankedBookmarks}
+          data={visibleRows}
           keyExtractor={item => item.id}
           contentContainerStyle={styles.listContent}
-          renderItem={({ item }) => (
-            <BookmarkCard
-              label={item.label}
-              category={item.category}
-              radiusMeters={item.radiusMeters}
-              temperature={item.temperature}
-              aqhi={item.aqhi}
-              distance={item.distance}
-              onPress={() => setSelectedBookmark(item)}
-              onChangeType={() => setRetypingBookmark(item)}
-              onRename={() => setRenamingBookmark(item)}
-              onRemove={() => removeBookmark(item.id)}
-            />
-          )}
+          ListHeaderComponent={
+            visibleRows.length === 0 ? (
+              <Text style={styles.allHiddenText}>
+                All your places are hidden — they still count towards your exposure.
+              </Text>
+            ) : null
+          }
+          ListFooterComponent={renderHiddenSection()}
+          renderItem={({ item, index }) =>
+            editing ? (
+              <PlaceEditRow
+                label={item.label}
+                category={item.category}
+                hidden={false}
+                onToggleHidden={() => setBookmarkHidden(item.id, true)}
+                onMoveUp={() => moveBookmark(item.id, -1)}
+                onMoveDown={() => moveBookmark(item.id, 1)}
+                canMoveUp={index > 0}
+                canMoveDown={index < visibleRows.length - 1}
+              />
+            ) : (
+              <BookmarkCard
+                label={item.label}
+                category={item.category}
+                radiusMeters={item.radiusMeters}
+                temperature={item.temperature}
+                aqhi={item.aqhi}
+                distance={item.distance}
+                onPress={() => setSelectedBookmark(item)}
+                onChangeType={() => setRetypingBookmark(item)}
+                onRename={() => setRenamingBookmark(item)}
+                onRemove={() => removeBookmark(item.id)}
+              />
+            )
+          }
         />
       )}
 
@@ -201,6 +256,16 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#1A1A1A',
   },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  editText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1A1A1A',
+  },
   addButton: {
     width: 44,
     height: 44,
@@ -224,6 +289,27 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
     lineHeight: 20,
+  },
+  allHiddenText: {
+    color: '#3A3A3A',
+    fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 12,
+  },
+  hiddenSection: {
+    marginTop: 8,
+  },
+  hiddenHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
+  hiddenHeaderText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#3A3A3A',
   },
 });
 

@@ -108,6 +108,7 @@ const LiveDeviceDetailModal: React.FC<Props> = ({
             selectedDate={selectedDate}
             onSelectDay={toggleDay}
             onWeekChange={changeWeek}
+            onPickDate={pickDate}
             todayKey={todayKey}
             todayReport={todayReport}
             todayLoading={todayLoading}

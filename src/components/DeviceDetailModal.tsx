@@ -139,6 +139,7 @@ const DeviceDetailModal: React.FC<Props> = ({ visible, device, onClose, onDelete
             selectedDate={selectedDate}
             onSelectDay={toggleDay}
             onWeekChange={changeWeek}
+            onPickDate={pickDate}
             todayKey={todayKey}
             todayReport={null}
             formatDateLabel={date => formatHkDateLabel(date, todayKey)}
