@@ -9,7 +9,13 @@ jest.mock('../../config/exposureApiConfig', () => ({
   },
 }));
 
-import { ExposureApiError, ingestExposureGpx, ingestExposurePings } from '../exposureApi';
+import {
+  deletePlaceLabel,
+  ExposureApiError,
+  ingestExposureGpx,
+  ingestExposurePings,
+  upsertPlaceLabel,
+} from '../exposureApi';
 
 const GPX = '<?xml version="1.0"?><gpx><trk><trkseg><trkpt lat="22.3" lon="114.2"/></trkseg></trk></gpx>';
 
@@ -69,5 +75,58 @@ describe('ingestExposurePings', () => {
     expect(url).toBe('http://etl.test/ingest');
     expect(init.headers).toEqual({ 'Content-Type': 'application/json' });
     expect(JSON.parse(init.body)).toEqual({ pid: 'p', features: [] });
+  });
+});
+
+describe('place labels', () => {
+  const fetchMock = jest.fn();
+  const label = {
+    labelId: 'bookmark-1',
+    contributorId: 'c-abc',
+    category: 'Office' as const,
+    latitude: 22.3399579,
+    longitude: 114.2632457,
+    radiusMeters: 25,
+    updatedAt: Date.UTC(2026, 9, 13, 1, 15),
+  };
+
+  beforeEach(() => {
+    fetchMock.mockReset();
+    globalThis.fetch = fetchMock;
+  });
+
+  it('PUTs category + circle in the documented shape, with a zoned updated_at', async () => {
+    fetchMock.mockResolvedValue(jsonResponse(201, {}));
+    await upsertPlaceLabel(label);
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('http://etl.test/place-labels/bookmark-1');
+    expect(init.method).toBe('PUT');
+    expect(JSON.parse(init.body)).toEqual({
+      contributor_id: 'c-abc',
+      category: 'Office',
+      lat: 22.3399579,
+      lng: 114.2632457,
+      radius_m: 25,
+      updated_at: '2026-10-13T01:15:00.000Z',
+    });
+  });
+
+  it('surfaces a 403 with its status so sync can stop retrying it', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse(403, { detail: 'label_id belongs to another contributor_id' }),
+    );
+    const error = await upsertPlaceLabel(label).catch(e => e);
+    expect(error).toBeInstanceOf(ExposureApiError);
+    expect(error.status).toBe(403);
+  });
+
+  it('DELETEs with the contributor id and treats 404 as already deleted', async () => {
+    fetchMock.mockResolvedValue(jsonResponse(404, { detail: 'unknown label_id' }));
+    await expect(deletePlaceLabel('bookmark-1', 'c-abc')).resolves.toBeUndefined();
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      'http://etl.test/place-labels/bookmark-1?contributor_id=c-abc',
+    );
+    expect(fetchMock.mock.calls[0][1].method).toBe('DELETE');
   });
 });

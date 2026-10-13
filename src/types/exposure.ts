@@ -1,25 +1,17 @@
 // src/types/exposure.ts
 
 // A GeoJSON Point feature as exported by phone/watch GPS logging apps —
-// properties.time as ISO8601, geometry.coordinates as [lng, lat]. Sent
-// as-is to the exposure ETL backend's /ingest endpoint.
+// properties.time as ISO8601, geometry.coordinates as [lng, lat],
+// properties.speed in m/s (negative = unknown). The only record shape the
+// exposure ETL backend's /ingest accepts: imported files are sent as-is and
+// live-tracked locations are converted into it (see deviceTrackingService).
 export type GeoJsonPointFeature = {
   type: 'Feature';
   properties: { time: string; speed?: number };
   geometry: { type: 'Point'; coordinates: [number, number] };
 };
 
-// A live-tracking ping in react-native-background-geolocation's own shape —
-// also accepted as-is by /ingest. `sample:true` pings are transient reads
-// the backend drops; `mock:true` (fake-GPS) pings are kept.
-export type LiveTrackingPing = {
-  timestamp: string;
-  coords: { latitude: number; longitude: number };
-  sample?: boolean;
-  mock?: boolean;
-};
-
-export type ExposureIngestFeature = GeoJsonPointFeature | LiveTrackingPing;
+export type ExposureIngestFeature = GeoJsonPointFeature;
 
 // An imported track file's format — decides which ingest endpoint it goes
 // to (GeoJSON → POST /ingest as JSON, GPX → POST /ingest/gpx as raw XML).
@@ -40,14 +32,18 @@ export type ExposureIo = (typeof EXPOSURE_IO_TYPES)[number];
 // keyed by (pid, io, start_time_hk), so multiple rows can now share the same
 // hour_start_hk + io (e.g. two separate outdoor stops inside one clock
 // hour) — each still carries its own coordinates. lat/lng semantics differ
-// by io: Outdoor (a "moving" type) is the average of the run's pings; Home /
-// Other Indoor ("stationary" types) are the run's first ping.
+// by io: Outdoor (a "moving" type) is the average of the run's pings; the
+// indoor kinds ("stationary" types) are the run's first ping.
 export type ExposureHourlyApiRow = {
   hour_start_hk: string; // YYYYMMDDHHMMSS, HK local, truncated to the hour — group by this (+io) for the bar chart
   start_time_hk: string; // YYYYMMDDHHMMSS, HK local — this row's own precise start; sort by this for the map route
   // Raw string, not ExposureIo: the backend may add io types (and older
   // rows said 'Indoor'), so it's mapped via normalizeExposureIo on adapt.
   io: string;
+  // 'label' when a crowd-sourced place label decided io, 'inferred' when the
+  // backend's own stay rules did. Not used by the UI yet; optional because
+  // rows stored before place labels existed don't have it.
+  io_source?: 'label' | 'inferred';
   delta_t_hours: number;
   // null when in_hk is false (never scored), or expo_calx failed for this row.
   exposure_value: number | null;

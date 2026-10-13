@@ -14,6 +14,7 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
 const mockUpsert = jest.fn();
 const mockRemove = jest.fn();
 jest.mock('../../data/placeLabels', () => ({
+  ...jest.requireActual('../../data/placeLabels/types'),
   isPlaceLabelDataMocked: false,
   placeLabelDataProvider: {
     upsert: (...args: unknown[]) => mockUpsert(...args),
@@ -98,6 +99,25 @@ describe('syncPlaceLabels', () => {
     await syncPlaceLabels();
     expect(mockUpsert).toHaveBeenCalledTimes(1);
     expect(mockUpsert.mock.calls[0][0].labelId).toBe('b');
+  });
+
+  it('does not retry a label the server rejected permanently (403)', async () => {
+    storeBookmarks([bookmark('taken')]);
+    mockUpsert.mockRejectedValue(Object.assign(new Error('belongs to another contributor'), { status: 403 }));
+    await expect(syncPlaceLabels()).resolves.toBeUndefined();
+
+    await syncPlaceLabels();
+    expect(mockUpsert).toHaveBeenCalledTimes(1);
+  });
+
+  it('treats a permanently rejected delete as done', async () => {
+    storeBookmarks([bookmark('a')]);
+    await syncPlaceLabels();
+    storeBookmarks([]);
+    mockRemove.mockRejectedValue(Object.assign(new Error('forbidden'), { status: 403 }));
+    await syncPlaceLabels();
+    await syncPlaceLabels();
+    expect(mockRemove).toHaveBeenCalledTimes(1);
   });
 
   it('migrates legacy house/place bookmarks and uploads them once', async () => {

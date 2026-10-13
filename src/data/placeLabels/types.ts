@@ -14,6 +14,14 @@ export type PlaceLabel = {
   updatedAt: number; // epoch ms
 };
 
+// Rejections no retry can fix, per the API doc: 403 = the label_id belongs
+// to another contributor, 422 = a field the server won't accept. Anything
+// else (offline, 5xx, timeout) is worth retrying on the next sync.
+const PERMANENT_FAILURE_STATUSES = [403, 422];
+
+export const isPermanentPlaceLabelError = (error: unknown): boolean =>
+  PERMANENT_FAILURE_STATUSES.includes((error as { status?: number })?.status ?? 0);
+
 export interface PlaceLabelDataProvider {
   // Idempotent create-or-update, keyed by labelId.
   upsert: (label: PlaceLabel) => Promise<void>;

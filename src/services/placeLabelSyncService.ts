@@ -1,6 +1,11 @@
 // src/services/placeLabelSyncService.ts
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { isPlaceLabelDataMocked, placeLabelDataProvider, PlaceLabel } from '../data/placeLabels';
+import {
+  isPermanentPlaceLabelError,
+  isPlaceLabelDataMocked,
+  placeLabelDataProvider,
+  PlaceLabel,
+} from '../data/placeLabels';
 import { BookmarkEntry } from '../types/bookmark';
 import { readBookmarks } from './bookmarkStorage';
 
@@ -55,11 +60,17 @@ const reconcile = async (): Promise<void> => {
     if (state[bookmark.id] === bookmark.updatedAt) continue;
     try {
       await placeLabelDataProvider.upsert(toPlaceLabel(bookmark, contributorId));
-      state[bookmark.id] = bookmark.updatedAt;
-      await writeSyncState(state);
     } catch (error) {
-      firstError ??= error;
+      if (!isPermanentPlaceLabelError(error)) {
+        firstError ??= error;
+        continue;
+      }
+      // Recorded as handled so it isn't resent on every sync forever — the
+      // place still works locally, it just doesn't feed the shared dataset.
+      console.log(`Place label ${bookmark.id} rejected permanently:`, error);
     }
+    state[bookmark.id] = bookmark.updatedAt;
+    await writeSyncState(state);
   }
 
   const liveIds = new Set(bookmarks.map(bookmark => bookmark.id));
@@ -67,11 +78,15 @@ const reconcile = async (): Promise<void> => {
     if (liveIds.has(labelId)) continue;
     try {
       await placeLabelDataProvider.remove(labelId, contributorId);
-      delete state[labelId];
-      await writeSyncState(state);
     } catch (error) {
-      firstError ??= error;
+      if (!isPermanentPlaceLabelError(error)) {
+        firstError ??= error;
+        continue;
+      }
+      console.log(`Place label ${labelId} delete rejected permanently:`, error);
     }
+    delete state[labelId];
+    await writeSyncState(state);
   }
 
   if (firstError) throw firstError;

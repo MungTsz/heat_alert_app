@@ -449,7 +449,6 @@ const ImportTrackModal: React.FC<Props> = ({ visible, onClose, lockedDeviceId })
               <Text style={styles.helperCaption}>
                 .geojson, .json or .gpx — up to {MAX_FILES} per import, max{' '}
                 {Math.round(EXPOSURE_API_CONFIG.maxIngestBodyBytes / (1024 * 1024))} MB each
-                (about one day of tracking)
               </Text>
 
               <Text style={styles.orText}>or</Text>

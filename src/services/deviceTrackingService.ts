@@ -2,7 +2,7 @@
 import BackgroundGeolocation, {
   Location,
 } from 'react-native-background-geolocation';
-import { LiveTrackingPing } from '../types/exposure';
+import { GeoJsonPointFeature } from '../types/exposure';
 
 let isConfigured = false;
 
@@ -40,15 +40,27 @@ export const stopTracking = async (): Promise<void> => {
   await BackgroundGeolocation.stop();
 };
 
-// Maps the plugin's own location shape to the live-tracking ping shape the
-// ETL backend's /ingest endpoint accepts directly — sample/mock flags are
-// forwarded so the backend can drop transient "samples" itself.
-export const toLiveTrackingPing = (location: Location): LiveTrackingPing => ({
-  timestamp: location.timestamp,
-  coords: { latitude: location.coords.latitude, longitude: location.coords.longitude },
-  sample: location.sample,
-  mock: location.mock,
+// /ingest only accepts GeoJSON Point Features (any other record shape is
+// skipped server-side), so live locations are converted into the same shape
+// an imported GPS export uses. The plugin reports an unknown speed as -1,
+// which the backend also reads as "unknown", so it's passed through as-is.
+export const toGeoJsonPing = (location: Location): GeoJsonPointFeature => ({
+  type: 'Feature',
+  properties: {
+    time: new Date(location.timestamp).toISOString(),
+    speed: location.coords.speed,
+  },
+  geometry: {
+    type: 'Point',
+    coordinates: [location.coords.longitude, location.coords.latitude],
+  },
 });
+
+// `sample` locations are transient reads the plugin itself says not to
+// persist — dropped here since the GeoJSON shape has no field to flag them.
+// Fake-GPS (`mock`) locations are kept, matching the backend's old behavior.
+export const toIngestablePings = (locations: Location[]): GeoJsonPointFeature[] =>
+  locations.filter(location => !location.sample).map(toGeoJsonPing);
 
 // Reads back everything the library has recorded since local midnight — it
 // persists locations itself, so no separate AsyncStorage log is needed.

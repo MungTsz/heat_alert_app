@@ -1,7 +1,7 @@
 // src/hooks/useTodayExposure.ts
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ExposureReport } from '../types/exposure';
-import { getTodayRawLocations, toLiveTrackingPing } from '../services/deviceTrackingService';
+import { getTodayRawLocations, toIngestablePings } from '../services/deviceTrackingService';
 import { exposureDataProvider } from '../data/exposure';
 import { DEFAULT_PID } from '../utils/exposurePid';
 import { refreshHistoryCache } from '../services/exposureHistoryService';
@@ -31,8 +31,10 @@ export const useTodayExposure = (trackingEnabled: boolean) => {
       );
 
       if (newLocations.length > 0) {
-        const pings = newLocations.map(toLiveTrackingPing);
-        await exposureDataProvider.ingest(DEFAULT_PID, pings);
+        const pings = toIngestablePings(newLocations);
+        // A poll can hold nothing but transient samples — sending an empty
+        // batch would just come back as a 400 "no valid pings".
+        if (pings.length > 0) await exposureDataProvider.ingest(DEFAULT_PID, pings);
         lastIngestedAtMsRef.current = Math.max(
           ...newLocations.map(location => new Date(location.timestamp).getTime()),
         );

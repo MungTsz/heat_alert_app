@@ -61,7 +61,7 @@ const utf8ByteLength = (str: string): number => {
 };
 
 const tooLargeMessage = (limitBytes: number): string =>
-  `File is too large to upload (limit ${formatMb(limitBytes)}). Split it into smaller files, e.g. one day each.`;
+  `File is too large to upload (limit ${formatMb(limitBytes)}). Split it into smaller files, e.g. half a day each.`;
 
 const NO_VALID_PINGS_MESSAGE = 'No valid GPS points found in that file.';
 // The server doesn't check it, but the API doc asks for it on /ingest/gpx.

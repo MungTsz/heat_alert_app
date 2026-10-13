@@ -26,7 +26,11 @@ describe('apiExposureProvider.ingest', () => {
   });
 
   const features: ExposureIngestFeature[] = [
-    { timestamp: '2026-09-07T08:00:00.000Z', coords: { latitude: 22.3, longitude: 114.2 } },
+    {
+      type: 'Feature',
+      properties: { time: '2026-09-07T08:00:00.000Z' },
+      geometry: { type: 'Point', coordinates: [114.2, 22.3] },
+    },
   ];
 
   it('forwards pid and features, then waits for the queued batch', async () => {
