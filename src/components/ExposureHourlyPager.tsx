@@ -1,10 +1,11 @@
 // src/components/ExposureHourlyPager.tsx
-import React, { useCallback } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
 import { ChevronLeft, ChevronRight } from 'lucide-react-native';
 import { ExposureSegmentResult } from '../types/exposure';
 import { formatHkDateLabel } from '../utils/hkDate';
 import { useSyncedPager } from '../hooks/useSyncedPager';
+import { ioTypesWithExposure, sumExposureByIo } from '../utils/exposureIoTotals';
 import ExposureTrendChart, {
   TREND_CHART_BODY_HEIGHT,
   TREND_CHART_WIDTH,
@@ -42,6 +43,19 @@ const ExposureHourlyPager: React.FC<Props> = ({
     selectedDate,
     TREND_CHART_WIDTH,
     onDateChange,
+  );
+
+  // Every io with a bar on any day's page, so the shared legend above the
+  // pager stays put while swiping.
+  const presentIos = useMemo(
+    () =>
+      ioTypesWithExposure(
+        dates.flatMap(date => {
+          const page = getPage(date);
+          return typeof page === 'string' ? [] : [sumExposureByIo(page).byIo];
+        }),
+      ),
+    [dates, getPage],
   );
 
   const renderDay = useCallback(
@@ -94,7 +108,7 @@ const ExposureHourlyPager: React.FC<Props> = ({
         </TouchableOpacity>
       </View>
 
-      <ExposureIoLegend />
+      <ExposureIoLegend present={presentIos} />
 
       <FlatList
         ref={listRef}

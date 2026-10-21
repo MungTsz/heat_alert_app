@@ -36,6 +36,8 @@ const ZERO_DATA_BAR_COLOR = EXPOSURE_MAP_CONFIG.outsideHkColor;
 // not tinted: a colored tint could be mistaken for one of the io colors.
 const SELECTED_SLOT_COLOR = 'rgba(28,28,30,0.06)';
 const DIVIDER_COLOR = '#FFFFFF';
+// Same horizontal seam between stacked io layers as ExposureTrendChart.
+const STACK_SEAM_WIDTH = 1;
 const FUTURE_LABEL_COLOR = '#C7C7CC';
 
 type Props = {
@@ -112,17 +114,29 @@ const ExposureDailyBarChart: React.FC<Props> = ({
                   const value = day.byIo?.[io] ?? 0;
                   if (value <= 0) return null;
                   const height = getSegmentHeight(value);
+                  const layerBottom = stackTop;
                   stackTop -= height;
                   return (
-                    <Rect
-                      key={io}
-                      x={slotX}
-                      y={stackTop}
-                      width={slotWidth}
-                      height={height}
-                      fill={EXPOSURE_IO_CONFIG[io].color}
-                      opacity={opacity}
-                    />
+                    <React.Fragment key={io}>
+                      <Rect
+                        x={slotX}
+                        y={stackTop}
+                        width={slotWidth}
+                        height={height}
+                        fill={EXPOSURE_IO_CONFIG[io].color}
+                        opacity={opacity}
+                      />
+                      {layerBottom < baseY && (
+                        <Line
+                          x1={slotX}
+                          y1={layerBottom}
+                          x2={slotX + slotWidth}
+                          y2={layerBottom}
+                          stroke={DIVIDER_COLOR}
+                          strokeWidth={STACK_SEAM_WIDTH}
+                        />
+                      )}
+                    </React.Fragment>
                   );
                 })
               : !day.isFuture && (

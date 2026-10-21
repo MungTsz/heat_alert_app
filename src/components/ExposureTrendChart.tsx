@@ -4,7 +4,7 @@ import { View, Text, StyleSheet, Dimensions } from 'react-native';
 import Svg, { Rect, Line, Text as SvgText } from 'react-native-svg';
 import { EXPOSURE_IO_TYPES, ExposureSegmentResult } from '../types/exposure';
 import { bucketExposureByHour } from '../utils/exposureHourlyBuckets';
-import { formatIoBreakdown } from '../utils/exposureIoTotals';
+import { formatIoBreakdown, ioTypesWithExposure } from '../utils/exposureIoTotals';
 import { pickAxisLabelStride } from '../utils/chartAxisLabels';
 import { clampedChartLabelX, estimateSvgTextWidth } from '../utils/svgChartLabel';
 import { niceAxisTicks } from '../utils/niceAxisTicks';
@@ -31,6 +31,10 @@ const Y_AXIS_WIDTH = 32;
 const CHART_WIDTH = SCREEN_WIDTH - Y_TITLE_WIDTH - Y_AXIS_WIDTH;
 const EMPTY_BAR_COLOR = '#E5E0FA';
 const DIVIDER_COLOR = '#FFFFFF';
+// Horizontal seam between stacked io layers — with seven io colors, some
+// dark neighbours (e.g. MTR red over Other Indoor teal) otherwise blur into
+// one block on a 12px-wide bar.
+const STACK_SEAM_WIDTH = 1;
 const SELECTED_LABEL_FONT_SIZE = 11;
 
 type Props = {
@@ -56,6 +60,7 @@ const ExposureTrendChart: React.FC<Props> = ({ segments, title, showLegend = tru
   const [selectedHour, setSelectedHour] = useState<number | null>(null);
 
   const hours = useMemo(() => bucketExposureByHour(segments), [segments]);
+  const presentIos = useMemo(() => ioTypesWithExposure(hours.map(h => h.byIo)), [hours]);
   const maxTotal = Math.max(0, ...hours.map(h => h.total));
   const { ticks, niceMax } = useMemo(() => niceAxisTicks(maxTotal, 4), [maxTotal]);
   const slotWidth = CHART_WIDTH / 24;
@@ -73,7 +78,7 @@ const ExposureTrendChart: React.FC<Props> = ({ segments, title, showLegend = tru
   return (
     <View>
       {title && <Text style={styles.title}>{title}</Text>}
-      {showLegend && <ExposureIoLegend />}
+      {showLegend && <ExposureIoLegend present={presentIos} />}
       <View style={styles.axisRow}>
         <View style={styles.yTitleColumn}>
           <Text style={styles.yTitleText} numberOfLines={1}>
@@ -128,17 +133,29 @@ const ExposureTrendChart: React.FC<Props> = ({ segments, title, showLegend = tru
                   EXPOSURE_IO_TYPES.map(io => {
                     if (h.byIo[io] <= 0) return null;
                     const height = getSegmentHeight(h.byIo[io]);
+                    const layerBottom = stackTop;
                     stackTop -= height;
                     return (
-                      <Rect
-                        key={io}
-                        x={barX}
-                        y={stackTop}
-                        width={barWidth}
-                        height={height}
-                        fill={EXPOSURE_IO_CONFIG[io].color}
-                        opacity={opacity}
-                      />
+                      <React.Fragment key={io}>
+                        <Rect
+                          x={barX}
+                          y={stackTop}
+                          width={barWidth}
+                          height={height}
+                          fill={EXPOSURE_IO_CONFIG[io].color}
+                          opacity={opacity}
+                        />
+                        {layerBottom < baseY && (
+                          <Line
+                            x1={barX}
+                            y1={layerBottom}
+                            x2={barX + barWidth}
+                            y2={layerBottom}
+                            stroke={DIVIDER_COLOR}
+                            strokeWidth={STACK_SEAM_WIDTH}
+                          />
+                        )}
+                      </React.Fragment>
                     );
                   })
                 ) : (

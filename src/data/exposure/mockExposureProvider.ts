@@ -1,70 +1,141 @@
-import { ExposureHourlyApiRow } from '../../types/exposure';
+import { ExposureHourlyApiRow, ExposureIo, ExposurePointKind } from '../../types/exposure';
 import { buildExposureReport } from '../../utils/hourlyExposureAdapter';
 import { toHkDateKey } from '../../utils/hkDate';
 import { ExposureDataProvider } from './types';
 
 const MOCK_DELAY_MS = 400;
+const MINUTES_PER_HOUR = 60;
+const MINUTES_PER_DAY = 24 * MINUTES_PER_HOUR;
+const HK_OFFSET_MS = 8 * 60 * 60 * 1000;
 
-// ~0.0005 deg is roughly 55m at HK's latitude — comfortably past
-// EXPOSURE_MAP_CONFIG.stayRadiusMeters (30m) so mock waypoints render as
-// distinct dots/points instead of re-merging under clusterStayPoints.
-const OUTDOOR_WAYPOINT_STEP_DEG = 0.0005;
-const MOCK_HOME_WINDOW_END_HOUR = 6;
+// Relative exposure per hour by io — only so the mock's stacked bars have
+// plausible proportions (open air highest, MTR lowest); not a model.
+const MOCK_EXPOSURE_RATE: Record<ExposureIo, number> = {
+  Outdoor: 1.0,
+  Vehicle: 0.7,
+  MTR: 0.4,
+  'Other Indoor': 0.5,
+  School: 0.5,
+  Office: 0.45,
+  Home: 0.5,
+};
 
-// Fakes a full day's worth of Home/Other Indoor/Outdoor hourly rows up to the current
-// HK hour, near a fixed HK reference point — enough to exercise the
-// stacked-bar chart and map before the ETL backend is configured. Outdoor
-// hours are split into several same-hour rows with distinct start_time_hk
-// and a short walked path between them, mirroring the new API contract
-// (multiple dwell runs can now share an hour_start_hk+io) so the map's
-// multi-point route rendering is exercisable without a live backend.
+type MockPoint = {
+  at: string; // HH:MM HK local — the point lasts until the next one's `at`
+  io: ExposureIo;
+  kind: ExposurePointKind;
+  reason: string;
+  lat: number;
+  lng: number;
+  road?: string;
+  labelled?: boolean; // decided by a place label rather than the rules
+};
+
+const HOME = { lat: 22.3193, lng: 114.1694 };
+const OFFICE = { lat: 22.278, lng: 114.1676 };
+
+const stay = (
+  at: string,
+  io: ExposureIo,
+  reason: string,
+  pos: { lat: number; lng: number },
+): MockPoint => ({ at, io, kind: 'stay', reason, ...pos, labelled: reason === 'place_label' });
+
+const route = (
+  at: string,
+  io: ExposureIo,
+  reason: string,
+  lat: number,
+  lng: number,
+  road?: string,
+): MockPoint => ({ at, io, kind: 'route', reason, lat, lng, road });
+
+// A commuter's day between Mong Kok and Admiralty, scripted to cover every io
+// type and both point kinds — an underground MTR jump (drawn dashed), a bus
+// ride with road names, walks, short stops and labelled places — so the
+// map's lines/arrows and the charts' colors can all be reviewed without the
+// ETL backend. Mirrors the backend's contract: a stay is one point, a route
+// several, and each point owns the time until the next one.
+const MOCK_DAY: MockPoint[] = [
+  stay('00:00', 'Home', 'night_stay', HOME),
+  route('08:00', 'Outdoor', 'walk', 22.3193, 114.1694),
+  route('08:04', 'Outdoor', 'walk', 22.3199, 114.1703),
+  route('08:07', 'Outdoor', 'walk', 22.3194, 114.1716),
+  stay('08:09', 'Outdoor', 'short_stop', { lat: 22.3192, lng: 114.1718 }),
+  route('08:12', 'MTR', 'jump', 22.3192, 114.1718), // Mong Kok
+  route('08:16', 'MTR', 'jump', 22.2976, 114.1722), // Tsim Sha Tsui
+  route('08:21', 'MTR', 'jump', 22.2793, 114.1646), // Admiralty
+  route('08:24', 'Outdoor', 'walk', 22.2789, 114.1652),
+  route('08:28', 'Outdoor', 'walk', 22.2782, 114.1668),
+  stay('08:32', 'Office', 'place_label', OFFICE),
+  route('12:30', 'Outdoor', 'walk', 22.278, 114.1676),
+  route('12:34', 'Outdoor', 'walk', 22.2772, 114.1689),
+  stay('12:40', 'Other Indoor', 'long_stay', { lat: 22.2768, lng: 114.1702 }),
+  route('13:25', 'Outdoor', 'walk', 22.2768, 114.1702),
+  route('13:30', 'Outdoor', 'walk', 22.2776, 114.1683),
+  stay('13:36', 'Office', 'place_label', OFFICE),
+  route('18:05', 'Outdoor', 'walk', 22.278, 114.1676),
+  stay('18:09', 'Outdoor', 'short_stop', { lat: 22.2797, lng: 114.166 }),
+  route('18:15', 'Vehicle', 'vehicle', 22.2797, 114.166, 'HARCOURT ROAD'),
+  route('18:19', 'Vehicle', 'vehicle', 22.285, 114.181, 'CROSS HARBOUR TUNNEL'),
+  route('18:25', 'Vehicle', 'vehicle', 22.3008, 114.1807, 'HONG CHONG ROAD'),
+  route('18:31', 'Vehicle', 'vehicle', 22.3049, 114.1776, 'CHATHAM ROAD NORTH'),
+  route('18:36', 'Vehicle', 'vehicle', 22.3117, 114.1706, 'NATHAN ROAD'),
+  route('18:42', 'Vehicle', 'vehicle', 22.3176, 114.1696, 'NATHAN ROAD'),
+  route('18:46', 'Outdoor', 'walk', 22.318, 114.169),
+  stay('18:50', 'School', 'place_label', { lat: 22.3184, lng: 114.1683 }),
+  route('20:00', 'Outdoor', 'walk', 22.3184, 114.1683),
+  route('20:05', 'Outdoor', 'walk', 22.3189, 114.169),
+  stay('20:10', 'Home', 'near_night_stay', HOME),
+];
+
+const toMinuteOfDay = (hhmm: string): number =>
+  Number(hhmm.slice(0, 2)) * MINUTES_PER_HOUR + Number(hhmm.slice(3, 5));
+
+const pad2 = (n: number): string => n.toString().padStart(2, '0');
+
+// YYYYMMDDHHMMSS, HK local — the backend's timestamp format.
+const hkStamp = (dateKey: string, minuteOfDay: number): string =>
+  `${dateKey}${pad2(Math.floor(minuteOfDay / MINUTES_PER_HOUR))}${pad2(minuteOfDay % MINUTES_PER_HOUR)}00`;
+
+// Today's rows of MOCK_DAY up to the current HK minute, cut at HK clock
+// hours exactly like the backend (one row per point per hour it overlaps).
 const buildMockRows = (): ExposureHourlyApiRow[] => {
   const dateKey = toHkDateKey().replace(/-/g, '');
-  const nowHkHour = new Date(Date.now() + 8 * 60 * 60 * 1000).getUTCHours();
+  const nowHk = new Date(Date.now() + HK_OFFSET_MS);
+  const nowMinute = nowHk.getUTCHours() * MINUTES_PER_HOUR + nowHk.getUTCMinutes();
   const rows: ExposureHourlyApiRow[] = [];
-  const outdoorWaypointMinutes = [5, 20, 35, 50];
 
-  for (let hour = 0; hour <= nowHkHour; hour++) {
-    const hourStr = hour.toString().padStart(2, '0');
-    const hourStartHk = `${dateKey}${hourStr}0000`;
-    const isIndoorHeavy = hour < 9 || hour >= 18; // "home hours"
-    const indoorShare = isIndoorHeavy ? 0.8 : 0.2;
+  MOCK_DAY.forEach((point, i) => {
+    const next = MOCK_DAY[i + 1];
+    const start = toMinuteOfDay(point.at);
+    const end = Math.min(next ? toMinuteOfDay(next.at) : MINUTES_PER_DAY, nowMinute);
 
-    if (indoorShare > 0) {
+    // heading_deg/compass are left out: the app draws arrows from the line
+    // geometry and never reads them.
+    for (let sliceStart = start; sliceStart < end; ) {
+      const hourStart = Math.floor(sliceStart / MINUTES_PER_HOUR) * MINUTES_PER_HOUR;
+      const sliceEnd = Math.min(end, hourStart + MINUTES_PER_HOUR);
+      const deltaHours = (sliceEnd - sliceStart) / MINUTES_PER_HOUR;
       rows.push({
-        hour_start_hk: hourStartHk,
-        start_time_hk: hourStartHk,
-        // Mirrors the backend's Home window (indoor stay starting 00:00-06:00
-        // HK) so all three io colors show up without a live backend.
-        io: hour < MOCK_HOME_WINDOW_END_HOUR ? 'Home' : 'Other Indoor',
-        delta_t_hours: indoorShare,
-        exposure_value: Number(((0.4 + Math.random() * 0.3) * indoorShare).toFixed(4)),
-        lng: 114.1694,
-        lat: 22.3193,
+        hour_start_hk: hkStamp(dateKey, hourStart),
+        start_time_hk: hkStamp(dateKey, sliceStart),
+        io: point.io,
+        io_source: point.labelled ? 'label' : 'inferred',
+        reason: point.reason,
+        kind: point.kind,
+        delta_t_hours: deltaHours,
+        exposure_value: Number(
+          (MOCK_EXPOSURE_RATE[point.io] * (0.8 + Math.random() * 0.4) * deltaHours).toFixed(4),
+        ),
+        lng: point.lng,
+        lat: point.lat,
+        road_name: point.road ?? null,
         in_hk: true,
       });
+      sliceStart = sliceEnd;
     }
-    const outdoorShare = 1 - indoorShare;
-    if (outdoorShare > 0) {
-      const waypointCount = isIndoorHeavy ? 1 : outdoorWaypointMinutes.length;
-      const deltaPerWaypoint = outdoorShare / waypointCount;
-      for (let w = 0; w < waypointCount; w++) {
-        const minuteStr = outdoorWaypointMinutes[w].toString().padStart(2, '0');
-        rows.push({
-          hour_start_hk: hourStartHk,
-          start_time_hk: `${dateKey}${hourStr}${minuteStr}00`,
-          io: 'Outdoor',
-          delta_t_hours: deltaPerWaypoint,
-          exposure_value: Number(
-            ((0.6 + Math.random() * 0.8) * deltaPerWaypoint).toFixed(4),
-          ),
-          lng: 114.1734 + w * OUTDOOR_WAYPOINT_STEP_DEG,
-          lat: 22.3213 + w * OUTDOOR_WAYPOINT_STEP_DEG,
-          in_hk: true,
-        });
-      }
-    }
-  }
+  });
 
   return rows;
 };

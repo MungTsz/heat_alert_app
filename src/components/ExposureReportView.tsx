@@ -4,8 +4,16 @@ import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { AlertTriangle } from 'lucide-react-native';
 import { ExposureReport } from '../types/exposure';
 import { isExposureDataMocked } from '../data/exposure';
-import { exposureColor } from '../utils/exposureColor';
 import { EXPOSURE_MAP_CONFIG } from '../config/exposureMapConfig';
+import { EXPOSURE_IO_CONFIG } from '../config/exposureIoConfig';
+import { EXPOSURE_IO_ICONS } from '../config/exposureIoIconConfig';
+import { clusterStayPoints } from '../utils/geoClustering';
+import {
+  buildExposureTimeline,
+  buildTripLegs,
+  ExposureTimelineItem,
+} from '../utils/exposureTrajectory';
+import { formatDuration, formatRoadList, formatTime } from '../utils/exposureFormat';
 import ExposureTrendChart from './ExposureTrendChart';
 import ExposureTrajectoryMap from './ExposureTrajectoryMap';
 
@@ -17,20 +25,54 @@ type Props = {
   hourlyChart?: React.ReactNode;
 };
 
-const formatDuration = (ms: number): string => {
-  const totalMinutes = Math.round(ms / 60000);
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  if (hours === 0) return `${minutes}m`;
-  return `${hours}h ${minutes}m`;
+// One timeline row's display fields — stays and trips share the row layout.
+const timelineRowContent = (item: ExposureTimelineItem) => {
+  if (item.type === 'stay') {
+    const { stay } = item;
+    return {
+      io: stay.io,
+      inHk: stay.inHk,
+      startTime: stay.startTime,
+      endTime: stay.endTime,
+      durationMs: stay.totalDurationMs,
+      exposure: stay.totalExposure,
+      detail: null,
+    };
+  }
+  const { leg } = item;
+  return {
+    io: leg.io,
+    inHk: leg.inHk,
+    startTime: leg.startTime,
+    endTime: leg.endTime,
+    durationMs: leg.totalDurationMs,
+    exposure: leg.totalExposure,
+    // Roads for a vehicle ride; "underground" explains a dashed MTR line.
+    detail:
+      formatRoadList(leg.roadNames, EXPOSURE_MAP_CONFIG.maxRoadNamesShown) ??
+      (leg.pathInferred ? 'underground' : null),
+  };
 };
 
-const formatTime = (ms: number): string =>
-  new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
 const ExposureReportView: React.FC<Props> = ({ report, title, hourlyChart }) => {
-  const maxExposure = useMemo(
-    () => Math.max(0, ...report.segments.map(s => s.exposure)),
+  // The same stays/legs the map draws (same functions, same radius), so a
+  // timeline row and a dot/line on the map are always the same thing — the
+  // raw rows would list every thinned route point (hundreds a day).
+  const timeline = useMemo(
+    () =>
+      buildExposureTimeline(
+        clusterStayPoints(report.segments, EXPOSURE_MAP_CONFIG.stayRadiusMeters),
+        buildTripLegs(report.segments),
+      ),
+    [report.segments],
+  );
+  // The exposure-relevant headline the io split makes possible: open-air
+  // time, where heat and air quality hit hardest.
+  const outdoorMs = useMemo(
+    () =>
+      report.segments
+        .filter(s => s.io === 'Outdoor')
+        .reduce((sum, s) => sum + (s.endTime - s.startTime), 0),
     [report.segments],
   );
 
@@ -61,8 +103,8 @@ const ExposureReportView: React.FC<Props> = ({ report, title, hourlyChart }) => 
             <Text style={styles.statLabel}>Duration</Text>
           </View>
           <View style={styles.stat}>
-            <Text style={styles.statValue}>{report.segments.length}</Text>
-            <Text style={styles.statLabel}>Locations</Text>
+            <Text style={styles.statValue}>{formatDuration(outdoorMs)}</Text>
+            <Text style={styles.statLabel}>Time outdoors</Text>
           </View>
         </View>
         {report.segments.length > 0 && (
@@ -92,41 +134,47 @@ const ExposureReportView: React.FC<Props> = ({ report, title, hourlyChart }) => 
       ) : (
         <>
           <View style={styles.segmentListHeader}>
-            <View style={styles.segmentDotSpacer} />
-            <Text style={styles.segmentListHeaderText}>Time at location</Text>
+            <View style={styles.segmentBadgeSpacer} />
+            <Text style={styles.segmentListHeaderText}>Timeline</Text>
             <Text style={[styles.segmentListHeaderText, styles.segmentListHeaderExposure]}>
               Exposure (%AR·h)
             </Text>
           </View>
           <ScrollView style={styles.segmentList} nestedScrollEnabled>
-            {report.segments.map((segment, i) => (
-            <View key={`${segment.startTime}-${i}`} style={styles.segmentRow}>
-              <View
-                style={[
-                  styles.segmentDot,
-                  {
-                    backgroundColor: segment.inHk
-                      ? exposureColor(segment.exposure, maxExposure)
-                      : EXPOSURE_MAP_CONFIG.outsideHkColor,
-                  },
-                ]}
-              />
-              <View style={styles.segmentInfo}>
-                <Text style={styles.segmentTime}>
-                  {formatTime(segment.startTime)} – {formatTime(segment.endTime)}{' '}
-                  ({formatDuration(segment.endTime - segment.startTime)})
-                </Text>
-                <Text style={styles.segmentLocation}>
-                  {segment.lat.toFixed(5)}, {segment.lon.toFixed(5)}
-                  {!segment.inHk && ' · Outside HK'}
-                </Text>
-              </View>
-              {/* "—" not "0.000": outside HK means "not calculated", not zero. */}
-              <Text style={styles.segmentExposure}>
-                {segment.inHk ? segment.exposure.toFixed(3) : '—'}
-              </Text>
-            </View>
-            ))}
+            {timeline.map((item, i) => {
+              const row = timelineRowContent(item);
+              const { color, label } = EXPOSURE_IO_CONFIG[row.io];
+              const Icon = EXPOSURE_IO_ICONS[row.io];
+              return (
+                <View key={`${item.type}-${row.startTime}-${i}`} style={styles.segmentRow}>
+                  {/* Same icon badge as the map's stay dots, so a row is
+                      matched to the map by shape and color alone. */}
+                  <View
+                    style={[
+                      styles.segmentBadge,
+                      { backgroundColor: row.inHk ? color : EXPOSURE_MAP_CONFIG.outsideHkColor },
+                    ]}
+                  >
+                    <Icon size={12} color="#fff" />
+                  </View>
+                  <View style={styles.segmentInfo}>
+                    <Text style={styles.segmentTime}>
+                      {formatTime(row.startTime)} – {formatTime(row.endTime)}{' '}
+                      ({formatDuration(row.durationMs)})
+                    </Text>
+                    <Text style={styles.segmentLocation} numberOfLines={1}>
+                      {label}
+                      {row.detail && ` · ${row.detail}`}
+                      {!row.inHk && ' · Outside HK'}
+                    </Text>
+                  </View>
+                  {/* "—" not "0.000": outside HK means "not calculated", not zero. */}
+                  <Text style={styles.segmentExposure}>
+                    {row.inHk ? row.exposure.toFixed(3) : '—'}
+                  </Text>
+                </View>
+              );
+            })}
           </ScrollView>
         </>
       )}
@@ -187,7 +235,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(0,0,0,0.1)',
   },
-  segmentDotSpacer: { width: 10, marginRight: 10 },
+  segmentBadgeSpacer: { width: 22, marginRight: 10 },
   segmentListHeaderText: { flex: 1, fontSize: 10, fontWeight: '700', color: '#8E8E93' },
   segmentListHeaderExposure: { flex: 0, textAlign: 'right' },
   segmentList: { maxHeight: 300 },
@@ -198,7 +246,14 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: 'rgba(0,0,0,0.08)',
   },
-  segmentDot: { width: 10, height: 10, borderRadius: 5, marginRight: 10 },
+  segmentBadge: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    marginRight: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   segmentInfo: { flex: 1 },
   segmentTime: { fontSize: 13, fontWeight: '600', color: '#1C1C1E' },
   segmentLocation: { fontSize: 11, color: '#8E8E93', marginTop: 2 },

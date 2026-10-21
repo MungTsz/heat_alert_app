@@ -49,6 +49,37 @@ describe('toExposureSegments', () => {
     expect(segment.inHk).toBe(true);
   });
 
+  it('carries the route fields through, with null mapped to undefined', () => {
+    const [routePoint] = toExposureSegments([
+      row({
+        io: 'Vehicle',
+        kind: 'route',
+        reason: 'vehicle',
+        io_source: 'inferred',
+        heading_deg: 234.5,
+        road_name: 'LUNG CHEUNG ROAD',
+      }),
+    ]);
+    expect(routePoint).toMatchObject({
+      io: 'Vehicle',
+      kind: 'route',
+      reason: 'vehicle',
+      ioSource: 'inferred',
+      roadName: 'LUNG CHEUNG ROAD',
+    });
+
+    const [stayPoint] = toExposureSegments([
+      row({ kind: 'stay', reason: null, heading_deg: null, road_name: null }),
+    ]);
+    expect(stayPoint.reason).toBeUndefined();
+    expect(stayPoint.roadName).toBeUndefined();
+  });
+
+  it('reads a row without kind (stored before routes existed) as a stay', () => {
+    const [segment] = toExposureSegments([row()]);
+    expect(segment.kind).toBe('stay');
+  });
+
   it('sorts by start_time_hk, not input order, when rows share an hour_start_hk', () => {
     const segments = toExposureSegments([
       row({ start_time_hk: '20260830163500', lat: 22.31, lng: 114.21 }),

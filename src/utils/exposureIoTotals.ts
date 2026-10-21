@@ -29,6 +29,18 @@ export const formatIoBreakdown = (byIo: Record<ExposureIo, number>): string =>
     .map(io => `${io} ${byIo[io].toFixed(2)}`)
     .join(' · ');
 
+// The io types with a positive total in any of these per-io maps — i.e. the
+// ones that actually draw a bar segment, for the legend's `present` filter.
+export const ioTypesWithExposure = (
+  byIoList: Iterable<Record<ExposureIo, number>>,
+): Set<ExposureIo> => {
+  const present = new Set<ExposureIo>();
+  for (const byIo of byIoList) {
+    for (const io of EXPOSURE_IO_TYPES) if (byIo[io] > 0) present.add(io);
+  }
+  return present;
+};
+
 // Sums a set of segments (e.g. one day's) into per-io totals for the
 // stacked-bar charts — used where only the day-level split is needed
 // (ExposureDailyBarChart).

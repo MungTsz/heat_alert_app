@@ -33,7 +33,7 @@ export const toExposureSegments = (
   rows: ExposureHourlyApiRow[],
 ): ExposureSegmentResult[] =>
   rows
-    .map(row => {
+    .map((row): ExposureSegmentResult => {
       const startTime = hkTimestampToEpochMs(row.start_time_hk);
       return {
         startTime,
@@ -53,6 +53,12 @@ export const toExposureSegments = (
         // Missing in_hk = a row stored before the backend added the field,
         // when everything ingested was scored as HK — treat as inside.
         inHk: row.in_hk !== false,
+        // A row without kind predates routes: it was one row per dwell run.
+        kind: row.kind ?? 'stay',
+        // null → undefined so the app model has one "absent" value.
+        reason: row.reason ?? undefined,
+        ioSource: row.io_source,
+        roadName: row.road_name ?? undefined,
       };
     })
     .sort((a, b) => a.startTime - b.startTime);

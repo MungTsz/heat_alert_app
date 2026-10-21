@@ -1,9 +1,10 @@
-import { ExposureIo } from './exposure';
+import { EXPOSURE_INDOOR_IO_TYPES } from './exposure';
 
 // A place's category IS the indoor io type the exposure backend assigns to
-// stays inside it — derived from ExposureIo rather than redeclared, so the
-// two can never drift apart.
-export type PlaceCategory = Exclude<ExposureIo, 'Outdoor'>;
+// stays inside it — derived from the indoor io group rather than redeclared,
+// so the two can never drift apart (and Outdoor/Vehicle/MTR, which no place
+// label can produce, are excluded by construction).
+export type PlaceCategory = (typeof EXPOSURE_INDOOR_IO_TYPES)[number];
 
 export type BookmarkEntry = {
   id: string;

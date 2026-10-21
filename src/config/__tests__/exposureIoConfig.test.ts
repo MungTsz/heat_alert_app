@@ -1,4 +1,9 @@
-import { EXPOSURE_IO_CONFIG, normalizeExposureIo } from '../exposureIoConfig';
+import {
+  EXPOSURE_IO_CONFIG,
+  EXPOSURE_IO_GROUPS,
+  isIndoorIo,
+  normalizeExposureIo,
+} from '../exposureIoConfig';
 import { EXPOSURE_IO_TYPES } from '../../types/exposure';
 
 describe('normalizeExposureIo', () => {
@@ -20,5 +25,22 @@ describe('EXPOSURE_IO_CONFIG', () => {
   it('gives every io type its own distinct color', () => {
     const colors = EXPOSURE_IO_TYPES.map(io => EXPOSURE_IO_CONFIG[io].color.toLowerCase());
     expect(new Set(colors).size).toBe(colors.length);
+  });
+});
+
+describe('EXPOSURE_IO_GROUPS', () => {
+  it('lists every io type exactly once, in stack order', () => {
+    expect(EXPOSURE_IO_GROUPS.flat()).toEqual([...EXPOSURE_IO_TYPES]);
+  });
+});
+
+describe('isIndoorIo', () => {
+  it('is true only for the place-label categories', () => {
+    expect(EXPOSURE_IO_TYPES.filter(isIndoorIo)).toEqual([
+      'Other Indoor',
+      'School',
+      'Office',
+      'Home',
+    ]);
   });
 });

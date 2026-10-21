@@ -4,7 +4,7 @@ import { View, Text, StyleSheet, Dimensions, FlatList, TouchableOpacity } from '
 import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight } from 'lucide-react-native';
 import { DailyExposureEntry, ExposureReport } from '../types/exposure';
 import { getHkWeekStartKey } from '../utils/hkDate';
-import { sumExposureByIo } from '../utils/exposureIoTotals';
+import { ioTypesWithExposure, sumExposureByIo } from '../utils/exposureIoTotals';
 import {
   addHkWeeks,
   buildDailyIoMap,
@@ -58,6 +58,10 @@ const ExposureWeekCard: React.FC<Props> = ({
       ),
     [history, todayKey, todayReport],
   );
+
+  // Every io with a bar on any page (not just the visible week), so the
+  // shared legend above the pager doesn't change while swiping.
+  const presentIos = useMemo(() => ioTypesWithExposure(dailyMap.values()), [dailyMap]);
 
   // Pages run from the oldest tracked week (or the visible week, if a
   // calendar pick landed earlier) through the current week — empty weeks in
@@ -149,7 +153,7 @@ const ExposureWeekCard: React.FC<Props> = ({
         </TouchableOpacity>
       </View>
 
-      <ExposureIoLegend />
+      <ExposureIoLegend present={presentIos} />
 
       <View style={styles.chartRow}>
         <WeekChartYTitle />

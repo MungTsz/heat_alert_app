@@ -8,6 +8,8 @@ import { ExposureIo } from '../../types/exposure';
 
 const byIo = (outdoor: number, home = 0): Record<ExposureIo, number> => ({
   Outdoor: outdoor,
+  Vehicle: 0,
+  MTR: 0,
   'Other Indoor': 0,
   School: 0,
   Office: 0,

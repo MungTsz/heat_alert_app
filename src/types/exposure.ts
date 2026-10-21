@@ -17,23 +17,38 @@ export type ExposureIngestFeature = GeoJsonPointFeature;
 // to (GeoJSON → POST /ingest as JSON, GPX → POST /ingest/gpx as raw XML).
 export type TrackFileFormat = 'geojson' | 'gpx';
 
-// The backend's io types, in stack/legend order (bottom → top): Outdoor
-// first, then the indoor kinds adjacent so they read as one group. An indoor
-// stay inside a user-labelled place circle (see PlaceCategory in
-// types/bookmark.ts) takes that place's category; an unlabelled one falls
-// back to the start-time rule — starting in the 00:00-06:00 HK window is
-// Home, anything else is Other Indoor.
-export const EXPOSURE_IO_TYPES = ['Outdoor', 'Other Indoor', 'School', 'Office', 'Home'] as const;
+// The backend's io types fall into three groups by how much of the outdoor
+// environment a person is exposed to: open air (Outdoor), enclosed transport
+// (Vehicle on the roads, MTR mostly underground), and sheltered indoors. The
+// groups are declared separately so the legend can chunk them and
+// PlaceCategory can be derived from the indoor group alone.
+export const EXPOSURE_TRANSIT_IO_TYPES = ['Vehicle', 'MTR'] as const;
+// A stay inside a user-labelled place circle (see PlaceCategory in
+// types/bookmark.ts) takes that place's category; an unlabelled one is Home
+// when it overlaps the 00:00-06:00 HK night window (or sits near such a
+// stay), anything else Other Indoor — Office/School are never guessed.
+export const EXPOSURE_INDOOR_IO_TYPES = ['Other Indoor', 'School', 'Office', 'Home'] as const;
+// Stack/legend order (bottom → top): Outdoor sits on the baseline because
+// it's the main exposure driver and only the bottom layer can be compared
+// across bars by height; then decreasing contact with outdoor air.
+export const EXPOSURE_IO_TYPES = [
+  'Outdoor',
+  ...EXPOSURE_TRANSIT_IO_TYPES,
+  ...EXPOSURE_INDOOR_IO_TYPES,
+] as const;
 export type ExposureIo = (typeof EXPOSURE_IO_TYPES)[number];
 
+// A backend point is either a whole stay (one point at the median of its
+// pings, incl. an MTR interchange) or one kept ping of a route (walk,
+// vehicle, MTR ride) — routes are drawn as lines, stays as dots.
+export type ExposurePointKind = 'stay' | 'route';
+
 // One row of the ETL backend's GET /exposure/hourly/{pid} response — one per
-// dwell run, or one per hour-slice of a run that crosses an hour boundary
-// (prorated delta_t_hours per slice, not reclassified per hour). Rows are
-// keyed by (pid, io, start_time_hk), so multiple rows can now share the same
-// hour_start_hk + io (e.g. two separate outdoor stops inside one clock
-// hour) — each still carries its own coordinates. lat/lng semantics differ
-// by io: Outdoor (a "moving" type) is the average of the run's pings; the
-// indoor kinds ("stationary" types) are the run's first ping.
+// point (a stay, or one thinned route ping), or one per hour-slice of a
+// point whose time crosses an HK clock hour (prorated delta_t_hours per
+// slice, not reclassified per hour; the slices repeat the position). Rows
+// are keyed by (pid, io, start_time_hk), so many rows can share the same
+// hour_start_hk + io (e.g. every point of one walk).
 export type ExposureHourlyApiRow = {
   hour_start_hk: string; // YYYYMMDDHHMMSS, HK local, truncated to the hour — group by this (+io) for the bar chart
   start_time_hk: string; // YYYYMMDDHHMMSS, HK local — this row's own precise start; sort by this for the map route
@@ -41,19 +56,39 @@ export type ExposureHourlyApiRow = {
   // rows said 'Indoor'), so it's mapped via normalizeExposureIo on adapt.
   io: string;
   // 'label' when a crowd-sourced place label decided io, 'inferred' when the
-  // backend's own stay rules did. Not used by the UI yet; optional because
-  // rows stored before place labels existed don't have it.
-  io_source?: 'label' | 'inferred';
+  // backend's own stay rules did. Optional because rows stored before place
+  // labels existed don't have it.
+  io_source?: ExposureIoSource;
+  // Which backend rule decided io ('jump', 'night_stay', 'place_label', …).
+  // Raw string so a new rule degrades to "no explanation" instead of a
+  // crash; null/absent on rows stored before the field existed.
+  reason?: string | null;
+  // null/absent on rows stored before routes existed — those were one row
+  // per dwell run, i.e. stays.
+  kind?: ExposurePointKind | null;
   delta_t_hours: number;
   // null when in_hk is false (never scored), or expo_calx failed for this row.
   exposure_value: number | null;
   lng: number;
   lat: number;
+  // Route points: direction to the next point, degrees clockwise from north
+  // (compass: the same as N/NE/…); null for stays. Not read: the map's
+  // arrows take their direction from the drawn line itself. The backend
+  // gives a run's LAST point the heading of the segment before it, not of
+  // the segment to the next run's point that the map draws — on the real
+  // 2026-08-30 sample 7 of 485 edges (every leg's final one) disagreed by
+  // 20-150°, i.e. arrows pointing backwards.
+  heading_deg?: number | null;
+  compass?: string | null;
+  // Vehicle route points: English name of the road within 30 m.
+  road_name?: string | null;
   // expo_calx only scores Hong Kong — rows outside are still returned so
   // the route can be drawn, but carry no exposure. Optional because rows
   // ingested before the backend added the field don't have it.
   in_hk?: boolean;
 };
+
+export type ExposureIoSource = 'label' | 'inferred';
 
 // POST /ingest's 202 body — the pipeline runs as a background job.
 export type ExposureIngestAccepted = {
@@ -97,6 +132,13 @@ export type ExposureSegmentResult = {
   // false = outside Hong Kong: drawn on the map (in a neutral color) but
   // exposure is always 0 and must not be read as "zero exposure".
   inHk: boolean;
+  // The new per-point fields are optional because segments cached in
+  // AsyncStorage before the backend sent them don't have them. A missing
+  // kind reads as 'stay' (the old rows were one per dwell run).
+  kind?: ExposurePointKind;
+  reason?: string;
+  ioSource?: ExposureIoSource;
+  roadName?: string;
 };
 
 export type ExposureReport = {
@@ -142,6 +184,29 @@ export type ExposureStayCluster = {
   totalExposure: number; // sum across merged segments, shown in the callout
   io: ExposureIo;
   inHk: boolean; // runs never mix in/out-of-HK segments (see clusterStayPoints)
+  // The anchor segment's — explains in the stay sheet why the stay got its io.
+  reason?: string;
+  ioSource?: ExposureIoSource;
+};
+
+// One leg of travel on the trajectory map — a run of chronologically
+// consecutive route segments sharing io / inHk / pathInferred (see
+// buildTripLegs in utils/exposureTrajectory.ts), drawn as one polyline.
+export type ExposureTripLeg = {
+  io: ExposureIo;
+  inHk: boolean;
+  // true for an MTR ride the backend inferred from a GPS jump (no pings
+  // underground): the line between stations is a straight-line guess, not
+  // the travelled path, so it's drawn dashed.
+  pathInferred: boolean;
+  path: { latitude: number; longitude: number }[];
+  startTime: number;
+  endTime: number;
+  totalDurationMs: number; // summed per segment, same reason as ExposureStayCluster
+  totalExposure: number;
+  // Distinct road names in travel order (Vehicle legs only).
+  roadNames: string[];
+  reason?: string;
 };
 
 // A named workspace for imported data tagged with its own pid — distinct

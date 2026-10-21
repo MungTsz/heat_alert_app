@@ -34,15 +34,21 @@ export const haversineMeters = (
 // because a segment fails the radius check, the next run starts fresh with a
 // new anchor. There's no global spatial lookup, so this falls out of the
 // algorithm's structure — don't "fix" this into a global merge later.
+//
+// Route segments (kind 'route') are drawn as lines by buildTripLegs, not as
+// dots, so they're skipped — but they still close the open run: two stays
+// with a walk between them are two visits even if they're 20 m apart. In
+// practice the backend already emits one point per stay, so what's left to
+// merge here is a stay's hour-split slices (same position) and old
+// pre-route rows.
 export const clusterStayPoints = (
   segments: ExposureSegmentResult[],
   radiusMeters: number,
 ): ExposureStayCluster[] => {
-  if (segments.length === 0) return [];
-
   const clusters: ExposureStayCluster[] = [];
 
   const closeRun = (run: ExposureSegmentResult[]) => {
+    if (run.length === 0) return;
     const anchor = run[0];
     clusters.push({
       lat: anchor.lat,
@@ -54,12 +60,22 @@ export const clusterStayPoints = (
       totalExposure: run.reduce((sum, s) => sum + s.exposure, 0),
       io: anchor.io,
       inHk: anchor.inHk,
+      reason: anchor.reason,
+      ioSource: anchor.ioSource,
     });
   };
 
-  let run: ExposureSegmentResult[] = [segments[0]];
-  for (let i = 1; i < segments.length; i++) {
-    const segment = segments[i];
+  let run: ExposureSegmentResult[] = [];
+  for (const segment of segments) {
+    if (segment.kind === 'route') {
+      closeRun(run);
+      run = [];
+      continue;
+    }
+    if (run.length === 0) {
+      run = [segment];
+      continue;
+    }
     const anchor = run[0];
     // Also break the run on an io change (e.g. a doorway transition) even
     // when the backend's per-hour reference point hasn't moved — otherwise
