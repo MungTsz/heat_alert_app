@@ -4,6 +4,7 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { EXPOSURE_IO_CONFIG } from '../../config/exposureIoConfig';
 import { PlaceCategory } from '../../types/bookmark';
 import StepDots from './StepDots';
+import { ADD_PLACE_STEPS } from '../../config/alertUiConfig';
 import PlaceCategoryPicker from './PlaceCategoryPicker';
 import InfoNote from './InfoNote';
 
@@ -14,8 +15,6 @@ type Props = {
   onCancel: () => void;
 };
 
-const TOTAL_STEPS = 2;
-
 // Step 1 of Add place: the category is the one piece of data the exposure
 // API actually uses, so it gets a screen to itself, is never preselected,
 // and needs an explicit Next — tapping a tile only selects it, so a mis-tap
@@ -25,7 +24,7 @@ const PlaceCategoryStep: React.FC<Props> = ({ selected, onSelect, onNext, onCanc
 
   return (
     <View>
-      <StepDots current={1} total={TOTAL_STEPS} />
+      <StepDots current={ADD_PLACE_STEPS.category} total={ADD_PLACE_STEPS.total} />
       <Text style={styles.title}>What kind of place is this?</Text>
 
       <PlaceCategoryPicker selected={selected} onSelect={onSelect} />

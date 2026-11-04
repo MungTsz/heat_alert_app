@@ -3,8 +3,11 @@ import React, { useState } from 'react';
 import { Modal, View, TouchableOpacity, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BookmarkEntry, PlaceCategory } from '../types/bookmark';
+import { PlaceAlertProfile } from '../types/alerts';
 import { PLACE_LABEL_CONFIG } from '../config/placeLabelConfig';
+import { DEFAULT_PLACE_ALERT_PROFILE } from '../config/alertConfig';
 import PlaceCategoryStep from './addPlace/PlaceCategoryStep';
+import PlaceAudienceStep from './addPlace/PlaceAudienceStep';
 import MapPickerModal, { PickedPlace } from './MapPickerModal';
 
 type Coordinates = { latitude: number; longitude: number };
@@ -20,11 +23,12 @@ type Props = {
   onAdd: (place: Omit<BookmarkEntry, 'id' | 'updatedAt'>) => void;
 };
 
-type Step = 'category' | 'location';
+type Step = 'category' | 'audience' | 'location';
 
-// Two focused steps, most important first: (1) what kind of place — the
-// data the exposure API uses, (2) where it is and how big, on a map. The
-// name is generated from the location, so nothing has to be typed.
+// Three focused steps, most important first: (1) what kind of place — the
+// data the exposure API uses, (2) who is mainly there — what alerts use,
+// (3) where it is and how big, on a map. The name is generated from the
+// location, so nothing has to be typed.
 const AddBookmarkModal = ({
   visible,
   onClose,
@@ -36,10 +40,12 @@ const AddBookmarkModal = ({
   const insets = useSafeAreaInsets();
   const [step, setStep] = useState<Step>('category');
   const [category, setCategory] = useState<PlaceCategory | null>(null);
+  const [alertProfile, setAlertProfile] = useState<PlaceAlertProfile>(DEFAULT_PLACE_ALERT_PROFILE);
 
   const resetAndClose = () => {
     setStep('category');
     setCategory(null);
+    setAlertProfile(DEFAULT_PLACE_ALERT_PROFILE);
     onClose();
   };
 
@@ -52,14 +58,17 @@ const AddBookmarkModal = ({
       longitude: place.longitude,
       radiusMeters: place.radiusMeters,
       category,
+      alertProfile,
     });
     resetAndClose();
   };
 
+  const sheetStep = step === 'category' || step === 'audience';
+
   return (
     <>
       <Modal
-        visible={visible && step === 'category'}
+        visible={visible && sheetStep}
         animationType="slide"
         transparent
         onRequestClose={resetAndClose}
@@ -72,12 +81,21 @@ const AddBookmarkModal = ({
             onPress={resetAndClose}
           />
           <View style={[styles.sheet, { paddingBottom: 24 + insets.bottom }]}>
-            <PlaceCategoryStep
-              selected={category}
-              onSelect={setCategory}
-              onNext={() => setStep('location')}
-              onCancel={resetAndClose}
-            />
+            {step === 'category' ? (
+              <PlaceCategoryStep
+                selected={category}
+                onSelect={setCategory}
+                onNext={() => setStep('audience')}
+                onCancel={resetAndClose}
+              />
+            ) : (
+              <PlaceAudienceStep
+                profile={alertProfile}
+                onChange={setAlertProfile}
+                onBack={() => setStep('category')}
+                onNext={() => setStep('location')}
+              />
+            )}
           </View>
         </View>
       </Modal>
@@ -90,7 +108,7 @@ const AddBookmarkModal = ({
           initialCenter={initialCenter ?? currentLocation ?? PLACE_LABEL_CONFIG.fallbackCenter}
           category={category}
           otherPlaces={existingPlaces}
-          onBack={() => setStep('category')}
+          onBack={() => setStep('audience')}
           onConfirm={handleConfirm}
         />
       )}

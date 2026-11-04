@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
-import { Trash2, Pencil, ChevronDown } from 'lucide-react-native';
+import { Trash2, Pencil, ChevronDown, ChevronRight, Bell, BellOff } from 'lucide-react-native';
 import { getHeatIndexInfo } from '../utils/heatIndexUtils';
 import { getAqhiInfo } from '../utils/aqhiUtils';
 import { PlaceCategory } from '../types/bookmark';
@@ -15,7 +15,11 @@ type Props = {
   temperature: number | null; // heat index
   aqhi: number | null;
   distance: number | null; // miles; null until the phone's position is known
+  // One-line "who is here" summary (see summarizeAlertProfile).
+  alertSummary: string;
+  alertsOn: boolean;
   onPress: () => void;
+  onAlertSettings: () => void;
   onChangeType: () => void;
   onRename: () => void;
   onRemove: () => void;
@@ -32,7 +36,10 @@ const BookmarkCard = ({
   temperature,
   aqhi,
   distance,
+  alertSummary,
+  alertsOn,
   onPress,
+  onAlertSettings,
   onChangeType,
   onRename,
   onRemove,
@@ -88,6 +95,21 @@ const BookmarkCard = ({
           {distance === null ? '--' : distance.toFixed(1)} miles away · {radiusMeters} m area
         </Text>
       </View>
+
+      {/* Spelled out and tappable, like the type chip: who the place is
+          for decides when its alerts fire, so it should be easy to check. */}
+      <TouchableOpacity
+        style={styles.alertRow}
+        onPress={onAlertSettings}
+        hitSlop={ACTION_HIT_SLOP}
+        accessibilityLabel={`Alert settings: ${alertSummary}. Tap to change`}
+      >
+        {alertsOn ? <Bell size={13} color="#666" /> : <BellOff size={13} color="#999" />}
+        <Text style={styles.alertText} numberOfLines={1}>
+          {alertSummary}
+        </Text>
+        <ChevronRight size={14} color="#999" />
+      </TouchableOpacity>
 
       <View style={styles.badgeRow}>
         <View
@@ -154,7 +176,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     marginTop: 6,
+    marginBottom: 8,
+  },
+  alertRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
     marginBottom: 10,
+  },
+  alertText: {
+    flexShrink: 1,
+    fontSize: 12,
+    color: '#555',
   },
   typeChip: {
     flexDirection: 'row',

@@ -87,3 +87,16 @@ export const formatAqhiValue = (aqhi: number): string => {
   const v = clampAqhiValue(aqhi);
   return v >= 11 ? '10+' : v.toString();
 };
+
+// A level's value span ("1-3", "7", "8-10", "10+"), derived from the same
+// value→classification table getAqhiInfo uses, so labels like "Very High
+// (8-10)" can never disagree with how readings are classified.
+export const formatAqhiLevelRange = (level: string): string => {
+  const values = Object.entries(AQHI_CLASSIFICATION_BY_VALUE)
+    .filter(([, classification]) => classification === level)
+    .map(([value]) => Number(value));
+  if (values.length === 0) return '';
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  return min === max ? formatAqhiValue(min) : `${min}-${formatAqhiValue(max)}`;
+};

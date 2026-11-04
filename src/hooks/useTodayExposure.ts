@@ -6,7 +6,7 @@ import { exposureDataProvider } from '../data/exposure';
 import { DEFAULT_PID } from '../utils/exposurePid';
 import { refreshHistoryCache } from '../services/exposureHistoryService';
 
-// Matches HeatAlertEngine's foreground check cadence — this is a
+// Matches AlertEngine's foreground check cadence — this is a
 // while-the-screen-is-open poll, not a background job.
 const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { BookmarkEntry, PlaceCategory } from '../types/bookmark';
+import { PlaceAlertProfile } from '../types/alerts';
 import { readBookmarks, writeBookmarks } from '../services/bookmarkStorage';
 import { syncPlaceLabels } from '../services/placeLabelSyncService';
 import { moveBookmarkTo } from '../utils/bookmarkOrder';
@@ -71,6 +72,12 @@ export const useBookmarkList = () => {
     await persist(bookmarks.map(b => (b.id === id ? { ...b, hidden } : b)));
   };
 
+  // Like hide/rename: the alert profile never leaves the phone (it can hold
+  // health information), so it doesn't bump updatedAt or trigger a sync.
+  const setBookmarkAlertProfile = async (id: string, alertProfile: PlaceAlertProfile) => {
+    await persist(bookmarks.map(b => (b.id === id ? { ...b, alertProfile } : b)));
+  };
+
   return {
     bookmarks,
     loading,
@@ -80,5 +87,6 @@ export const useBookmarkList = () => {
     changeBookmarkCategory,
     moveBookmark,
     setBookmarkHidden,
+    setBookmarkAlertProfile,
   };
 };

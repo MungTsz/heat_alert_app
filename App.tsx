@@ -7,7 +7,7 @@ import CommunityScreen from './src/screens/CommunityScreen';
 import ExposureScreen from './src/screens/ExposureScreen';
 import FloatingNavBar, { TabName } from './src/components/FloatingNavBar';
 import SettingsScreen from './src/screens/SettingsScreen';
-import HeatAlertEngine from './src/components/HeatAlertEngine';
+import AlertEngine from './src/components/AlertEngine';
 
 const App = () => {
   const [activeTab, setActiveTab] = useState<TabName>('Environment');
@@ -27,7 +27,7 @@ const App = () => {
 
   return (
     <SafeAreaProvider>
-      <HeatAlertEngine />
+      <AlertEngine />
       <View style={styles.container}>
         {renderScreen()}
         <FloatingNavBar activeTab={activeTab} onTabChange={setActiveTab} />

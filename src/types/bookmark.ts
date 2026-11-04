@@ -1,4 +1,5 @@
 import { EXPOSURE_INDOOR_IO_TYPES } from './exposure';
+import type { PlaceAlertProfile } from './alerts';
 
 // A place's category IS the indoor io type the exposure backend assigns to
 // stays inside it — derived from the indoor io group rather than redeclared,
@@ -28,6 +29,12 @@ export type BookmarkEntry = {
   // Optional so entries stored before it existed need no migration
   // (undefined = shown).
   hidden?: boolean;
+  // Who is mainly here and which hazards to alert on. Health-related
+  // personal data ("long-term condition"), so it stays on the phone: it is
+  // not in the place-labels upload payload, and changing it must NOT bump
+  // updatedAt. Optional so older entries need no migration — read it
+  // through resolveAlertProfile(), which fills in the defaults.
+  alertProfile?: PlaceAlertProfile;
 };
 
 // The pre-category shape still sitting in AsyncStorage on older installs —

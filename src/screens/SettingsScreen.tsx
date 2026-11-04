@@ -1,86 +1,41 @@
 // src/screens/SettingsScreen.tsx
 import React from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Animated,
-  LayoutChangeEvent,
-} from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import {
-  MapPin,
-  CheckCircle2,
-  XCircle,
-  Thermometer,
-  Wind,
-} from 'lucide-react-native';
+import { MapPin, CheckCircle2, XCircle } from 'lucide-react-native';
 import SettingsSection from '../components/SettingsSection';
 import SettingsToggleRow from '../components/SettingsToggleRow';
+import SegmentedControl from '../components/SegmentedControl';
+import TimeStepperRow from '../components/TimeStepperRow';
+import AlertProfileEditor from '../components/alerts/AlertProfileEditor';
 import { useNotificationSettings } from '../hooks/useNotificationSettings';
 import { useLocationPermissionStatus } from '../hooks/useLocationPermissionStatus';
 import { useMapSettings } from '../hooks/useMapSettings';
 import { useExposureTrackingSettings } from '../hooks/useExposureTrackingSettings';
-import { HEAT_LEVELS_ORDERED } from '../types/settings';
-import { getHeatZoneByClassification } from '../utils/heatIndexUtils';
-import { getAqhiInfo } from '../utils/aqhiUtils';
-import { sendTestNotification } from '../services/notificationService';
-import { runHeatAlertCheckNow } from '../services/heatAlertBus';
-import { AqhiLevel } from '../types/settings';
+import { AllClearMode } from '../types/settings';
+import { ALL_CLEAR_COPY, PROFILE_EDITOR_COPY } from '../config/alertCopy';
+import { sendSampleNotification } from '../services/alertCheckService';
+import { runAlertCheckNow } from '../services/alertCheckBus';
 
-// AQHI thresholds use the real 1-11 severity bands, grouped into named
-// levels for the toggle UI, mirroring how heat's levels work.
-const AQHI_LEVEL_GROUPS: { label: AqhiLevel; sampleValue: number }[] = [
-  { label: 'Low', sampleValue: 2 },
-  { label: 'Moderate', sampleValue: 5 },
-  { label: 'High', sampleValue: 7 },
-  { label: 'Very High', sampleValue: 9 },
-  { label: 'Serious', sampleValue: 11 },
-];
+const ALL_CLEAR_OPTIONS: { value: AllClearMode; label: string }[] = (
+  ['auto', 'always', 'off'] as const
+).map(value => ({ value, label: ALL_CLEAR_COPY[value] }));
 
+// Settings decide HOW alerts arrive. WHEN a place counts as dangerous is set
+// per place (Community → a card's alert line), apart from your own live
+// location, which is "About you" here.
 const SettingsScreen = () => {
-  const {
-    settings,
-    toggleAlertLevel,
-    setNotifyCurrentLocation,
-    setNotifyBookmarkedLocations,
-  } = useNotificationSettings();
-  const { granted, requestPermission, openAppSettings } =
-    useLocationPermissionStatus();
+  const { settings, update } = useNotificationSettings();
+  const { granted, requestPermission, openAppSettings } = useLocationPermissionStatus();
   const { settings: mapSettings, update: updateMapSettings } = useMapSettings();
   const { enabled: exposureTrackingEnabled, setEnabled: setExposureTrackingEnabled } =
     useExposureTrackingSettings();
 
   const [checking, setChecking] = React.useState(false);
-  const [activeIndexTab, setActiveIndexTab] = React.useState<'heat' | 'aqhi'>(
-    'heat',
-  );
-
-  // Sliding-pill segmented control for the index tabs, mirroring the
-  // capsule + moving-indicator pattern already used by FloatingNavBar.
-  const [indexTabRowWidth, setIndexTabRowWidth] = React.useState(0);
-  const indexTabAnim = React.useRef(new Animated.Value(0)).current;
-
-  React.useEffect(() => {
-    if (indexTabRowWidth > 0) {
-      Animated.spring(indexTabAnim, {
-        toValue: activeIndexTab === 'heat' ? 0 : 1,
-        useNativeDriver: true,
-        bounciness: 6,
-        speed: 14,
-      }).start();
-    }
-  }, [activeIndexTab, indexTabRowWidth, indexTabAnim]);
-
-  const handleIndexTabRowLayout = (e: LayoutChangeEvent) => {
-    setIndexTabRowWidth(e.nativeEvent.layout.width);
-  };
 
   const handleRunCheckNow = async () => {
     setChecking(true);
-    const ran = await runHeatAlertCheckNow();
+    const ran = await runAlertCheckNow();
     setChecking(false);
     if (!ran) console.log('Engine not ready yet — try again in a moment.');
   };
@@ -93,120 +48,25 @@ const SettingsScreen = () => {
     }
   };
 
+  const { quietHours } = settings;
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <Text style={styles.headerTitle}>Settings</Text>
 
-        {/* Index selector card — pick which index's thresholds to edit below */}
         <SettingsSection
-          title="ALERT THRESHOLDS"
-          subtitle="Choose which levels send a notification, per index"
+          title="ABOUT YOU"
+          subtitle="Sets when alerts for your current location reach you"
         >
-          <View style={styles.indexTabRow} onLayout={handleIndexTabRowLayout}>
-            {indexTabRowWidth > 0 && (
-              <Animated.View
-                style={[
-                  styles.indexTabIndicator,
-                  {
-                    width: (indexTabRowWidth - 8) / 2,
-                    transform: [
-                      {
-                        translateX: indexTabAnim.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: [0, (indexTabRowWidth - 8) / 2],
-                        }),
-                      },
-                    ],
-                  },
-                ]}
-              />
-            )}
-            <TouchableOpacity
-              style={styles.indexTab}
-              onPress={() => setActiveIndexTab('heat')}
-            >
-              <Thermometer
-                size={16}
-                color={activeIndexTab === 'heat' ? '#D9534F' : '#666'}
-              />
-              <Text
-                style={[
-                  styles.indexTabText,
-                  activeIndexTab === 'heat' && styles.indexTabTextActive,
-                ]}
-              >
-                Heat Index
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.indexTab}
-              onPress={() => setActiveIndexTab('aqhi')}
-            >
-              <Wind
-                size={16}
-                color={activeIndexTab === 'aqhi' ? '#D9534F' : '#666'}
-              />
-              <Text
-                style={[
-                  styles.indexTabText,
-                  activeIndexTab === 'aqhi' && styles.indexTabTextActive,
-                ]}
-              >
-                AQHI
-              </Text>
-            </TouchableOpacity>
+          <View style={styles.editorPadding}>
+            <AlertProfileEditor
+              profile={settings.currentLocationProfile}
+              onChange={currentLocationProfile => update({ currentLocationProfile })}
+              question={PROFILE_EDITOR_COPY.selfQuestion}
+              showCaringFor={false}
+            />
           </View>
-
-          {activeIndexTab === 'heat'
-            ? HEAT_LEVELS_ORDERED.map((level, i) => {
-                const { color } = getHeatZoneByClassification(level);
-                return (
-                  <View key={level}>
-                    <View style={styles.levelRowWrapper}>
-                      <View
-                        style={[styles.levelDot, { backgroundColor: color }]}
-                      />
-                      <View style={styles.levelRowContent}>
-                        <SettingsToggleRow
-                          label={level}
-                          value={settings.alertLevels[level]}
-                          onValueChange={value =>
-                            toggleAlertLevel(level, value)
-                          }
-                        />
-                      </View>
-                    </View>
-                    {i < HEAT_LEVELS_ORDERED.length - 1 && (
-                      <View style={styles.divider} />
-                    )}
-                  </View>
-                );
-              })
-            : AQHI_LEVEL_GROUPS.map((group, i) => {
-                const { color } = getAqhiInfo(group.sampleValue);
-                return (
-                  <View key={group.label}>
-                    <View style={styles.levelRowWrapper}>
-                      <View
-                        style={[styles.levelDot, { backgroundColor: color }]}
-                      />
-                      <View style={styles.levelRowContent}>
-                        <SettingsToggleRow
-                          label={group.label}
-                          value={!!settings.aqhiAlertLevels?.[group.label]}
-                          onValueChange={value =>
-                            toggleAlertLevel(group.label, value, 'aqhi')
-                          }
-                        />
-                      </View>
-                    </View>
-                    {i < AQHI_LEVEL_GROUPS.length - 1 && (
-                      <View style={styles.divider} />
-                    )}
-                  </View>
-                );
-              })}
         </SettingsSection>
 
         <SettingsSection
@@ -217,15 +77,56 @@ const SettingsScreen = () => {
             label="Current Location"
             description="Alert me based on my live location"
             value={settings.notifyCurrentLocation}
-            onValueChange={setNotifyCurrentLocation}
+            onValueChange={notifyCurrentLocation => update({ notifyCurrentLocation })}
           />
           <View style={styles.divider} />
           <SettingsToggleRow
-            label="Community Bookmarks"
-            description="Alert me about places I'm monitoring"
+            label="Community Places"
+            description="Alert me about my places, using who is there"
             value={settings.notifyBookmarkedLocations}
-            onValueChange={setNotifyBookmarkedLocations}
+            onValueChange={notifyBookmarkedLocations => update({ notifyBookmarkedLocations })}
           />
+        </SettingsSection>
+
+        <SettingsSection title="DELIVERY" subtitle="How and when alerts reach you">
+          <View style={styles.block}>
+            <Text style={styles.rowLabel}>All clear message</Text>
+            <Text style={styles.rowDescription}>
+              Auto sends one only for places set up for family or others
+            </Text>
+            <View style={styles.segmentSpacing}>
+              <SegmentedControl
+                options={ALL_CLEAR_OPTIONS}
+                value={settings.allClear}
+                onChange={allClear => update({ allClear })}
+              />
+            </View>
+          </View>
+          <View style={styles.divider} />
+          <SettingsToggleRow
+            label="Quiet hours"
+            description="Only Serious air quality and Extreme Danger heat index alerts come through"
+            value={quietHours.enabled}
+            onValueChange={enabled => update({ quietHours: { ...quietHours, enabled } })}
+          />
+          {quietHours.enabled && (
+            <>
+              <TimeStepperRow
+                label="From"
+                minuteOfDay={quietHours.startMinute}
+                onChange={startMinute => update({ quietHours: { ...quietHours, startMinute } })}
+              />
+              <TimeStepperRow
+                label="Until"
+                minuteOfDay={quietHours.endMinute}
+                onChange={endMinute => update({ quietHours: { ...quietHours, endMinute } })}
+              />
+            </>
+          )}
+          <View style={styles.divider} />
+          <TouchableOpacity style={styles.testButton} onPress={sendSampleNotification}>
+            <Text style={styles.testButtonText}>Preview a notification</Text>
+          </TouchableOpacity>
         </SettingsSection>
 
         <SettingsSection title="MAP DISPLAY">
@@ -233,16 +134,10 @@ const SettingsScreen = () => {
             <TouchableOpacity
               key={type}
               style={styles.mapTypeRow}
-              onPress={() =>
-                updateMapSettings({ ...mapSettings, mapType: type })
-              }
+              onPress={() => updateMapSettings({ ...mapSettings, mapType: type })}
             >
-              <Text style={styles.mapTypeLabel}>
-                {type === 'standard' ? 'Default' : 'Satellite'}
-              </Text>
-              {mapSettings.mapType === type && (
-                <Text style={styles.mapTypeCheck}>✓</Text>
-              )}
+              <Text style={styles.mapTypeLabel}>{type === 'standard' ? 'Default' : 'Satellite'}</Text>
+              {mapSettings.mapType === type && <Text style={styles.mapTypeCheck}>✓</Text>}
             </TouchableOpacity>
           ))}
         </SettingsSection>
@@ -268,24 +163,12 @@ const SettingsScreen = () => {
                 {granted === true ? (
                   <>
                     <CheckCircle2 size={14} color="#4CAF50" />
-                    <Text
-                      style={[
-                        styles.permissionStatusText,
-                        { color: '#4CAF50' },
-                      ]}
-                    >
-                      Allowed
-                    </Text>
+                    <Text style={[styles.permissionStatusText, { color: '#4CAF50' }]}>Allowed</Text>
                   </>
                 ) : granted === false ? (
                   <>
                     <XCircle size={14} color="#D9534F" />
-                    <Text
-                      style={[
-                        styles.permissionStatusText,
-                        { color: '#D9534F' },
-                      ]}
-                    >
+                    <Text style={[styles.permissionStatusText, { color: '#D9534F' }]}>
                       Not allowed
                     </Text>
                   </>
@@ -305,27 +188,21 @@ const SettingsScreen = () => {
           </View>
         </SettingsSection>
 
-        <SettingsSection
-          title="NOTIFICATION TESTING"
-          subtitle="For development — trigger alerts manually"
-        >
-          <TouchableOpacity
-            style={styles.testButton}
-            onPress={sendTestNotification}
-          >
-            <Text style={styles.testButtonText}>Send Test Notification</Text>
-          </TouchableOpacity>
-          <View style={styles.divider} />
-          <TouchableOpacity
-            style={styles.testButton}
-            onPress={handleRunCheckNow}
-            disabled={checking}
-          >
-            <Text style={styles.testButtonText}>
-              {checking ? 'Checking...' : 'Run Real Alert Check Now'}
-            </Text>
-          </TouchableOpacity>
-        </SettingsSection>
+        {/* Development builds only: runs the real check at once, skipping
+            the batching wait (quiet hours and the daily cap still apply). */}
+        {__DEV__ && (
+          <SettingsSection title="NOTIFICATION TESTING" subtitle="Development builds only">
+            <TouchableOpacity
+              style={styles.testButton}
+              onPress={handleRunCheckNow}
+              disabled={checking}
+            >
+              <Text style={styles.testButtonText}>
+                {checking ? 'Checking...' : 'Run Real Alert Check Now'}
+              </Text>
+            </TouchableOpacity>
+          </SettingsSection>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -340,39 +217,11 @@ const styles = StyleSheet.create({
     color: '#333',
     marginBottom: 20,
   },
-  indexTabRow: {
-    flexDirection: 'row',
-    backgroundColor: '#F0F0F0',
-    borderRadius: 24,
-    padding: 4,
-    marginBottom: 14,
-  },
-  indexTabIndicator: {
-    position: 'absolute',
-    top: 4,
-    left: 4,
-    bottom: 4,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-  },
-  indexTab: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 10,
-  },
-  indexTabText: { fontSize: 13, fontWeight: '700', color: '#666' },
-  indexTabTextActive: { color: '#D9534F' },
-  levelRowWrapper: { flexDirection: 'row', alignItems: 'center' },
-  levelDot: { width: 10, height: 10, borderRadius: 5, marginRight: 10 },
-  levelRowContent: { flex: 1 },
+  editorPadding: { paddingBottom: 6 },
+  block: { paddingVertical: 12 },
+  rowLabel: { fontSize: 15, fontWeight: '600', color: '#333' },
+  rowDescription: { fontSize: 12, color: '#999', marginTop: 2 },
+  segmentSpacing: { marginTop: 10 },
   divider: { height: 1, backgroundColor: '#EEE' },
   mapTypeRow: {
     flexDirection: 'row',

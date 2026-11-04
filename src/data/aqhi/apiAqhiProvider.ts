@@ -16,7 +16,21 @@ const SAMPLE_OFFSETS = [
   { lat: -0.06, lng: 0 },
 ];
 
+// The same single-point query as the ring's centre sample, so a place's
+// value equals what Home shows when the user stands there.
+const fetchAqhiAt = async (lat: number, lng: number, ts: string): Promise<number> => {
+  const data = await fetchPraisePointData(lat, lng, ts, ts, ['AQHIBN2024']);
+  const value = data.AQHIBN2024?.[0];
+  if (typeof value !== 'number') {
+    throw new Error('PRAISE-HK returned no AQHI for this point');
+  }
+  return value;
+};
+
 export const apiAqhiProvider: AqhiDataProvider = {
+  getAqhiAt: async (coords: Coordinates): Promise<number> =>
+    fetchAqhiAt(coords.latitude, coords.longitude, toHkTimestamp()),
+
   getAqhiPoints: async (center: Coordinates): Promise<AqhiPoint[]> => {
     const ts = toHkTimestamp();
 
@@ -25,16 +39,11 @@ export const apiAqhiProvider: AqhiDataProvider = {
         const lat = center.latitude + offset.lat;
         const lng = center.longitude + offset.lng;
         try {
-          const data = await fetchPraisePointData(lat, lng, ts, ts, [
-            'AQHIBN2024',
-          ]);
-          const value = data.AQHIBN2024?.[0];
-          if (typeof value !== 'number') return null;
           return {
             id: `praise-${i}`,
             latitude: lat,
             longitude: lng,
-            aqhi: value,
+            aqhi: await fetchAqhiAt(lat, lng, ts),
           };
         } catch (error) {
           console.log('PRAISE point fetch failed for offset', offset, error);

@@ -49,7 +49,7 @@ When adding a feature that needs new backend data, follow this same pattern rath
 - `/area` paints any part of the box outside the data footprint as opaque white — always trim map boxes with `clipToDataFootprint` first (the heat tile hooks do).
 - Product decision: the map and headline numbers are heat-index-only (no temperature/RH map layer). Temperature and humidity appear only as context at a single place — the home card's "Humidity makes it feel N° hotter" line, the map pin's "Temp · Humidity" sub-line, and the forecast chart's dashed "Temperature" line. Always write "Temp"/"Temperature" and "Heat index" in full words — never "Air" or "RH" in UI copy. `HeatIndexExplainerSheet` opens only from the home card's gap line (shown only when there is a gap) — no standing "what is heat index?" link, since AQHI has none. Tunables in `src/config/heatDisplayConfig.ts`.
 - Heat and AQHI are **peer hazard layers and must stay consistent** everywhere: map layer (per-region tile, shared opacity slider, matching vertical legend, Play Forecast with the same frame count/speed from `src/config/mapLayerConfig.ts`, shared `MapForecastFrame` type), home cards, and forecast charts (both are thin wrappers over the shared `HourlyForecastChart`: day tabs + swipeable day pages + readout row + one-row `ChartBandLegend`; the sheet carries the title, so the chart has none). Any feature added to one layer must be added to the other.
-- The API has no forecast yet: while `forecastFromHistory` is true, future hours repeat the reading from 48 h earlier (demo), and the alert engine skips its forecast-based trend rules.
+- The API has no forecast yet: while `forecastFromHistory` is true, future hours repeat the reading from 48 h earlier (demo), and the alert engine ignores the heat forecast (heat events start at "active", no heat heads-ups).
 
 Google Maps requires `GOOGLE_ANDROID_MAP_KEY` in `.env` (wired into the native Android config).
 
@@ -59,16 +59,23 @@ Google Maps requires `GOOGLE_ANDROID_MAP_KEY` in `.env` (wired into the native A
 
 ### IDW spatial interpolation
 
-AQHI only (heat values come straight from the Spatial Temperature API). AQHI providers return discrete sample points (`{ latitude, longitude, value }`). `src/utils/idw.ts` (`idwInterpolate`) does inverse-distance-weighted interpolation to estimate a value at an arbitrary coordinate (e.g. the user's exact location, or a tapped map point). `src/utils/renderIdwBitmap.ts` + `src/hooks/useIdwOverlayImage.ts` rasterize this into an image overlay for `react-native-maps`.
+AQHI only (heat values come straight from the Spatial Temperature API). AQHI providers return discrete sample points (`{ latitude, longitude, value }`) for the map overlay. `src/utils/idw.ts` (`idwInterpolate`) does inverse-distance-weighted interpolation to estimate a value at an arbitrary coordinate (e.g. a tapped map point). `src/utils/renderIdwBitmap.ts` + `src/hooks/useIdwOverlayImage.ts` rasterize this into an image overlay for `react-native-maps`. Lists of places (Community cards, alert checks) don't use IDW: they call `aqhiDataProvider.getAqhiAt` via `usePlacesAqhi`, the peer of heat's `getHeatIndexAt` / `usePlacesHeatIndex` (both wrap the shared `usePlaceValues`).
 
-### Alert engine
+### Alerts (event-based, heat and AQHI as peers)
 
-`HeatAlertEngine` (`src/components/HeatAlertEngine.tsx`) is mounted once at the root in `App.tsx` and runs headless (`return null`). On a 5-minute interval it:
-1. Pulls current location, forecast, bookmarks, and notification settings, and fetches fresh heat index for the location and each bookmark from the heat provider on every tick.
-2. Runs threshold/trend rules from `src/utils/alertRules.ts` (`evaluateCurrentThreshold`, `evaluateUpcomingTrend`, `evaluateSustainedTrend`, `evaluateCommunityThresholds`).
-3. Delivers any resulting `HeatAlert`s via `src/services/notificationService.ts`, which uses Notifee and de-dupes/cools down repeat alerts per-alert-id in AsyncStorage (3h cooldown, 48h history retention).
+Alerts are per **event** (one hazard at one place, first sign to all clear), not per reading, so an episode produces a handful of messages. Levels come from **who is at each place**, not global level toggles:
+- `PlaceAlertProfile` (`src/types/alerts.ts`): audience (`general` / `sensitive` / `chronic` / `outdoor`), `caringFor` (`self` / `family` → "call to remind them" wording), per-hazard on/off, optional Advanced level override. Stored on `BookmarkEntry.alertProfile` (phone-only: never in the place-label upload, never bumps `updatedAt`) and as `NotificationSettings.currentLocationProfile` ("About you"). Always read through `resolveAlertProfile()`.
+- Audience → level table, urgent levels, event timing and delivery limits: `src/config/alertConfig.ts`. Every word of UI and notification copy: `src/config/alertCopy.ts`.
 
-`src/services/heatAlertBus.ts` is a tiny module-level registry (not React context) that lets other screens (e.g. Settings' "run check now" / "send test notification" buttons) trigger the engine's check function without prop drilling.
+Pipeline (`runAlertCheck` in `src/services/alertCheckService.ts`, a plain async function that reads settings/places from storage, so it can run outside React later):
+1. `alertReadings.ts` fetches current value + hourly forecast per place. Heat forecast is skipped while `forecastFromHistory`; AQHI is skipped entirely when PRAISE isn't configured (mock data must never push).
+2. `utils/alertSignals.ts` reduces each place × hazard to ranks and the first forecast window at/above the place's level.
+3. `utils/alertEvents.ts` is the state machine (`forecast` → `active` → `easing` → `cleared`, or `cancelled`) deciding what the user is owed (`preview` / `breaking` / `escalation` / `cancelled` / `cleared`). Events persist in AsyncStorage (`alertStateStorage.ts`).
+4. `utils/alertDelivery.ts` applies quiet hours, the 10-min batching wait, per-event cooldown, and the daily cap (urgent levels bypass all of them).
+5. `utils/alertMessages.ts` merges due notices into one message per group (multi-place, and heat + AQHI → "double risk" with the combined advice).
+6. `notificationService.ts` displays via Notifee (normal + urgent Android channels).
+
+All steps 2–5 are pure and unit-tested. `AlertEngine` (`src/components/AlertEngine.tsx`, mounted in `App.tsx`) is just the 5-minute foreground timer; `src/services/alertCheckBus.ts` lets Settings' dev "run check now" button trigger it. Not built yet: background execution, scheduled evening/morning digests, official HKO/Labour Department warnings.
 
 ### Scene rendering (Skia)
 

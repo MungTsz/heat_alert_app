@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { getImportJobStatus, ImportJobStatus } from '../services/importJobStatusService';
 
 // Matches the "while this screen is open" poll cadence used elsewhere
-// (useTodayExposure, HeatAlertEngine), just shorter — this needs to feel
+// (useTodayExposure, AlertEngine), just shorter — this needs to feel
 // responsive since it's the only signal that a background import is alive.
 const POLL_INTERVAL_MS = 5000;
 

@@ -3,7 +3,7 @@
 // Live, in-memory progress of track imports so the Exposure tab can show a
 // banner at the top while files are still uploading/processing — and keep
 // showing the outcome (incl. per-file errors like "file too large") after
-// ImportTrackModal is closed. Module-level registry like heatAlertBus.ts,
+// ImportTrackModal is closed. Module-level registry like alertCheckBus.ts,
 // not React context, since the modal and the screen don't share a parent
 // that owns import state. Deliberately not persisted: the client-side
 // upload+poll loop dies with the app anyway, and a device's own data shows

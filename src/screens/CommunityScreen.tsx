@@ -12,12 +12,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronDown, ChevronUp, Plus } from 'lucide-react-native';
 import { useLocation } from '../utils/useLocation';
 import { usePlacesHeatIndex } from '../hooks/useHeatData';
-import { useAqhiData } from '../hooks/useAqhiData';
+import { usePlacesAqhi } from '../hooks/useAqhiData';
 import { useBookmarkList } from '../hooks/useBookmarkList';
-import { estimateAqhiAt } from '../utils/aqhiUtils';
 import { distanceMiles } from '../utils/distance';
-import { resolveDataCenter } from '../config/locationConfig';
+import { resolveAlertProfile, summarizeAlertProfile } from '../utils/alertProfile';
+import { HAZARD_KINDS } from '../config/alertConfig';
 import BookmarkCard from '../components/BookmarkCard';
+import PlaceAlertSettingsModal from '../components/PlaceAlertSettingsModal';
 import PlaceEditRow from '../components/PlaceEditRow';
 import DraggableList from '../components/DraggableList';
 import AddBookmarkModal from '../components/AddBookmarkModal';
@@ -29,7 +30,7 @@ import { BookmarkEntry } from '../types/bookmark';
 const SKY_BLUE = '#BEE7FB';
 
 const CommunityScreen = () => {
-  const { coords, loading: locating } = useLocation();
+  const { coords } = useLocation();
   const {
     bookmarks,
     addBookmark,
@@ -38,7 +39,9 @@ const CommunityScreen = () => {
     changeBookmarkCategory,
     moveBookmark,
     setBookmarkHidden,
+    setBookmarkAlertProfile,
   } = useBookmarkList();
+  const [alertingBookmark, setAlertingBookmark] = useState<BookmarkEntry | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedBookmark, setSelectedBookmark] =
     useState<BookmarkEntry | null>(null);
@@ -48,16 +51,13 @@ const CommunityScreen = () => {
   const [hiddenExpanded, setHiddenExpanded] = useState(false);
   const [dragging, setDragging] = useState(false);
 
-  // Each place's heat index is looked up at its own coordinates from the API
-  // (not interpolated from nearby samples), so it matches the map exactly.
-  // Hidden places never show a heat badge, so they aren't looked up.
-  const { heatIndexById } = usePlacesHeatIndex(
-    bookmarks.filter(bookmark => !bookmark.hidden),
-  );
-  // Same rule as Home: no AQHI fetch for the fallback spot while locating.
-  const { points: aqhiPoints } = useAqhiData(
-    resolveDataCenter({ coords, loading: locating }),
-  );
+  // Both hazards are looked up at each place's own coordinates — not
+  // estimated from samples around the user — so a card matches the map and
+  // the alert engine, which uses the same lookups. Hidden places never show
+  // badges, so they aren't looked up.
+  const visibleBookmarks = bookmarks.filter(bookmark => !bookmark.hidden);
+  const { heatIndexById } = usePlacesHeatIndex(visibleBookmarks);
+  const { aqhiById } = usePlacesAqhi(visibleBookmarks);
 
   // Kept in the user's own (stored) order rather than ranked by severity —
   // the order is now theirs to set in Edit mode, and a list that re-sorts
@@ -70,7 +70,8 @@ const CommunityScreen = () => {
           bookmark.id in heatIndexById
             ? Math.round(heatIndexById[bookmark.id])
             : null,
-        aqhi: estimateAqhiAt(bookmark.latitude, bookmark.longitude, aqhiPoints),
+        aqhi: bookmark.id in aqhiById ? Math.round(aqhiById[bookmark.id]) : null,
+        alertProfile: resolveAlertProfile(bookmark.alertProfile),
         // Measured from the real position only — a distance from the
         // fallback spot would be a made-up number, so it shows "--" instead.
         distance: coords
@@ -82,7 +83,7 @@ const CommunityScreen = () => {
             )
           : null,
       })),
-    [bookmarks, heatIndexById, aqhiPoints, coords],
+    [bookmarks, heatIndexById, aqhiById, coords],
   );
   const visibleRows = bookmarkRows.filter(row => !row.hidden);
   const hiddenRows = bookmarkRows.filter(row => row.hidden);
@@ -203,7 +204,10 @@ const CommunityScreen = () => {
               temperature={item.temperature}
               aqhi={item.aqhi}
               distance={item.distance}
+              alertSummary={summarizeAlertProfile(item.alertProfile)}
+              alertsOn={HAZARD_KINDS.some(h => item.alertProfile.hazards[h])}
               onPress={() => setSelectedBookmark(item)}
+              onAlertSettings={() => setAlertingBookmark(item)}
               onChangeType={() => setRetypingBookmark(item)}
               onRename={() => setRenamingBookmark(item)}
               onRemove={() => removeBookmark(item.id)}
@@ -241,6 +245,18 @@ const CommunityScreen = () => {
             setRetypingBookmark(null);
           }}
           onCancel={() => setRetypingBookmark(null)}
+        />
+      )}
+
+      {alertingBookmark && (
+        <PlaceAlertSettingsModal
+          key={alertingBookmark.id}
+          place={alertingBookmark}
+          onSave={profile => {
+            setBookmarkAlertProfile(alertingBookmark.id, profile);
+            setAlertingBookmark(null);
+          }}
+          onCancel={() => setAlertingBookmark(null)}
         />
       )}
 

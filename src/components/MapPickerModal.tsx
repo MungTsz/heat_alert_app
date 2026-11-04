@@ -25,6 +25,7 @@ import { PLACE_CATEGORY_CONFIG } from '../config/placeCategoryConfig';
 import { PLACE_LABEL_CONFIG } from '../config/placeLabelConfig';
 import { BookmarkEntry, PlaceCategory } from '../types/bookmark';
 import StepDots from './addPlace/StepDots';
+import { ADD_PLACE_STEPS } from '../config/alertUiConfig';
 import PlaceRadiusCircles from './addPlace/PlaceRadiusCircles';
 import PlaceRadiusSlider from './addPlace/PlaceRadiusSlider';
 import PlaceNamePreview from './addPlace/PlaceNamePreview';
@@ -48,11 +49,10 @@ type Props = {
   onConfirm: (place: PickedPlace) => void;
 };
 
-const TOTAL_STEPS = 2;
 const PIN_SIZE = 40;
 const ANIMATE_MS = 400;
 
-// Step 2 of Add place: one full-screen map where the user places the pin,
+// Last step of Add place: one full-screen map where the user places the pin,
 // sizes the circle and confirms. The name is filled in from the location —
 // typing is optional.
 const MapPickerModal: React.FC<Props> = ({
@@ -235,7 +235,7 @@ const MapPickerModal: React.FC<Props> = ({
               <Icon size={14} color="#fff" />
               <Text style={styles.categoryChipText}>{categoryLabel}</Text>
             </View>
-            <StepDots current={2} total={TOTAL_STEPS} />
+            <StepDots current={ADD_PLACE_STEPS.location} total={ADD_PLACE_STEPS.total} />
           </View>
           <Text style={styles.title}>Where is it?</Text>
           <Text style={styles.subtitle}>Move the map so the pin sits on the place.</Text>

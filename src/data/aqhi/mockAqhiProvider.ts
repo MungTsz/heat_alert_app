@@ -1,4 +1,5 @@
 import { AqhiDataProvider, AqhiPoint, Coordinates } from './types';
+import { idwInterpolate } from '../../utils/idw';
 
 const STATION_TEMPLATE = [
   { latOffset: 0.05, lngOffset: 0.05, aqhi: 7 },
@@ -24,9 +25,25 @@ const generateMockPoints = (center: Coordinates): AqhiPoint[] => {
   }));
 };
 
+const MOCK_DELAY_MS = 400;
+const delay = () => new Promise<void>(resolve => setTimeout(() => resolve(), MOCK_DELAY_MS));
+
 export const mockAqhiProvider: AqhiDataProvider = {
   getAqhiPoints: async center => {
-    await new Promise<void>(resolve => setTimeout(() => resolve(), 400));
+    await delay();
     return generateMockPoints(center);
+  },
+  // IDW over the same mock ring, so a place reads like its map overlay.
+  getAqhiAt: async coords => {
+    await delay();
+    return idwInterpolate(
+      coords.latitude,
+      coords.longitude,
+      generateMockPoints(coords).map(p => ({
+        latitude: p.latitude,
+        longitude: p.longitude,
+        value: p.aqhi,
+      })),
+    );
   },
 };
