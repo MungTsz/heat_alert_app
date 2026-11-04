@@ -54,20 +54,66 @@ export type DueSelection = {
   due: AlertEvent[];
 };
 
+export type DeliveryContext = {
+  nowMs: number;
+  quietHours: QuietHours;
+  // Skip the batching wait (manual "run check now").
+  flush?: boolean;
+  // A scheduled digest goes out in this run: everything waiting joins it,
+  // whatever the batching, quiet hours or cooldown say — the user picked
+  // this time to hear from the app.
+  digestNow?: boolean;
+  // When the next digest is due; null/undefined = no digests enabled, so
+  // nothing waits for one.
+  nextDigestAtMs?: number | null;
+  // false = "it got worse" alerts wait for the digest too (urgent excepted).
+  breakingUpdates?: boolean;
+};
+
+// The time a notice is about, if any: the forecast start for a heads-up,
+// the told start for a cancellation.
+const noticeStartMs = (ev: AlertEvent): number | null => {
+  switch (noticeGroupOf(ev)) {
+    case 'preview':
+      return ev.forecast?.startMs ?? null;
+    case 'cancelled':
+      return ev.toldStartMs;
+    default:
+      return null;
+  }
+};
+
+// Heads-ups and cancellations go in the next digest (design doc: "first a
+// forecast, then confirmation", without a push every time a forecast run
+// shifts). But a digest after the event starts would be useless, so a
+// notice about something starting sooner goes out as it would without
+// digests.
+const waitsForDigest = (ev: AlertEvent, ctx: DeliveryContext): boolean => {
+  if (ev.pending!.urgent) return false;
+  const group = noticeGroupOf(ev);
+  const digestKind =
+    group === 'preview' || group === 'cancelled' || (group === 'live' && ctx.breakingUpdates === false);
+  if (!digestKind || ctx.nextDigestAtMs === null || ctx.nextDigestAtMs === undefined) return false;
+  const startMs = noticeStartMs(ev);
+  return startMs === null || startMs >= ctx.nextDigestAtMs;
+};
+
 export const selectDueEvents = (
   events: readonly AlertEvent[],
-  ctx: { nowMs: number; quietHours: QuietHours; flush?: boolean },
+  ctx: DeliveryContext,
 ): DueSelection => {
   const { nowMs } = ctx;
   const cleaned = events.map(ev =>
     ev.pending && !isNoticeStillTrue(ev) ? { ...ev, pending: null } : ev,
   );
   const waiting = cleaned.filter(ev => ev.pending !== null);
+  if (ctx.digestNow) return { events: cleaned, due: waiting };
 
-  const urgent = waiting.filter(ev => ev.pending!.urgent);
+  const immediate = waiting.filter(ev => !waitsForDigest(ev, ctx));
+  const urgent = immediate.filter(ev => ev.pending!.urgent);
   const eligible = isInQuietHours(nowMs, ctx.quietHours)
     ? []
-    : waiting.filter(ev => !ev.pending!.urgent && !inCooldown(ev, nowMs));
+    : immediate.filter(ev => !ev.pending!.urgent && !inCooldown(ev, nowMs));
 
   // Send once the oldest notice has waited out the batching window, so
   // other places and the other hazard get the chance to join it. An urgent

@@ -24,6 +24,12 @@ export const normalizeNotificationSettings = (stored: unknown): NotificationSett
     notifyBookmarkedLocations: s.notifyBookmarkedLocations ?? d.notifyBookmarkedLocations,
     allClear: s.allClear ?? d.allClear,
     quietHours: { ...d.quietHours, ...s.quietHours },
+    digests: {
+      evening: { ...d.digests.evening, ...s.digests?.evening },
+      morning: { ...d.digests.morning, ...s.digests?.morning },
+    },
+    breakingUpdates: s.breakingUpdates ?? d.breakingUpdates,
+    noEventDays: s.noEventDays ?? d.noEventDays,
   };
 };
 

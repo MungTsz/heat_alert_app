@@ -1,6 +1,6 @@
 // src/config/alertCopy.ts
 import { AudienceGroup, CaringFor, HazardKind } from '../types/alerts';
-import { AllClearMode } from '../types/settings';
+import { AllClearMode, NoEventDays } from '../types/settings';
 
 // Every user-facing word about alerts lives here, so a Traditional Chinese
 // version later is a copy of this file rather than a hunt through logic.
@@ -23,6 +23,20 @@ export const CARING_FOR_COPY: Record<CaringFor, string> = {
 export const HAZARD_COPY: Record<HazardKind, { name: string; lower: string }> = {
   heat: { name: 'Heat index', lower: 'heat index' },
   aqhi: { name: 'Air quality', lower: 'air quality' },
+};
+
+export const DELIVERY_SETTINGS_COPY = {
+  eveningLabel: 'Evening heads-up',
+  eveningDescription: "Tomorrow's outlook, after the afternoon forecast update",
+  morningLabel: 'Morning reminder',
+  morningDescription: 'Only on days with something to know',
+  timeLabel: 'Time',
+  breakingLabel: 'Breaking updates',
+  breakingDescription:
+    'Send right away when it gets worse than expected. Off: wait for the next heads-up or reminder.',
+  noEventLabel: 'Days with no alerts',
+  noEventDescription: 'A morning summary, or nothing at all',
+  noEventOptions: { silent: 'Nothing', summary: 'Morning summary' } as Record<NoEventDays, string>,
 };
 
 export const ALL_CLEAR_COPY: Record<AllClearMode, string> = {
@@ -159,9 +173,78 @@ export const MESSAGE_COPY = {
   samplePrefix: 'Sample · ',
 };
 
+// The morning reminder about today (design doc: "今日提醒"), and the
+// optional summary on days with nothing to report.
+export const REMINDER_COPY = {
+  title: (hazard: HazardKind, level: string) => `Today: ${HAZARD_COPY[hazard].lower} ${level}`,
+  dualTitle: 'Today: poor air quality and heat',
+  forecastBody: (places: string, range: string, when: string, advice: string) =>
+    `${places}: expected ${range} ${when}. ${advice}`,
+  ongoingBody: (places: string, level: string, day: number, advice: string) =>
+    day > 1 ? `${places}: ${level}, day ${day}. ${advice}` : `${places}: ${level} now. ${advice}`,
+  dualBody: (places: string, advice: string) =>
+    `${places}: poor air quality and a high heat index today. ${advice}`,
+  noEventsTitle: 'No alerts today',
+  noEventsBody: 'No heat or air quality alerts are expected today at your places.',
+};
+
+// Small badges on Home's hazard cards and Community's place cards.
+export const ACTIVE_ALERT_BADGE_COPY = {
+  now: 'Alert now',
+  headsUp: (when: string) => `Heads-up ${when}`,
+  // Community cards name the hazard, since one card shows both.
+  withHazard: (hazard: HazardKind, text: string) => `${HAZARD_COPY[hazard].name}: ${text}`,
+};
+
+// The alert detail sheet (opened by tapping a notification or a badge).
+export const DETAIL_COPY = {
+  sheetTitle: 'Alert details',
+  sentAt: (clock: string, day: string) => `Sent ${clock} ${day}`,
+  missing: 'This alert is no longer available.',
+  placesHeading: 'Places',
+  meaningHeading: 'What this level means',
+  adviceHeading: 'What to do',
+  forecastHeading: (place: string) => `Forecast for ${place}`,
+  sourcesHeading: 'Sources',
+  sources:
+    'Readings: PRAISE-HK (air quality) and the Spatial Temperature API (heat index), both from HKUST. Advice follows EPD and HKO health guidance.',
+  disclaimer:
+    'This app does not replace official warnings from the Hong Kong Observatory or the Environmental Protection Department.',
+  helpfulQuestion: 'Was this alert helpful?',
+  yes: 'Yes',
+  no: 'No',
+  thanks: 'Thanks — this helps tune future alerts.',
+  itemNow: (level: string) => `${level} now`,
+  itemExpected: (range: string, when: string) => `Expected ${range} ${when}`,
+  itemCleared: (level: string) => `Back to ${level}`,
+  itemCancelled: 'Heads-up cancelled',
+};
+
+// Official pages for the full advice.
+export const OFFICIAL_LINKS: { label: string; url: string }[] = [
+  { label: 'EPD: Air Quality Health Index', url: 'https://www.aqhi.gov.hk' },
+  { label: 'HKO: Hot weather advice', url: 'https://www.hko.gov.hk/en/wservice/warning/coldhot.htm' },
+];
+
+// Three sentences at most, per the design doc's "learn the levels by
+// using the app". AQHI wording follows EPD's health advice by risk band;
+// heat uses the NWS risk text already in HEAT_INDEX_ZONES, so it isn't
+// repeated here.
+export const AQHI_LEVEL_MEANING: Record<string, string> = {
+  Low: 'Low health risk. Normal activities are fine.',
+  Moderate:
+    'Moderate health risk. People with heart or lung conditions may notice symptoms and should take care outdoors.',
+  High: 'High health risk. Children, older adults and people with heart or lung conditions should reduce outdoor exertion.',
+  'Very High':
+    'Very high health risk. Everyone should reduce outdoor exertion and time outdoors, especially near busy roads.',
+  Serious:
+    'Serious health risk. Everyone should reduce outdoor activity and exertion as much as possible.',
+};
+
 export const TIME_COPY = {
   today: 'today',
   tomorrow: 'tomorrow',
+  yesterday: 'yesterday',
   from: (clock: string, day: string) => `from about ${clock} ${day}`,
   onWeekday: (weekday: string) => `on ${weekday}`,
   weekdays: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],

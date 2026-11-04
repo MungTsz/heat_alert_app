@@ -12,14 +12,37 @@ import { useNotificationSettings } from '../hooks/useNotificationSettings';
 import { useLocationPermissionStatus } from '../hooks/useLocationPermissionStatus';
 import { useMapSettings } from '../hooks/useMapSettings';
 import { useExposureTrackingSettings } from '../hooks/useExposureTrackingSettings';
-import { AllClearMode } from '../types/settings';
-import { ALL_CLEAR_COPY, PROFILE_EDITOR_COPY } from '../config/alertCopy';
+import { AllClearMode, DigestSlot, NoEventDays } from '../types/settings';
+import {
+  ALL_CLEAR_COPY,
+  DELIVERY_SETTINGS_COPY,
+  PROFILE_EDITOR_COPY,
+} from '../config/alertCopy';
+import { DIGEST_CONFIG } from '../config/alertConfig';
 import { sendSampleNotification } from '../services/alertCheckService';
 import { runAlertCheckNow } from '../services/alertCheckBus';
 
 const ALL_CLEAR_OPTIONS: { value: AllClearMode; label: string }[] = (
   ['auto', 'always', 'off'] as const
 ).map(value => ({ value, label: ALL_CLEAR_COPY[value] }));
+
+const NO_EVENT_OPTIONS: { value: NoEventDays; label: string }[] = (
+  ['silent', 'summary'] as const
+).map(value => ({ value, label: DELIVERY_SETTINGS_COPY.noEventOptions[value] }));
+
+// Evening first: it carries the first heads-up of an episode.
+const DIGEST_ROWS: { slot: DigestSlot; label: string; description: string }[] = [
+  {
+    slot: 'evening',
+    label: DELIVERY_SETTINGS_COPY.eveningLabel,
+    description: DELIVERY_SETTINGS_COPY.eveningDescription,
+  },
+  {
+    slot: 'morning',
+    label: DELIVERY_SETTINGS_COPY.morningLabel,
+    description: DELIVERY_SETTINGS_COPY.morningDescription,
+  },
+];
 
 // Settings decide HOW alerts arrive. WHEN a place counts as dangerous is set
 // per place (Community → a card's alert line), apart from your own live
@@ -89,6 +112,37 @@ const SettingsScreen = () => {
         </SettingsSection>
 
         <SettingsSection title="DELIVERY" subtitle="How and when alerts reach you">
+          {DIGEST_ROWS.map(({ slot, label, description }) => {
+            const digest = settings.digests[slot];
+            const setDigest = (patch: Partial<typeof digest>) =>
+              update({ digests: { ...settings.digests, [slot]: { ...digest, ...patch } } });
+            return (
+              <View key={slot}>
+                <SettingsToggleRow
+                  label={label}
+                  description={description}
+                  value={digest.enabled}
+                  onValueChange={enabled => setDigest({ enabled })}
+                />
+                {digest.enabled && (
+                  <TimeStepperRow
+                    label={DELIVERY_SETTINGS_COPY.timeLabel}
+                    minuteOfDay={digest.minute}
+                    onChange={minute => setDigest({ minute })}
+                    range={DIGEST_CONFIG[slot]}
+                  />
+                )}
+                <View style={styles.divider} />
+              </View>
+            );
+          })}
+          <SettingsToggleRow
+            label={DELIVERY_SETTINGS_COPY.breakingLabel}
+            description={DELIVERY_SETTINGS_COPY.breakingDescription}
+            value={settings.breakingUpdates}
+            onValueChange={breakingUpdates => update({ breakingUpdates })}
+          />
+          <View style={styles.divider} />
           <View style={styles.block}>
             <Text style={styles.rowLabel}>All clear message</Text>
             <Text style={styles.rowDescription}>
@@ -123,6 +177,18 @@ const SettingsScreen = () => {
               />
             </>
           )}
+          <View style={styles.divider} />
+          <View style={styles.block}>
+            <Text style={styles.rowLabel}>{DELIVERY_SETTINGS_COPY.noEventLabel}</Text>
+            <Text style={styles.rowDescription}>{DELIVERY_SETTINGS_COPY.noEventDescription}</Text>
+            <View style={styles.segmentSpacing}>
+              <SegmentedControl
+                options={NO_EVENT_OPTIONS}
+                value={settings.noEventDays}
+                onChange={noEventDays => update({ noEventDays })}
+              />
+            </View>
+          </View>
           <View style={styles.divider} />
           <TouchableOpacity style={styles.testButton} onPress={sendSampleNotification}>
             <Text style={styles.testButtonText}>Preview a notification</Text>

@@ -13,6 +13,7 @@ import { ChevronDown, ChevronUp, Plus } from 'lucide-react-native';
 import { useLocation } from '../utils/useLocation';
 import { usePlacesHeatIndex } from '../hooks/useHeatData';
 import { usePlacesAqhi } from '../hooks/useAqhiData';
+import { useActiveAlerts } from '../hooks/useActiveAlerts';
 import { useBookmarkList } from '../hooks/useBookmarkList';
 import { distanceMiles } from '../utils/distance';
 import { resolveAlertProfile, summarizeAlertProfile } from '../utils/alertProfile';
@@ -58,6 +59,7 @@ const CommunityScreen = () => {
   const visibleBookmarks = bookmarks.filter(bookmark => !bookmark.hidden);
   const { heatIndexById } = usePlacesHeatIndex(visibleBookmarks);
   const { aqhiById } = usePlacesAqhi(visibleBookmarks);
+  const alertsByPlace = useActiveAlerts();
 
   // Kept in the user's own (stored) order rather than ranked by severity —
   // the order is now theirs to set in Edit mode, and a list that re-sorts
@@ -206,6 +208,7 @@ const CommunityScreen = () => {
               distance={item.distance}
               alertSummary={summarizeAlertProfile(item.alertProfile)}
               alertsOn={HAZARD_KINDS.some(h => item.alertProfile.hazards[h])}
+              alertBadges={HAZARD_KINDS.flatMap(h => (alertsByPlace[item.id] ?? []).filter(b => b.hazard === h))}
               onPress={() => setSelectedBookmark(item)}
               onAlertSettings={() => setAlertingBookmark(item)}
               onChangeType={() => setRetypingBookmark(item)}

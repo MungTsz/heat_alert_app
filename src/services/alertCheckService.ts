@@ -1,5 +1,5 @@
 // src/services/alertCheckService.ts
-import { AlertEvent } from '../types/alerts';
+import { AlertEvent, AlertMessage, AlertMessageRecord } from '../types/alerts';
 import { BookmarkEntry } from '../types/bookmark';
 import { NotificationSettings } from '../types/settings';
 import { CURRENT_LOCATION_PLACE_ID, HAZARD_KINDS } from '../config/alertConfig';
@@ -7,14 +7,18 @@ import { CURRENT_LOCATION_LABEL } from '../config/alertCopy';
 import { readBookmarks } from './bookmarkStorage';
 import { readNotificationSettings } from './notificationSettingsStorage';
 import {
+  appendMessageRecords,
   clearLegacyAlertHistory,
   readAlertEvents,
   readDeliveryLog,
+  readDigestLog,
   writeAlertEvents,
   writeDeliveryLog,
+  writeDigestLog,
 } from './alertStateStorage';
 import { fetchPlaceReadings } from './alertReadings';
 import { displayAlertMessage, ensureNotificationSetup } from './notificationService';
+import { notifyAlertCheckDone } from './alertCheckBus';
 import { resolveAlertProfile } from '../utils/alertProfile';
 import { buildHazardSignal } from '../utils/alertSignals';
 import { advanceEvent, markNoticeDelivered } from '../utils/alertEvents';
@@ -24,7 +28,15 @@ import {
   pruneDeliveryLog,
   selectDueEvents,
 } from '../utils/alertDelivery';
-import { AlertPlace, buildSampleMessage, composeMessages } from '../utils/alertMessages';
+import { dueDigestSlot, nextDigest } from '../utils/alertDigest';
+import { toHkDateKey } from '../utils/hkDate';
+import {
+  AlertPlace,
+  buildMessageRecord,
+  buildSampleMessage,
+  composeDigest,
+  composeMessages,
+} from '../utils/alertMessages';
 
 type Coordinates = { latitude: number; longitude: number };
 type CheckedPlace = AlertPlace & { coords: Coordinates };
@@ -77,11 +89,12 @@ const runCheckOnce = async ({ coords, flush }: AlertCheckOptions): Promise<void>
   await clearLegacyAlertHistory();
   const nowMs = Date.now();
 
-  const [settings, bookmarks, previousEvents, log] = await Promise.all([
+  const [settings, bookmarks, previousEvents, log, digestLog] = await Promise.all([
     readNotificationSettings(),
     readBookmarks(),
     readAlertEvents(),
     readDeliveryLog(),
+    readDigestLog(),
   ]);
   const places = buildPlaces(settings, bookmarks, coords);
   const readings = await Promise.all(
@@ -106,24 +119,42 @@ const runCheckOnce = async ({ coords, flush }: AlertCheckOptions): Promise<void>
     }),
   );
 
+  const digestSlot = dueDigestSlot(nowMs, settings, digestLog);
   const { events, due } = selectDueEvents(advanced, {
     nowMs,
     quietHours: settings.quietHours,
     flush,
+    digestNow: digestSlot !== null,
+    nextDigestAtMs: nextDigest(nowMs, settings)?.atMs ?? null,
+    breakingUpdates: settings.breakingUpdates,
   });
   const placesById = Object.fromEntries(places.map(place => [place.id, place]));
-  const messages = applyDailyCap(
-    composeMessages(due, placesById, nowMs),
-    countSentToday(log, nowMs),
-  );
+  const composed = digestSlot
+    ? [
+        composeDigest({
+          slot: digestSlot,
+          due,
+          events,
+          places: placesById,
+          nowMs,
+          noEventDays: settings.noEventDays,
+        }),
+      ].filter((m): m is AlertMessage => m !== null)
+    : composeMessages(due, placesById, nowMs);
+  const messages = applyDailyCap(composed, countSentToday(log, nowMs));
 
+  // Snapshots for the detail sheet are taken before delivery marks the
+  // events as told, so they show what this message was about.
+  const eventsByKey = new Map(events.map(ev => [ev.key, ev]));
   const deliveredKeys = new Set<string>();
   const nextLog = [...log];
+  const records: AlertMessageRecord[] = [];
   for (const message of messages) {
     try {
       await displayAlertMessage(message);
       message.eventKeys.forEach(key => deliveredKeys.add(key));
       nextLog.push({ atMs: nowMs, urgent: message.urgent });
+      records.push(buildMessageRecord(message, eventsByKey, placesById, nowMs));
     } catch (error) {
       // Left pending — the next tick tries again.
       console.log('Failed to show alert:', error);
@@ -138,6 +169,12 @@ const runCheckOnce = async ({ coords, flush }: AlertCheckOptions): Promise<void>
   await Promise.all([
     writeAlertEvents(finalEvents),
     writeDeliveryLog(pruneDeliveryLog(nextLog, nowMs)),
+    appendMessageRecords(records, nowMs),
+    // The slot counts as done even with nothing to say (or over the cap),
+    // so it isn't re-tried on every tick of its late window.
+    digestSlot
+      ? writeDigestLog({ ...digestLog, [digestSlot]: toHkDateKey(new Date(nowMs)) })
+      : Promise.resolve(),
   ]);
 };
 
@@ -151,6 +188,7 @@ export const runAlertCheck = (options: AlertCheckOptions): Promise<void> => {
       .catch(error => console.log('Alert check failed:', error))
       .finally(() => {
         inFlight = null;
+        notifyAlertCheckDone();
       });
   }
   return inFlight;
@@ -166,5 +204,12 @@ export const sendSampleNotification = async (): Promise<void> => {
   const place: AlertPlace = firstPlace
     ? { id: firstPlace.id, label: firstPlace.label, profile: resolveAlertProfile(firstPlace.alertProfile) }
     : { id: CURRENT_LOCATION_PLACE_ID, label: CURRENT_LOCATION_LABEL, profile: settings.currentLocationProfile };
-  await displayAlertMessage(buildSampleMessage(place, Date.now()));
+  const nowMs = Date.now();
+  const sample = buildSampleMessage(place, nowMs);
+  await displayAlertMessage(sample);
+  // Recorded too, so tapping the sample shows what the detail sheet is like.
+  await appendMessageRecords(
+    [{ id: sample.id, title: sample.title, body: sample.body, sentAtMs: nowMs, urgent: false, items: [] }],
+    nowMs,
+  );
 };

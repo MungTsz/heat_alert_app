@@ -47,6 +47,7 @@ When adding a feature that needs new backend data, follow this same pattern rath
 - Endpoints return HTTP 200 with `status: 1` on errors — check `status`, not `response.ok` alone.
 - Anchor queries on `/{family}/latest`, not the phone's clock (data lands 1–2 h late).
 - `/area` paints any part of the box outside the data footprint as opaque white — always trim map boxes with `clipToDataFootprint` first (the heat tile hooks do).
+- Heat levels follow the API's map PNG colours: NWS bands for Caution and above, and "No Caution" (`#009933`, sampled from the API's PNG) below 27°C — never "Safe". `HEAT_INDEX_ZONES` in `heatIndexUtils.ts` is the single table every legend, chart band and card reads.
 - Product decision: the map and headline numbers are heat-index-only (no temperature/RH map layer). Temperature and humidity appear only as context at a single place — the home card's "Humidity makes it feel N° hotter" line, the map pin's "Temp · Humidity" sub-line, and the forecast chart's dashed "Temperature" line. Always write "Temp"/"Temperature" and "Heat index" in full words — never "Air" or "RH" in UI copy. `HeatIndexExplainerSheet` opens only from the home card's gap line (shown only when there is a gap) — no standing "what is heat index?" link, since AQHI has none. Tunables in `src/config/heatDisplayConfig.ts`.
 - Heat and AQHI are **peer hazard layers and must stay consistent** everywhere: map layer (per-region tile, shared opacity slider, matching vertical legend, Play Forecast with the same frame count/speed from `src/config/mapLayerConfig.ts`, shared `MapForecastFrame` type), home cards, and forecast charts (both are thin wrappers over the shared `HourlyForecastChart`: day tabs + swipeable day pages + readout row + one-row `ChartBandLegend`; the sheet carries the title, so the chart has none). Any feature added to one layer must be added to the other.
 - The API has no forecast yet: while `forecastFromHistory` is true, future hours repeat the reading from 48 h earlier (demo), and the alert engine ignores the heat forecast (heat events start at "active", no heat heads-ups).
@@ -75,7 +76,17 @@ Pipeline (`runAlertCheck` in `src/services/alertCheckService.ts`, a plain async 
 5. `utils/alertMessages.ts` merges due notices into one message per group (multi-place, and heat + AQHI → "double risk" with the combined advice).
 6. `notificationService.ts` displays via Notifee (normal + urgent Android channels).
 
-All steps 2–5 are pure and unit-tested. `AlertEngine` (`src/components/AlertEngine.tsx`, mounted in `App.tsx`) is just the 5-minute foreground timer; `src/services/alertCheckBus.ts` lets Settings' dev "run check now" button trigger it. Not built yet: background execution, scheduled evening/morning digests, official HKO/Labour Department warnings.
+All steps 2–5 are pure and unit-tested.
+
+Scheduled digests (`utils/alertDigest.ts`, times in `DIGEST_CONFIG`): heads-ups and cancellations wait for the next evening heads-up (19:30) or morning reminder (07:30) unless the event starts before it; with Breaking updates off, live alerts wait too (urgent never waits). The morning digest adds a "today" reminder for told events ("day N" for multi-day episodes), or an optional no-alerts summary. Each slot is logged per HK day so it sends once.
+
+Running it:
+- `AlertEngine` (`src/components/AlertEngine.tsx`, mounted in `App.tsx`) is the 5-minute foreground timer; it also records the last GPS fix for background runs and starts background checks.
+- `src/services/backgroundAlertService.ts` uses `react-native-background-fetch`: a periodic check plus a one-shot task timed for the next digest (rescheduled after every check and when digest settings change). Headless handlers (background fetch, Notifee background taps) are registered in `index.js`. iOS needs the `BGTaskSchedulerPermittedIdentifiers` / `UIBackgroundModes` entries in `Info.plist`; iOS timing is best effort.
+- Every delivered message is stored as an `AlertMessageRecord` (snapshot per place × hazard) in `alertStateStorage.ts`. Tapping a notification (any app state, via `useAlertDetailOpen`) or a card badge (`AlertBadge`, fed by `useActiveAlerts`) opens `AlertDetailSheet` at the root.
+- `src/services/alertCheckBus.ts` carries the dev "run check now" trigger, "check finished" (badges refresh) and "open alert detail".
+
+Not built yet: official HKO/Labour Department warnings, heat heads-ups (needs a real API forecast), server push.
 
 ### Scene rendering (Skia)
 

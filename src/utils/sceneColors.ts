@@ -44,7 +44,8 @@ export const getSkyPalette = (tempCelsius: number): SkyPalette => {
         lawnColor: '#79B863',
         hazeIntensity: 0.3,
       };
-    default: // Safe
+    default: // No Caution — the scene keeps a clear blue sky, an illustration
+      // colour rather than a legend colour, so it does not follow the band green
       return {
         topColor: '#3F7FA6',
         bottomColor: '#5DADE2',

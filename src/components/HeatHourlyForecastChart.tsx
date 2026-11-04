@@ -11,7 +11,7 @@ import HourlyForecastChart, {
   ForecastChartDay,
 } from './HourlyForecastChart';
 
-// Chart bounds in Celsius, with headroom below "Safe" and above "Extreme
+// Chart bounds in Celsius, with headroom below "No Caution" and above "Extreme
 // Danger" so every zone's band is visible even at the axis edges.
 const VALUE_RANGE = { min: 15, max: 55 };
 
@@ -32,7 +32,7 @@ const BANDS: ForecastChartBand[] = HEAT_INDEX_ZONES.map(zone => ({
   opacity: 0.55,
 }));
 
-// Safe → Extreme Danger, left to right, matching the AQHI chart's key order.
+// No Caution → Extreme Danger, left to right, matching the AQHI chart's key order.
 const LEGEND_ITEMS = [...HEAT_INDEX_ZONES].reverse().map(zone => ({
   label: zone.classification,
   range: formatHeatZoneRangeC(zone),

@@ -3,6 +3,7 @@ import { DEFAULT_PLACE_ALERT_PROFILE } from '../../config/alertConfig';
 import {
   AlertPlace,
   buildSampleMessage,
+  composeDigest,
   composeMessages,
   describeRange,
   describeStart,
@@ -10,7 +11,7 @@ import {
 } from '../alertMessages';
 
 const HOUR = 60 * 60 * 1000;
-const hkt = (day: number, hour: number) => Date.UTC(2026, 10, day, hour - 8);
+const hkt = (day: number, hour: number, minute = 0) => Date.UTC(2026, 10, day, hour - 8, minute);
 const NOW = hkt(4, 12); // Wed 4 Nov 2026, noon HKT
 
 const place = (id: string, label: string, profile: Partial<PlaceAlertProfile> = {}): AlertPlace => ({
@@ -162,4 +163,59 @@ describe('buildSampleMessage', () => {
 // Keeps the helper honest about hour math used above.
 it('hkt helper lands on the intended HK hour', () => {
   expect(new Date(NOW + 8 * HOUR).getUTCHours()).toBe(12);
+});
+
+describe('composeDigest', () => {
+  const MORNING = hkt(5, 7, 30);
+  const ongoing = event({
+    placeId: 'office',
+    hazard: 'aqhi',
+    stage: 'active',
+    openedAtMs: hkt(4, 15),
+    latestValue: 8,
+    toldRank: 3,
+  });
+
+  it('reminds about an episode still going on, with the day count', () => {
+    const msg = composeDigest({
+      slot: 'morning',
+      due: [],
+      events: [ongoing],
+      places: PLACES,
+      nowMs: MORNING,
+      noEventDays: 'silent',
+    });
+    expect(msg?.title).toBe('Today: air quality Very High');
+    expect(msg?.body).toMatch(/^Office: Very High \(8\), day 2\./);
+    expect(msg?.id).toBe(`digest:morning:${MORNING}`);
+  });
+
+  it('merges new heads-ups and the today reminder into one push, today first', () => {
+    const preview = event({
+      placeId: 'mum',
+      hazard: 'heat',
+      stage: 'forecast',
+      forecast: { startMs: hkt(6, 13), endMs: hkt(6, 17), minValue: 35, maxValue: 40, peakRank: 3 },
+      pending: { kind: 'preview', rank: 3, urgent: false, queuedAtMs: MORNING },
+    });
+    const msg = composeDigest({
+      slot: 'morning',
+      due: [preview],
+      events: [ongoing, preview],
+      places: PLACES,
+      nowMs: MORNING,
+      noEventDays: 'silent',
+    });
+    expect(msg?.group).toBe('digest');
+    expect(msg?.title).toBe('Today: air quality Very High');
+    expect(msg?.body.split('\n')).toHaveLength(2);
+    expect(msg?.eventKeys.sort()).toEqual(['mum|heat', 'office|aqhi']);
+  });
+
+  it('stays silent on a quiet day unless the summary is on', () => {
+    const params = { slot: 'morning' as const, due: [], events: [], places: PLACES, nowMs: MORNING };
+    expect(composeDigest({ ...params, noEventDays: 'silent' })).toBeNull();
+    expect(composeDigest({ ...params, noEventDays: 'summary' })?.title).toBe('No alerts today');
+    expect(composeDigest({ ...params, slot: 'evening', noEventDays: 'summary' })).toBeNull();
+  });
 });

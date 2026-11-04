@@ -90,6 +90,47 @@ describe('selectDueEvents', () => {
   });
 });
 
+describe('digest routing', () => {
+  const EVENING = hkt(19, 30);
+  const preview = (startMs: number) =>
+    event({
+      stage: 'forecast',
+      latestValue: 5,
+      forecast: { startMs, endMs: startMs + 3 * HOUR, minValue: 7, maxValue: 8, peakRank: 3 },
+      pending: { kind: 'preview', rank: 3, urgent: false, queuedAtMs: NOON - HOUR },
+    });
+  const ctx = (over = {}) => ({ nowMs: NOON, quietHours: QUIET, nextDigestAtMs: EVENING, ...over });
+
+  it('holds a heads-up for tomorrow until the evening digest', () => {
+    expect(selectDueEvents([preview(hkt(14) + 24 * HOUR)], ctx()).due).toHaveLength(0);
+  });
+
+  it('sends a heads-up at once when it starts before the next digest', () => {
+    expect(selectDueEvents([preview(hkt(15))], ctx()).due).toHaveLength(1);
+  });
+
+  it('sends heads-ups as they happen when digests are off', () => {
+    expect(selectDueEvents([preview(hkt(14) + 24 * HOUR)], ctx({ nextDigestAtMs: null })).due).toHaveLength(1);
+  });
+
+  it('includes everything waiting in a digest run, even in quiet hours', () => {
+    const late = event({ pending: { kind: 'breaking', rank: 3, urgent: false, queuedAtMs: hkt(23) } });
+    const { due } = selectDueEvents([preview(hkt(14) + 24 * HOUR), late], {
+      ...ctx(),
+      nowMs: hkt(23, 5),
+      digestNow: true,
+    });
+    expect(due).toHaveLength(2);
+  });
+
+  it('holds live alerts for the digest when breaking updates are off, but never urgent ones', () => {
+    const live = event();
+    const urgent = event({ key: 'office|aqhi', placeId: 'office', pending: { kind: 'breaking', rank: 4, urgent: true, queuedAtMs: NOON } });
+    const { due } = selectDueEvents([live, urgent], ctx({ breakingUpdates: false, nowMs: NOON + HOUR }));
+    expect(due.map(ev => ev.key)).toEqual(['office|aqhi']);
+  });
+});
+
 const message = (id: string, priority: number, urgent = false): AlertMessage => ({
   id,
   group: 'live',

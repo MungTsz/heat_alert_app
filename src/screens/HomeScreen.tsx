@@ -37,6 +37,10 @@ import { useForecastData } from '../hooks/useForecastData';
 import { useAqhiForecastData } from '../hooks/useAqhiForecastData';
 import { useAqhiData } from '../hooks/useAqhiData';
 import { useHeatConditions } from '../hooks/useHeatData';
+import { useActiveAlerts } from '../hooks/useActiveAlerts';
+import AlertBadge from '../components/alerts/AlertBadge';
+import { CURRENT_LOCATION_PLACE_ID } from '../config/alertConfig';
+import { HazardKind } from '../types/alerts';
 const LOCATION_BOX_WIDTH = 160;
 const MIN_GAP_BELOW_CHARACTER = 24;
 // Plain white like the cards' labels, so a "--" never reads as a level color.
@@ -56,6 +60,13 @@ const HomeScreen = () => {
   const { days: aqhiForecastDays, loading: aqhiForecastLoading } =
     useAqhiForecastData(dataCenter);
   const { points: aqhiPoints } = useAqhiData(dataCenter);
+  // Alerts the user has been told about for their own location — the same
+  // badge on both hazard cards, as peers.
+  const locationAlerts = useActiveAlerts()[CURRENT_LOCATION_PLACE_ID] ?? [];
+  const alertBadgeFor = (hazard: HazardKind) => {
+    const badge = locationAlerts.find(b => b.hazard === hazard);
+    return badge ? <AlertBadge badge={badge} /> : undefined;
+  };
 
   // null until AQHI samples arrive (or if they never do) → "--", same as heat.
   const currentAqhi = dataCenter
@@ -157,6 +168,7 @@ const HomeScreen = () => {
               classification={heatInfo?.classification ?? '—'}
               valueColor={heatInfo?.color ?? UNAVAILABLE_VALUE_COLOR}
               onPress={() => setHeatSheetOpen(true)}
+              badge={alertBadgeFor('heat')}
             />
             {/* aqhi card — same "--" / "—" placeholders as the heat card */}
             <HazardCard
@@ -170,6 +182,7 @@ const HomeScreen = () => {
               // Deliberately NOT the forecast chart's own background bands.
               valueColor={aqhiInfo?.color ?? UNAVAILABLE_VALUE_COLOR}
               onPress={() => setAqhiSheetOpen(true)}
+              badge={alertBadgeFor('aqhi')}
             />
           </View>
 

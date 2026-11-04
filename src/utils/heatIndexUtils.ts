@@ -16,12 +16,16 @@ export const fahrenheitToCelsius = (fahrenheit: number): number => {
 };
 
 // Standard NWS Heat Index classification (Caution/Extreme Caution/Danger/Extreme
-// Danger), plus a "Safe" tier below Caution — the single source of truth for
-// classification/color/risk, shared by current-conditions displays, map pins,
-// alert messages and the hourly forecast chart's background bands (see
+// Danger), plus a "No Caution" tier below Caution — the single source of truth
+// for classification/color/risk, shared by current-conditions displays, map
+// pins, alert messages and the hourly forecast chart's background bands (see
 // HeatHourlyForecastChart.tsx). Colors and risk text are taken verbatim from
-// the NWS reference table the project follows (colors pixel-sampled from it);
-// "Safe" isn't in that table, so it keeps the app's own blue.
+// the NWS reference table the project follows (colors pixel-sampled from it).
+// "No Caution" isn't in that table: its green is pixel-sampled from the
+// Spatial Temperature API's own map PNG (/heat-index/area), so the in-app
+// legend, chart and cards match the server-rendered map layer. It is named
+// "No Caution" rather than "Safe" — below 27°C NWS issues no caution, which
+// is not a promise that heat can't harm anyone.
 export const HEAT_INDEX_ZONES: {
   classification: string;
   color: string;
@@ -58,8 +62,8 @@ export const HEAT_INDEX_ZONES: {
     maxF: 90,
   },
   {
-    classification: 'Safe',
-    color: '#5DADE2',
+    classification: 'No Caution',
+    color: '#009933',
     risk: 'Heat/Sunstroke unlikely',
     minF: -Infinity,
     maxF: 80,

@@ -10,6 +10,9 @@ const CHANNELS = {
   urgent: { id: 'urgent-alerts', name: 'Urgent heat & air quality alerts' },
 };
 
+// Key in a notification's data payload holding the AlertMessageRecord id.
+export const ALERT_MESSAGE_ID_KEY = 'alertMessageId';
+
 let setupDone = false;
 
 export const ensureNotificationSetup = async () => {
@@ -35,6 +38,8 @@ export const displayAlertMessage = async (message: AlertMessage): Promise<void> 
   await notifee.displayNotification({
     title: message.title,
     body: message.body,
+    // Read back on tap to open this message's detail sheet.
+    data: { [ALERT_MESSAGE_ID_KEY]: message.id },
     android: {
       channelId: message.urgent ? CHANNELS.urgent.id : CHANNELS.normal.id,
       pressAction: { id: 'default' },

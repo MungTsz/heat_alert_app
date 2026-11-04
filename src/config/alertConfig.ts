@@ -105,9 +105,13 @@ export const ALERT_MESSAGE_PRIORITY = {
   urgent: 0,
   escalation: 1,
   breaking: 2,
+  // The morning "today" reminder ranks with heads-ups: both are planned,
+  // scheduled information rather than news.
+  reminder: 3,
   preview: 3,
   cancelled: 4,
   cleared: 5,
+  summary: 6,
 };
 
 // Event id for the phone's live location (bookmarks use their own ids).
@@ -125,8 +129,45 @@ export const DEFAULT_PLACE_ALERT_PROFILE: PlaceAlertProfile = {
 // tomorrow — a typical afternoon pollution/heat peak.
 export const SAMPLE_PREVIEW_HK_HOUR = 14;
 
-// Quiet-hours time pickers step by this much.
+// Quiet-hours and digest time pickers step by this much.
 export const QUIET_HOURS_STEP_MINUTES = 30;
+
+// Scheduled digests (Hong Kong time). The evening slot sits after PRAISE's
+// afternoon forecast update so tomorrow's outlook is fresh, early enough to
+// change tomorrow's plans; the morning slot comes before people head out.
+// Ranges bound the Settings time pickers.
+export const DIGEST_CONFIG = {
+  evening: { defaultMinute: 19 * 60 + 30, minMinute: 18 * 60, maxMinute: 21 * 60 },
+  morning: { defaultMinute: 7 * 60 + 30, minMinute: 6 * 60 + 30, maxMinute: 8 * 60 + 30 },
+  // A digest the phone missed (asleep, no background run) is still sent
+  // this long after its time — a 7:30 reminder at 10:00 still helps, a
+  // 19:30 heads-up at 1 am does not.
+  lateWindowMs: 2 * HOUR_MS,
+};
+
+export const BACKGROUND_ALERT_CONFIG = {
+  // Periodic background check. The OS treats this as a minimum and may run
+  // it later (Doze on Android, iOS's own scheduling).
+  minimumFetchIntervalMinutes: 15,
+  // One-shot task timed for the next digest, so it isn't left to the
+  // periodic check's jitter. iOS only runs task ids registered under
+  // BGTaskSchedulerPermittedIdentifiers in Info.plist, with this prefix.
+  digestTaskId: 'com.transistorsoft.alertdigest',
+  // Background runs can't ask for a GPS fix; they use the last position
+  // the app saw, if it is this recent. Older than this, the current
+  // location is skipped rather than alerting for somewhere the user left.
+  lastLocationMaxAgeMs: 12 * HOUR_MS,
+};
+
+// Delivered messages kept for the alert detail sheet and card badges.
+export const ALERT_MESSAGE_LOG_CONFIG = {
+  maxEntries: 30,
+  retentionMs: 72 * HOUR_MS,
+};
+
+// How often Home / Community re-read active alerts while open (they also
+// refresh whenever a check finishes).
+export const ACTIVE_ALERTS_REFRESH_MS = MINUTE_MS;
 
 export const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
   currentLocationProfile: DEFAULT_PLACE_ALERT_PROFILE,
@@ -134,4 +175,10 @@ export const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
   notifyBookmarkedLocations: true,
   allClear: 'auto',
   quietHours: { enabled: true, startMinute: 23 * 60, endMinute: 7 * 60 },
+  digests: {
+    evening: { enabled: true, minute: DIGEST_CONFIG.evening.defaultMinute },
+    morning: { enabled: true, minute: DIGEST_CONFIG.morning.defaultMinute },
+  },
+  breakingUpdates: true,
+  noEventDays: 'silent',
 };

@@ -11,18 +11,24 @@ type Props = {
   label: string;
   minuteOfDay: number;
   onChange: (minuteOfDay: number) => void;
+  // A bounded range (digest times) clamps instead of wrapping.
+  range?: { minMinute: number; maxMinute: number };
 };
 
 const formatMinuteOfDay = (minute: number) =>
   `${String(Math.floor(minute / 60)).padStart(2, '0')}:${String(minute % 60).padStart(2, '0')}`;
 
 // − 23:00 + — a time picker without a native dependency. Wraps around
-// midnight, since quiet hours usually span it.
-const TimeStepperRow = ({ label, minuteOfDay, onChange }: Props) => {
-  const step = (direction: 1 | -1) =>
+// midnight (quiet hours usually span it) unless given a range.
+const TimeStepperRow = ({ label, minuteOfDay, onChange, range }: Props) => {
+  const step = (direction: 1 | -1) => {
+    const next = minuteOfDay + direction * QUIET_HOURS_STEP_MINUTES;
     onChange(
-      (minuteOfDay + direction * QUIET_HOURS_STEP_MINUTES + MINUTES_PER_DAY) % MINUTES_PER_DAY,
+      range
+        ? Math.min(range.maxMinute, Math.max(range.minMinute, next))
+        : (next + MINUTES_PER_DAY) % MINUTES_PER_DAY,
     );
+  };
 
   return (
     <View style={styles.row}>

@@ -104,10 +104,15 @@ export type AlertEvent = {
 // heads-up update, so it joins the previews.
 export type AlertMessageGroup = 'live' | 'preview' | 'cancelled' | 'cleared';
 
+// What a message is: one notice group, or one of the scheduled kinds —
+// the morning "today" reminder, the no-alerts summary, a digest merging
+// several of these, or the Settings sample.
+export type AlertMessageKind = AlertMessageGroup | 'reminder' | 'summary' | 'digest' | 'sample';
+
 // One push notification, possibly covering several places and both hazards.
 export type AlertMessage = {
   id: string;
-  group: AlertMessageGroup;
+  group: AlertMessageKind;
   // Lower = more important; picks which messages survive the daily cap.
   priority: number;
   urgent: boolean;
@@ -115,4 +120,33 @@ export type AlertMessage = {
   body: string;
   // Events this message delivers — marked as told only once it is shown.
   eventKeys: string[];
+};
+
+// One place × hazard as it stood when a message went out — a snapshot, so
+// the detail sheet shows what the user was told even after the event moves
+// on or the place is renamed.
+export type AlertDetailItem = {
+  eventKey: string;
+  placeId: string;
+  placeLabel: string;
+  latitude: number | null;
+  longitude: number | null;
+  hazard: HazardKind;
+  stage: AlertEventStage;
+  value: number | null;
+  rank: number;
+  forecast: ForecastWindow | null;
+  audience: AudienceGroup;
+  caringFor: CaringFor;
+};
+
+// A delivered message, kept for the detail sheet that opens when the
+// notification (or a card's alert badge) is tapped.
+export type AlertMessageRecord = {
+  id: string;
+  title: string;
+  body: string;
+  sentAtMs: number;
+  urgent: boolean;
+  items: AlertDetailItem[];
 };

@@ -6,6 +6,9 @@ import { getAqhiInfo } from '../utils/aqhiUtils';
 import { PlaceCategory } from '../types/bookmark';
 import { PLACE_CATEGORY_CONFIG } from '../config/placeCategoryConfig';
 import { EXPOSURE_IO_CONFIG } from '../config/exposureIoConfig';
+import { ACTIVE_ALERT_BADGE_COPY } from '../config/alertCopy';
+import { ActiveAlertBadge } from '../hooks/useActiveAlerts';
+import AlertBadge from './alerts/AlertBadge';
 
 type Props = {
   label: string;
@@ -18,6 +21,8 @@ type Props = {
   // One-line "who is here" summary (see summarizeAlertProfile).
   alertSummary: string;
   alertsOn: boolean;
+  // Alerts the user has been told about for this place, heat first.
+  alertBadges: ActiveAlertBadge[];
   onPress: () => void;
   onAlertSettings: () => void;
   onChangeType: () => void;
@@ -38,6 +43,7 @@ const BookmarkCard = ({
   distance,
   alertSummary,
   alertsOn,
+  alertBadges,
   onPress,
   onAlertSettings,
   onChangeType,
@@ -110,6 +116,18 @@ const BookmarkCard = ({
         </Text>
         <ChevronRight size={14} color="#999" />
       </TouchableOpacity>
+
+      {alertBadges.length > 0 && (
+        <View style={styles.alertBadgeRow}>
+          {alertBadges.map(badge => (
+            <AlertBadge
+              key={badge.hazard}
+              badge={badge}
+              label={ACTIVE_ALERT_BADGE_COPY.withHazard(badge.hazard, badge.text)}
+            />
+          ))}
+        </View>
+      )}
 
       <View style={styles.badgeRow}>
         <View
@@ -188,6 +206,12 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     fontSize: 12,
     color: '#555',
+  },
+  alertBadgeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 10,
   },
   typeChip: {
     flexDirection: 'row',

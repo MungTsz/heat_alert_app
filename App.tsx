@@ -8,9 +8,14 @@ import ExposureScreen from './src/screens/ExposureScreen';
 import FloatingNavBar, { TabName } from './src/components/FloatingNavBar';
 import SettingsScreen from './src/screens/SettingsScreen';
 import AlertEngine from './src/components/AlertEngine';
+import AlertDetailSheet from './src/components/alerts/AlertDetailSheet';
+import { useAlertDetailOpen } from './src/hooks/useAlertDetailOpen';
 
 const App = () => {
   const [activeTab, setActiveTab] = useState<TabName>('Environment');
+  // Mounted at the root so a tapped notification opens its details over
+  // whichever tab is showing.
+  const { messageId: alertDetailId, close: closeAlertDetail } = useAlertDetailOpen();
 
   const renderScreen = () => {
     switch (activeTab) {
@@ -32,6 +37,7 @@ const App = () => {
         {renderScreen()}
         <FloatingNavBar activeTab={activeTab} onTabChange={setActiveTab} />
       </View>
+      <AlertDetailSheet messageId={alertDetailId} onClose={closeAlertDetail} />
     </SafeAreaProvider>
   );
 };

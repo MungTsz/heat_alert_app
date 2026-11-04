@@ -46,6 +46,16 @@
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>location</string>
+		<string>fetch</string>
+		<string>processing</string>
+	</array>
+	<!-- react-native-background-fetch: the periodic alert check
+	     (com.transistorsoft.fetch) and the one-shot digest task
+	     (BACKGROUND_ALERT_CONFIG.digestTaskId). iOS only runs ids listed here. -->
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.transistorsoft.fetch</string>
+		<string>com.transistorsoft.alertdigest</string>
 	</array>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>

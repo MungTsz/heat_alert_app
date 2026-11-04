@@ -3,9 +3,11 @@ import {
   AlertEvent,
   AlertMessage,
   AlertMessageGroup,
+  AlertMessageRecord,
   HazardKind,
   PlaceAlertProfile,
 } from '../types/alerts';
+import { DigestSlot, NoEventDays } from '../types/settings';
 import {
   ALERT_DELIVERY_CONFIG,
   ALERT_MESSAGE_PRIORITY,
@@ -15,10 +17,12 @@ import {
 import {
   AQHI_ADVICE,
   AQHI_URGENT_ADVICE,
+  DETAIL_COPY,
   DUAL_ADVICE,
   HEAT_ADVICE,
   MESSAGE_COPY,
   PLACE_LIST_COPY,
+  REMINDER_COPY,
   TIME_COPY,
 } from '../config/alertCopy';
 import { addHkDays, diffHkDays, parseHkTimestamp, toHkDateKey, toHkTimestamp } from './hkDate';
@@ -35,6 +39,8 @@ export type AlertPlace = {
   id: string;
   label: string;
   profile: PlaceAlertProfile;
+  // Kept on the message record so the detail sheet can chart the place.
+  coords?: { latitude: number; longitude: number };
 };
 
 // "Mum's home", "Home and Office", "Home, Office and School",
@@ -87,9 +93,30 @@ export const describeStart = (startMs: number, nowMs: number): string => {
   return TIME_COPY.from(formatHkClock(startMs), day);
 };
 
-const adviceFor = (
+// "Sent 7:35 pm today" — minute precision, since it is a real send time.
+export const describeSentAt = (sentMs: number, nowMs: number): string => {
+  const date = new Date(sentMs);
+  const hour = Number(toHkTimestamp(date).slice(8, 10));
+  const hour12 = hour % 12 === 0 ? 12 : hour % 12;
+  const clock = `${hour12}:${String(date.getUTCMinutes()).padStart(2, '0')} ${
+    hour < 12 ? TIME_COPY.am : TIME_COPY.pm
+  }`;
+  const dayKey = toHkDateKey(date);
+  const dayDiff = diffHkDays(dayKey, toHkDateKey(new Date(nowMs)));
+  const day =
+    dayDiff <= 0
+      ? TIME_COPY.today
+      : dayDiff === 1
+        ? TIME_COPY.yesterday
+        : TIME_COPY.onWeekday(TIME_COPY.weekdays[new Date(`${dayKey}T00:00:00Z`).getUTCDay()]);
+  return DETAIL_COPY.sentAt(clock, day);
+};
+
+// The one action sentence for a message — also shown in the detail sheet,
+// so the sheet never words the advice differently from the push.
+export const adviceFor = (
   hazards: readonly HazardKind[],
-  profile: PlaceAlertProfile,
+  profile: Pick<PlaceAlertProfile, 'audience' | 'caringFor'>,
   severe: boolean,
 ): string => {
   const voice = profile.caringFor;
@@ -245,7 +272,7 @@ export const buildSampleMessage = (place: AlertPlace, nowMs: number): AlertMessa
   const startMs = parseHkTimestamp(`${tomorrow}${String(SAMPLE_PREVIEW_HK_HOUR).padStart(2, '0')}`);
   return {
     id: `sample:${nowMs}`,
-    group: 'preview',
+    group: 'sample',
     priority: ALERT_MESSAGE_PRIORITY.preview,
     urgent: false,
     title: `${MESSAGE_COPY.samplePrefix}${MESSAGE_COPY.dualPreviewTitle}`,
@@ -257,3 +284,166 @@ export const buildSampleMessage = (place: AlertPlace, nowMs: number): AlertMessa
     eventKeys: [],
   };
 };
+
+// ---- Scheduled digests ----------------------------------------------------
+
+const levelTextOf = (ev: AlertEvent): string =>
+  ev.latestValue === null
+    ? levelAtRank(ev.hazard, Math.max(ev.toldRank, 0))
+    : describeValue(ev.hazard, ev.latestValue);
+
+// The morning reminder about TODAY: events the user already knows about
+// that matter today — an episode still going (with "day N" for multi-day
+// ones) or a heads-up starting today. A reminder re-tells; it never changes
+// event state.
+export const composeTodayReminder = (
+  events: readonly AlertEvent[],
+  places: Record<string, AlertPlace>,
+  nowMs: number,
+): AlertMessage | null => {
+  const today = toHkDateKey(new Date(nowMs));
+  const relevant = events
+    .filter(
+      ev =>
+        ev.toldRank >= 0 &&
+        places[ev.placeId] !== undefined &&
+        (ev.stage === 'active' ||
+          (ev.stage === 'forecast' &&
+            ev.forecast !== null &&
+            toHkDateKey(new Date(ev.forecast.startMs)) === today)),
+    )
+    .sort((a, b) => b.toldRank - a.toldRank);
+  if (relevant.length === 0) return null;
+
+  const lead = relevant[0];
+  const leadPlace = places[lead.placeId];
+  const hazards = HAZARD_KINDS.filter(h => relevant.some(ev => ev.hazard === h));
+  const placeText = formatPlaceList(relevant.map(ev => places[ev.placeId].label));
+  const advice = adviceFor(hazards, leadPlace.profile, lead.toldRank >= urgentRankFor(lead.hazard));
+
+  let title: string;
+  let body: string;
+  if (hazards.length > 1) {
+    title = REMINDER_COPY.dualTitle;
+    body = REMINDER_COPY.dualBody(placeText, advice);
+  } else {
+    const ongoing = relevant.find(ev => ev.stage === 'active');
+    if (ongoing) {
+      const day = diffHkDays(toHkDateKey(new Date(ongoing.openedAtMs)), today) + 1;
+      title = REMINDER_COPY.title(ongoing.hazard, levelAtRank(ongoing.hazard, ongoing.toldRank));
+      body = REMINDER_COPY.ongoingBody(placeText, levelTextOf(ongoing), day, advice);
+    } else {
+      const windows = relevant.map(ev => ev.forecast!);
+      const max = Math.max(...windows.map(w => w.maxValue));
+      title = REMINDER_COPY.title(lead.hazard, levelOf(lead.hazard, max));
+      body = REMINDER_COPY.forecastBody(
+        placeText,
+        describeRange(lead.hazard, Math.min(...windows.map(w => w.minValue)), max),
+        describeStart(Math.min(...windows.map(w => w.startMs)), nowMs),
+        advice,
+      );
+    }
+  }
+  return {
+    id: `reminder:${nowMs}`,
+    group: 'reminder',
+    priority: ALERT_MESSAGE_PRIORITY.reminder,
+    urgent: false,
+    title,
+    body,
+    eventKeys: relevant.map(ev => ev.key),
+  };
+};
+
+// Live news first, then today, then what's coming, then the rest.
+const DIGEST_ORDER = ['live', 'reminder', 'preview', 'cancelled', 'cleared'];
+
+// One push for a digest slot: the due notices plus, in the morning, the
+// reminder about today. Several parts become one message with one line
+// each, titled by the most important part — the daily cap counts pushes,
+// and the design doc's typical episode is two or three of them.
+export const composeDigest = (params: {
+  slot: DigestSlot;
+  due: readonly AlertEvent[];
+  events: readonly AlertEvent[];
+  places: Record<string, AlertPlace>;
+  nowMs: number;
+  noEventDays: NoEventDays;
+}): AlertMessage | null => {
+  const { slot, due, events, places, nowMs, noEventDays } = params;
+  const dueKeys = new Set(due.map(ev => ev.key));
+  const parts = composeMessages(due, places, nowMs);
+  if (slot === 'morning') {
+    const reminder = composeTodayReminder(
+      events.filter(ev => !dueKeys.has(ev.key)),
+      places,
+      nowMs,
+    );
+    if (reminder) parts.push(reminder);
+  }
+  const id = `digest:${slot}:${nowMs}`;
+
+  if (parts.length === 0) {
+    return slot === 'morning' && noEventDays === 'summary'
+      ? {
+          id,
+          group: 'summary',
+          priority: ALERT_MESSAGE_PRIORITY.summary,
+          urgent: false,
+          title: REMINDER_COPY.noEventsTitle,
+          body: REMINDER_COPY.noEventsBody,
+          eventKeys: [],
+        }
+      : null;
+  }
+
+  const ordered = [...parts].sort(
+    (a, b) => DIGEST_ORDER.indexOf(a.group) - DIGEST_ORDER.indexOf(b.group),
+  );
+  if (ordered.length === 1) return { ...ordered[0], id };
+  return {
+    id,
+    group: 'digest',
+    priority: Math.min(...ordered.map(m => m.priority)),
+    urgent: ordered.some(m => m.urgent),
+    title: ordered[0].title,
+    body: ordered.map(m => m.body).join('\n'),
+    eventKeys: Array.from(new Set(ordered.flatMap(m => m.eventKeys))),
+  };
+};
+
+// ---- Records for the detail sheet -----------------------------------------
+
+export const buildMessageRecord = (
+  message: AlertMessage,
+  eventsByKey: ReadonlyMap<string, AlertEvent>,
+  places: Record<string, AlertPlace>,
+  sentAtMs: number,
+): AlertMessageRecord => ({
+  id: message.id,
+  title: message.title,
+  body: message.body,
+  sentAtMs,
+  urgent: message.urgent,
+  items: message.eventKeys.flatMap(key => {
+    const ev = eventsByKey.get(key);
+    const place = ev ? places[ev.placeId] : undefined;
+    if (!ev || !place) return [];
+    return [
+      {
+        eventKey: key,
+        placeId: place.id,
+        placeLabel: place.label,
+        latitude: place.coords?.latitude ?? null,
+        longitude: place.coords?.longitude ?? null,
+        hazard: ev.hazard,
+        stage: ev.stage,
+        value: ev.latestValue,
+        rank: ev.pending?.rank ?? ev.toldRank,
+        forecast: ev.forecast,
+        audience: place.profile.audience,
+        caringFor: place.profile.caringFor,
+      },
+    ];
+  }),
+});

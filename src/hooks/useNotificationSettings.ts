@@ -5,6 +5,7 @@ import {
   readNotificationSettings,
   writeNotificationSettings,
 } from '../services/notificationSettingsStorage';
+import { scheduleNextDigestTask } from '../services/backgroundAlertService';
 
 export const useNotificationSettings = () => {
   const [settings, setSettings] = useState<NotificationSettings>(DEFAULT_NOTIFICATION_SETTINGS);
@@ -31,6 +32,9 @@ export const useNotificationSettings = () => {
       const updated = { ...settings, ...patch };
       setSettings(updated);
       await writeNotificationSettings(updated);
+      // A changed digest time must move the scheduled background task now,
+      // not at the next check.
+      if (patch.digests) await scheduleNextDigestTask();
     },
     [settings],
   );
