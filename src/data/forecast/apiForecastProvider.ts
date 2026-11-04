@@ -11,13 +11,18 @@ const WEEKDAYS_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const toPoint = (
   ts: string,
   heatIndex: number,
+  temperature: number | null,
   observed: boolean,
 ): HourlyForecastPoint => ({
   timestamp: parseHkTimestamp(ts),
   time: `${ts.slice(8, 10)}:00`,
   heatIndex,
+  temperature,
   observed,
 });
+
+const toValueByTs = ({ ts, values }: { ts: string[]; values: number[] }) =>
+  new Map(ts.map((t, i) => [t, values[i]]));
 
 // Buckets hourly points into HK calendar days. Weekday/day-of-month are read
 // off the HK date key itself, so they're right regardless of the phone's
@@ -62,22 +67,32 @@ export const apiForecastProvider: ForecastDataProvider = {
     // keys compare correctly as strings.
     const historySource = shiftHkTimestamp(latest, -horizon + 1);
     const t0 = historySource < todayStart ? historySource : todayStart;
-    const series = await fetchPointSeries(
-      'heat-index',
-      latitude,
-      longitude,
-      t0,
-      latest,
-    );
-    const valueByTs = new Map(series.ts.map((ts, i) => [ts, series.values[i]]));
+    // Air temperature only adds context to the chart, so losing it degrades
+    // to a heat-index-only chart instead of failing the whole forecast.
+    const [heatIndexSeries, temperatureSeries] = await Promise.all([
+      fetchPointSeries('heat-index', latitude, longitude, t0, latest),
+      fetchPointSeries('temperature', latitude, longitude, t0, latest).catch(
+        err => {
+          console.log('Forecast air temperature fetch error:', err);
+          return { ts: [], values: [] };
+        },
+      ),
+    ]);
+    const heatIndexByTs = toValueByTs(heatIndexSeries);
+    const temperatureByTs = toValueByTs(temperatureSeries);
 
     const entries: { ts: string; point: HourlyForecastPoint }[] = [];
+    const addPoint = (ts: string, sourceTs: string, observed: boolean) => {
+      const heatIndex = heatIndexByTs.get(sourceTs);
+      if (heatIndex === undefined) return;
+      const temperature = temperatureByTs.get(sourceTs) ?? null;
+      entries.push({ ts, point: toPoint(ts, heatIndex, temperature, observed) });
+    };
 
     // Today up to now: real observations, so "now" on the chart is the same
     // value the current-conditions card shows.
     for (let ts = todayStart; ts <= latest; ts = shiftHkTimestamp(ts, 1)) {
-      const value = valueByTs.get(ts);
-      if (value !== undefined) entries.push({ ts, point: toPoint(ts, value, true) });
+      addPoint(ts, ts, true);
     }
 
     // Demo forecast (see SPATIAL_TEMP_CONFIG.forecastFromHistory): each
@@ -85,8 +100,7 @@ export const apiForecastProvider: ForecastDataProvider = {
     if (forecastFromHistory) {
       for (let h = 1; h <= horizon; h++) {
         const ts = shiftHkTimestamp(latest, h);
-        const value = valueByTs.get(shiftHkTimestamp(ts, -horizon));
-        if (value !== undefined) entries.push({ ts, point: toPoint(ts, value, false) });
+        addPoint(ts, shiftHkTimestamp(ts, -horizon), false);
       }
     }
 

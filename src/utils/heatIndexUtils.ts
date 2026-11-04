@@ -77,3 +77,31 @@ export const getHeatIndexInfo = (tempCelsius: number): HeatIndexInfo => {
     risk: zone.risk,
   };
 };
+
+// A zone's range in whole °C ("<27°C", "27-32°C", "52°C+") — one formatter
+// for every legend (forecast chart, map, heat index explainer) so they never
+// round the NWS °F thresholds differently.
+export const formatHeatZoneRangeC = (zone: {
+  minF: number;
+  maxF: number;
+}): string => {
+  const toC = (f: number) => Math.round(fahrenheitToCelsius(f));
+  if (zone.minF === -Infinity) return `<${toC(zone.maxF)}°C`;
+  if (zone.maxF === Infinity) return `${toC(zone.minF)}°C+`;
+  return `${toC(zone.minF)}-${toC(zone.maxF)}°C`;
+};
+
+// The one-line "why the two numbers differ" message shown next to air
+// temperature. Works on the rounded values the user actually sees, so the
+// stated gap always equals the difference between the two displayed numbers.
+// null when the gap is too small to be worth mentioning.
+export const describeFeelsLikeGap = (
+  airTempC: number,
+  heatIndexC: number,
+  minGapC: number,
+): string | null => {
+  const gap = Math.round(heatIndexC) - Math.round(airTempC);
+  if (gap >= minGapC) return `Humidity makes it feel ${gap}° hotter`;
+  if (gap <= -minGapC) return `Dry air makes it feel ${-gap}° cooler`;
+  return null;
+};

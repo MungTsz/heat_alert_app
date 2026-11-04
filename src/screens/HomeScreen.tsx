@@ -24,6 +24,7 @@ import DailyHeatForecastCard from '../components/DailyHeatForecastCard';
 import AqhiHourlyForecastChart from '../components/AqhiHourlyForecastChart';
 import HazardCard from '../components/HazardCard';
 import ForecastSheet from '../components/ForecastSheet';
+import HeatIndexExplainerSheet from '../components/HeatIndexExplainerSheet';
 import FullscreenMapModal from '../components/FullscreenMapModal';
 import MapScreen from './MapScreen';
 import { useLocation } from '../utils/useLocation';
@@ -100,6 +101,7 @@ const HomeScreen = () => {
   const [heatSheetOpen, setHeatSheetOpen] = useState(false);
   const [aqhiSheetOpen, setAqhiSheetOpen] = useState(false);
   const [mapFullscreen, setMapFullscreen] = useState(false);
+  const [heatExplainerOpen, setHeatExplainerOpen] = useState(false);
 
   return (
     <View style={styles.mainContainer}>
@@ -181,6 +183,8 @@ const HomeScreen = () => {
           <CurrentWeatherInfo
             temperature={actualTemp}
             humidity={currentHumidity}
+            heatIndex={conditions ? heatIndexTemp : null}
+            onPressInfo={() => setHeatExplainerOpen(true)}
           />
 
           <View style={styles.mapContainer}>
@@ -215,6 +219,11 @@ const HomeScreen = () => {
       >
         <AqhiHourlyForecastChart days={aqhiForecastDays} />
       </ForecastSheet>
+
+      <HeatIndexExplainerSheet
+        visible={heatExplainerOpen}
+        onClose={() => setHeatExplainerOpen(false)}
+      />
     </View>
   );
 };

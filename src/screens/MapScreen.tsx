@@ -18,7 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Navigation, Play, Square } from 'lucide-react-native';
 import Slider from '@react-native-community/slider';
 import { useLocation } from '../utils/useLocation';
-import { usePlacesHeatIndex } from '../hooks/useHeatData';
+import { useHeatConditions } from '../hooks/useHeatData';
 import { useHeatIndexMapTile } from '../hooks/useHeatIndexMapTile';
 import { useAqhiData } from '../hooks/useAqhiData';
 import { useIdwOverlayImage } from '../hooks/useIdwOverlayImage';
@@ -30,6 +30,8 @@ import DualStatPin from '../components/DualStatPin';
 import { usePraiseAqhiTile } from '../hooks/usePraiseAqhiTile';
 import { isPraiseConfigured } from '../config/praiseConfig';
 import AqhiLegend from '../components/AqhiLegend';
+import HeatLegend from '../components/HeatLegend';
+import HeatIndexExplainerSheet from '../components/HeatIndexExplainerSheet';
 import {
   fetchPraisePointData,
   toHkTimestamp,
@@ -45,10 +47,9 @@ const HEAT_OVERLAY_OPACITY = 0.45;
 
 const FALLBACK_LAT = 22.3375;
 const FALLBACK_LNG = 114.263;
-const SELECTED_PLACE_ID = 'selected';
 
-// Heat index for the pin isn't stored here — it's looked up from the API by
-// usePlacesHeatIndex, keyed on these coordinates.
+// Heat values for the pin aren't stored here — they're looked up from the
+// API by useHeatConditions, keyed on these coordinates.
 type SelectedPoint = {
   latitude: number;
   longitude: number;
@@ -79,6 +80,7 @@ const MapScreen = ({
   const [mapLayer, setMapLayer] = useState<MapLayer>('default');
   const [forecastPlaying, setForecastPlaying] = useState(false);
   const [frameIndex, setFrameIndex] = useState(0);
+  const [heatExplainerOpen, setHeatExplainerOpen] = useState(false);
 
   // 1. SPLIT STATES: One for the slider UI, one for the actual map overlay
   const [sliderOpacity, setSliderOpacity] = useState(0.55);
@@ -103,21 +105,11 @@ const MapScreen = ({
     null,
   );
 
-  const { heatIndexById } = usePlacesHeatIndex(
-    selectedPoint
-      ? [
-          {
-            id: SELECTED_PLACE_ID,
-            latitude: selectedPoint.latitude,
-            longitude: selectedPoint.longitude,
-          },
-        ]
-      : [],
-  );
-  const selectedHeatIndex =
-    SELECTED_PLACE_ID in heatIndexById
-      ? Math.round(heatIndexById[SELECTED_PLACE_ID])
-      : null;
+  const { conditions: selectedConditions, loading: selectedLoading } =
+    useHeatConditions(selectedPoint);
+  // While a new point loads, the hook still holds the previous point's
+  // values — show "--" instead so the pin never shows another spot's numbers.
+  const pinConditions = selectedLoading ? null : selectedConditions;
 
   const weightedAqhiPoints = aqhiPoints.map(p => ({
     latitude: p.latitude,
@@ -322,7 +314,17 @@ const MapScreen = ({
             tracksViewChanges={true}
           >
             <DualStatPin
-              temperature={selectedHeatIndex}
+              temperature={
+                pinConditions ? Math.round(pinConditions.heatIndexC) : null
+              }
+              airTemperature={
+                pinConditions ? Math.round(pinConditions.temperatureC) : null
+              }
+              humidity={
+                pinConditions
+                  ? Math.round(pinConditions.relativeHumidityPct)
+                  : null
+              }
               aqhi={selectedPoint.aqhi}
             />
           </Marker>
@@ -439,6 +441,25 @@ const MapScreen = ({
           />
         </View>
       )}
+
+      {mapLayer === 'heat' && (
+        <View
+          style={[
+            styles.legendContainerRight,
+            fullscreen && {
+              top: insets.top + 16 + 54 + 12,
+              bottom: insets.bottom + 16 + BOTTOM_ROW_HEIGHT + 16,
+            },
+          ]}
+        >
+          <HeatLegend onPressInfo={() => setHeatExplainerOpen(true)} />
+        </View>
+      )}
+
+      <HeatIndexExplainerSheet
+        visible={heatExplainerOpen}
+        onClose={() => setHeatExplainerOpen(false)}
+      />
 
       {mapLayer !== 'aqhi' && (
         <TouchableOpacity

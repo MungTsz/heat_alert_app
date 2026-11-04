@@ -46,6 +46,7 @@ When adding a feature that needs new backend data, follow this same pattern rath
 `src/config/spatialTempConfig.ts` (base URL defaults to the public deployment; override with `SPATIAL_TEMP_API_BASE_URL`) + `src/services/spatialTempApi.ts`. Families: `temperature`, `humidity`, `heat-index`. Every heat value in the app — current temp/RH/heat index, bookmark and tapped-point heat index, the map layer (server-rendered PNG via `useHeatIndexMapTile`), the forecast chart, and the alert engine — comes from this API. Never compute heat index on-device, IDW-estimate heat, or fall back to another source; show "--" when it's unavailable. Key gotchas:
 - Endpoints return HTTP 200 with `status: 1` on errors — check `status`, not `response.ok` alone.
 - Anchor queries on `/{family}/latest`, not the phone's clock (data lands 1–2 h late).
+- Product decision: the map and headline numbers are heat-index-only (no temperature/RH map layer). Air temp and RH appear only as context at a single place — the home card's "Humidity makes it feel N° hotter" line, the map pin's sub-line, and the forecast chart's dashed air-temp line — and every "?" opens `HeatIndexExplainerSheet`. Tunables in `src/config/heatDisplayConfig.ts`.
 - The API has no forecast yet: while `forecastFromHistory` is true, future hours repeat the reading from 48 h earlier (demo), and the alert engine skips its forecast-based trend rules.
 
 Google Maps requires `GOOGLE_ANDROID_MAP_KEY` in `.env` (wired into the native Android config).

@@ -1,40 +1,87 @@
 // src/components/CurrentWeatherInfo.tsx
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { Thermometer, Droplets } from 'lucide-react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { Thermometer, Droplets, CircleQuestionMark } from 'lucide-react-native';
 import { glassCardStyle, glassLabelText } from '../styles/glassCard';
+import { describeFeelsLikeGap } from '../utils/heatIndexUtils';
+import { HEAT_DISPLAY_CONFIG } from '../config/heatDisplayConfig';
 
 // null = not loaded / unavailable, shown as "--" rather than a fake 0.
 interface Props {
   temperature: number | null;
   humidity: number | null;
+  heatIndex: number | null;
+  onPressInfo: () => void;
 }
 
-const CurrentWeatherInfo: React.FC<Props> = ({ temperature, humidity }) => {
+const INFO_HIT_SLOP = { top: 8, bottom: 8, left: 8, right: 8 };
+
+// Air temperature and humidity are the supporting context under the
+// heat index card, not a headline of their own: the footer line puts the
+// gap between "air" and "feels like" into words, which is what makes the
+// difference between the two numbers click for people new to heat index.
+const CurrentWeatherInfo: React.FC<Props> = ({
+  temperature,
+  humidity,
+  heatIndex,
+  onPressInfo,
+}) => {
+  const gapMessage =
+    temperature !== null && heatIndex !== null
+      ? describeFeelsLikeGap(
+          temperature,
+          heatIndex,
+          HEAT_DISPLAY_CONFIG.feelsLikeGapMinC,
+        )
+      : null;
+
   return (
     <View style={styles.wrapper}>
-      <View style={styles.item}>
-        <Thermometer size={16} color="#FFFFFF" />
-        <Text style={styles.text}>Temp: {temperature ?? '--'}°C</Text>
+      <View style={styles.row}>
+        <View style={styles.item}>
+          <Thermometer size={16} color="#FFFFFF" />
+          <Text style={styles.text}>Air temp: {temperature ?? '--'}°C</Text>
+        </View>
+        <View style={styles.divider} />
+        <View style={styles.item}>
+          <Droplets size={16} color="#FFFFFF" />
+          <Text style={styles.text}>Humidity: {humidity ?? '--'}%</Text>
+        </View>
       </View>
-      <View style={styles.divider} />
-      <View style={styles.item}>
-        <Droplets size={16} color="#FFFFFF" />
-        <Text style={styles.text}>Humidity: {humidity ?? '--'}%</Text>
-      </View>
+
+      {/* Always present (falls back to a plain question) so the explainer
+          stays reachable even when the gap is too small to mention. */}
+      <TouchableOpacity
+        style={styles.footer}
+        onPress={onPressInfo}
+        hitSlop={INFO_HIT_SLOP}
+        accessibilityLabel="What is the heat index?"
+      >
+        <Text
+          style={[
+            styles.footerText,
+            gapMessage !== null && styles.footerTextStrong,
+          ]}
+        >
+          {gapMessage ?? "What's the heat index?"}
+        </Text>
+        <CircleQuestionMark size={15} color="#FFFFFF" />
+      </TouchableOpacity>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   wrapper: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
     ...glassCardStyle,
     marginTop: 12,
     paddingVertical: 12,
     paddingHorizontal: 24,
+  },
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   item: {
     flexDirection: 'row',
@@ -51,6 +98,26 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     ...glassLabelText,
+  },
+  footer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 0.5,
+    borderTopColor: 'rgba(255,255,255,0.3)',
+  },
+  footerText: {
+    fontSize: 13,
+    fontWeight: '500',
+    ...glassLabelText,
+    opacity: 0.85,
+  },
+  footerTextStrong: {
+    fontWeight: '700',
+    opacity: 1,
   },
 });
 

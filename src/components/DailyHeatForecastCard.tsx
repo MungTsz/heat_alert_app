@@ -26,8 +26,14 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated';
 import { DayForecast, lastObservedIndex } from '../data/forecast/types';
-import { HEAT_INDEX_ZONES, fahrenheitToCelsius } from '../utils/heatIndexUtils';
+import { CircleQuestionMark } from 'lucide-react-native';
+import {
+  HEAT_INDEX_ZONES,
+  fahrenheitToCelsius,
+  formatHeatZoneRangeC,
+} from '../utils/heatIndexUtils';
 import { clampedChartLabelX, estimateSvgTextWidth } from '../utils/svgChartLabel';
+import HeatIndexExplainerSheet from './HeatIndexExplainerSheet';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
@@ -37,6 +43,12 @@ const Y_AXIS_WIDTH = 30;
 const PADDING_TOP = 15;
 const PADDING_BOTTOM = 30;
 const SELECTED_LABEL_FONT_SIZE = 13;
+// Air temperature is context, not the headline: a dark slate dash that stays
+// readable on every band color but recedes behind the solid heat index line.
+const AIR_TEMP_LINE_COLOR = '#4A5568';
+const AIR_TEMP_LINE_DASH = '4,3';
+const LINE_KEY_WIDTH = 18;
+const INFO_HIT_SLOP = { top: 8, bottom: 8, left: 8, right: 8 };
 
 // Chart bounds in Celsius, with headroom below "Safe" and above "Extreme
 // Danger" so every zone's band is visible even at the axis edges.
@@ -57,6 +69,7 @@ const DailyHeatForecastCard: React.FC<Props> = ({ days }) => {
   const [selectedHourIndex, setSelectedHourIndex] = useState<number | null>(
     null,
   );
+  const [explainerOpen, setExplainerOpen] = useState(false);
   const activeDay = days[activeDayIndex];
   const points = activeDay?.points ?? [];
 
@@ -75,6 +88,17 @@ const DailyHeatForecastCard: React.FC<Props> = ({ days }) => {
     return points.reduce((acc, p, i) => {
       const cmd = i === 0 ? 'M' : 'L';
       return `${acc} ${cmd} ${getX(i)},${getY(p.heatIndex)}`;
+    }, '');
+  }, [points, slotWidth]);
+
+  // Air temperature line; restarts (M) after any hour missing a reading so
+  // a gap never gets bridged by a made-up straight segment.
+  const airTempPath = useMemo(() => {
+    return points.reduce((acc, p, i) => {
+      if (p.temperature === null) return acc;
+      const prev = points[i - 1];
+      const cmd = !prev || prev.temperature === null ? 'M' : 'L';
+      return `${acc} ${cmd} ${getX(i)},${getY(p.temperature)}`;
     }, '');
   }, [points, slotWidth]);
 
@@ -238,6 +262,19 @@ const DailyHeatForecastCard: React.FC<Props> = ({ days }) => {
             ))}
           </G>
 
+          {/* Air temperature: faint dashed line under the heat index, so the
+              space between the two is humidity's effect, hour by hour */}
+          {airTempPath !== '' && (
+            <Path
+              d={airTempPath}
+              stroke={AIR_TEMP_LINE_COLOR}
+              strokeWidth={1.5}
+              strokeDasharray={AIR_TEMP_LINE_DASH}
+              fill="none"
+              strokeLinejoin="round"
+            />
+          )}
+
           {/* Connecting line, matching the AQHI chart's neutral gray line */}
           <Path
             d={linePath}
@@ -289,7 +326,12 @@ const DailyHeatForecastCard: React.FC<Props> = ({ days }) => {
           )}
 
           {selectedPoint && selectedHourIndex !== null && (() => {
-            const labelText = `${Math.round(selectedPoint.heatIndex)}°C`;
+            const labelText =
+              selectedPoint.temperature === null
+                ? `${Math.round(selectedPoint.heatIndex)}°C`
+                : `${Math.round(selectedPoint.heatIndex)}°C · Air ${Math.round(
+                    selectedPoint.temperature,
+                  )}°C`;
             const { x, textAnchor } = clampedChartLabelX(
               getX(selectedHourIndex),
               GRAPH_WIDTH,
@@ -331,27 +373,61 @@ const DailyHeatForecastCard: React.FC<Props> = ({ days }) => {
         </Svg>
       </View>
 
-      <View style={styles.legendRow}>
-        {[...HEAT_INDEX_ZONES].reverse().map(zone => {
-          const rangeLabel =
-            zone.minF === -Infinity
-              ? `<${Math.round(fahrenheitToCelsius(zone.maxF))}°C`
-              : zone.maxF === Infinity
-              ? `${Math.round(fahrenheitToCelsius(zone.minF))}°C+`
-              : `${Math.round(fahrenheitToCelsius(zone.minF))}-${Math.round(
-                  fahrenheitToCelsius(zone.maxF),
-                )}°C`;
-          return (
-            <View key={zone.classification} style={styles.legendItem}>
-              <View
-                style={[styles.legendSwatch, { backgroundColor: zone.color }]}
-              />
-              <Text style={styles.legendLabel}>{zone.classification}</Text>
-              <Text style={styles.legendRange}>{rangeLabel}</Text>
-            </View>
-          );
-        })}
+      <View style={styles.lineKeyRow}>
+        <View style={styles.lineKeyItem}>
+          <Svg width={LINE_KEY_WIDTH} height={8}>
+            <Line
+              x1={0}
+              y1={4}
+              x2={LINE_KEY_WIDTH}
+              y2={4}
+              stroke="#888888"
+              strokeWidth={2}
+            />
+          </Svg>
+          <Text style={styles.lineKeyText}>Feels like (heat index)</Text>
+        </View>
+        <View style={styles.lineKeyItem}>
+          <Svg width={LINE_KEY_WIDTH} height={8}>
+            <Line
+              x1={0}
+              y1={4}
+              x2={LINE_KEY_WIDTH}
+              y2={4}
+              stroke={AIR_TEMP_LINE_COLOR}
+              strokeWidth={1.5}
+              strokeDasharray={AIR_TEMP_LINE_DASH}
+            />
+          </Svg>
+          <Text style={styles.lineKeyText}>Air temp</Text>
+        </View>
+        <TouchableOpacity
+          onPress={() => setExplainerOpen(true)}
+          hitSlop={INFO_HIT_SLOP}
+          accessibilityLabel="What is the heat index?"
+        >
+          <CircleQuestionMark size={16} color="#555" />
+        </TouchableOpacity>
       </View>
+
+      <View style={styles.legendRow}>
+        {[...HEAT_INDEX_ZONES].reverse().map(zone => (
+          <View key={zone.classification} style={styles.legendItem}>
+            <View
+              style={[styles.legendSwatch, { backgroundColor: zone.color }]}
+            />
+            <Text style={styles.legendLabel}>{zone.classification}</Text>
+            <Text style={styles.legendRange}>{formatHeatZoneRangeC(zone)}</Text>
+          </View>
+        ))}
+      </View>
+
+      {/* Rendered inside this card (itself inside ForecastSheet's Modal) so
+          iOS presents it on top of that modal rather than as a sibling. */}
+      <HeatIndexExplainerSheet
+        visible={explainerOpen}
+        onClose={() => setExplainerOpen(false)}
+      />
     </View>
   );
 };
@@ -393,12 +469,21 @@ const styles = StyleSheet.create({
   dayCircleActive: { backgroundColor: '#F0741F' },
   dayNumberText: { fontSize: 16, fontWeight: '700', color: '#2D3748' },
   dayNumberTextActive: { color: '#FFFFFF' },
+  lineKeyRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 14,
+    marginTop: 12,
+  },
+  lineKeyItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  lineKeyText: { fontSize: 11, color: '#4A5568', fontWeight: '600' },
   legendRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'center',
     gap: 12,
-    marginTop: 16,
+    marginTop: 10,
     paddingTop: 10,
     borderTopWidth: 1,
     borderTopColor: '#EDF2F7',

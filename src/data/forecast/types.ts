@@ -2,6 +2,10 @@ export type HourlyForecastPoint = {
   timestamp: number;
   time: string;
   heatIndex: number;
+  // Air temperature for the same hour and place, drawn as a faint line under
+  // the heat index so the gap between them (humidity's effect) is visible.
+  // null when the API had no reading for that hour.
+  temperature: number | null;
   // true = a measured hour, false = a forecast hour. "Now" is the last
   // observed point, not the phone's clock — the API's data lands an hour or
   // two late, and the chart/alerts must line up with the current-conditions

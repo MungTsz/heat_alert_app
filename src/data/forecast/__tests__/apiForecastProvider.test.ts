@@ -76,5 +76,25 @@ describe('apiForecastProvider (demo forecast from history)', () => {
     const thu9 = days[1].points.find(p => p.time === '09:00')!;
     expect(thu9.observed).toBe(false);
     expect(thu9.heatIndex).toBe(23);
+    // Air temperature is borrowed from the same source hour.
+    expect(thu9.temperature).toBe(23);
+  });
+
+  it('keeps the heat index chart when only the air temperature request fails', async () => {
+    (fetchPointSeries as jest.Mock).mockImplementation(
+      async (family: string, _lat, _lng, t0: string, t1: string) => {
+        if (family === 'temperature') throw new Error('temperature down');
+        return seriesFrom(t0, t1);
+      },
+    );
+
+    const days = await apiForecastProvider.getForecast({
+      latitude: 22.3,
+      longitude: 114.17,
+    });
+
+    const all = days.flatMap(d => d.points);
+    expect(all).toHaveLength(57); // 9 observed + 48 forecast
+    expect(all.every(p => p.temperature === null)).toBe(true);
   });
 });

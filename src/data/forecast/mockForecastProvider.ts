@@ -35,6 +35,9 @@ const generateDayPoints = (
       timestamp: pointDate.getTime(),
       time: `${hour.toString().padStart(2, '0')}:00`,
       heatIndex: Math.round(heatIndex * 10) / 10,
+      // Mock humidity effect: air temperature a bit below heat index,
+      // widening as it gets hotter (as it does in humid weather).
+      temperature: Math.round((21 + (heatIndex - 21) * 0.7) * 10) / 10,
       observed: pointDate.getTime() <= Date.now(),
     });
   }
