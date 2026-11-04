@@ -88,6 +88,9 @@ type Props = {
   primary: ForecastChartSeries;
   // Optional second line (e.g. temperature under heat index), drawn dashed.
   secondary?: ForecastChartSeries;
+  // Still fetching: keeps the empty state from claiming "not available"
+  // before the request has even finished.
+  loading?: boolean;
 };
 
 // Matches the x-axis style used across the app's hourly charts.
@@ -339,6 +342,7 @@ const HourlyForecastChart: React.FC<Props> = ({
   legendItems,
   primary,
   secondary,
+  loading = false,
 }) => {
   const [width, setWidth] = useState(0);
   const graphWidth = Math.max(0, width - Y_AXIS_WIDTH);
@@ -440,7 +444,9 @@ const HourlyForecastChart: React.FC<Props> = ({
   if (days.length === 0) {
     return (
       <View style={styles.empty}>
-        <Text style={styles.emptyText}>Forecast not available right now.</Text>
+        <Text style={styles.emptyText}>
+          {loading ? 'Loading forecast…' : 'Forecast not available right now.'}
+        </Text>
       </View>
     );
   }

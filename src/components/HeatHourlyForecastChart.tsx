@@ -46,9 +46,9 @@ const formatCelsius = (value: number) => `${Math.round(value)}°C`;
 const PRIMARY = { label: 'Heat index', format: formatCelsius };
 const SECONDARY = { label: 'Temperature', format: formatCelsius };
 
-type Props = { days: DayForecast[] };
+type Props = { days: DayForecast[]; loading?: boolean };
 
-const HeatHourlyForecastChart: React.FC<Props> = ({ days }) => {
+const HeatHourlyForecastChart: React.FC<Props> = ({ days, loading }) => {
   const chartDays = useMemo(
     (): ForecastChartDay[] =>
       days.map(day => {
@@ -82,6 +82,7 @@ const HeatHourlyForecastChart: React.FC<Props> = ({ days }) => {
       legendItems={LEGEND_ITEMS}
       primary={PRIMARY}
       secondary={SECONDARY}
+      loading={loading}
     />
   );
 };

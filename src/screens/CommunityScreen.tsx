@@ -14,8 +14,9 @@ import { useLocation } from '../utils/useLocation';
 import { usePlacesHeatIndex } from '../hooks/useHeatData';
 import { useAqhiData } from '../hooks/useAqhiData';
 import { useBookmarkList } from '../hooks/useBookmarkList';
-import { idwInterpolate } from '../utils/idw';
+import { estimateAqhiAt } from '../utils/aqhiUtils';
 import { distanceMiles } from '../utils/distance';
+import { resolveDataCenter } from '../config/locationConfig';
 import BookmarkCard from '../components/BookmarkCard';
 import PlaceEditRow from '../components/PlaceEditRow';
 import DraggableList from '../components/DraggableList';
@@ -25,12 +26,10 @@ import RenamePlaceModal from '../components/RenamePlaceModal';
 import ChangePlaceTypeModal from '../components/ChangePlaceTypeModal';
 import { BookmarkEntry } from '../types/bookmark';
 
-const FALLBACK_LAT = 22.3375;
-const FALLBACK_LNG = 114.263;
 const SKY_BLUE = '#BEE7FB';
 
 const CommunityScreen = () => {
-  const { coords } = useLocation();
+  const { coords, loading: locating } = useLocation();
   const {
     bookmarks,
     addBookmark,
@@ -49,20 +48,16 @@ const CommunityScreen = () => {
   const [hiddenExpanded, setHiddenExpanded] = useState(false);
   const [dragging, setDragging] = useState(false);
 
-  const center = coords ?? { latitude: FALLBACK_LAT, longitude: FALLBACK_LNG };
   // Each place's heat index is looked up at its own coordinates from the API
   // (not interpolated from nearby samples), so it matches the map exactly.
   // Hidden places never show a heat badge, so they aren't looked up.
   const { heatIndexById } = usePlacesHeatIndex(
     bookmarks.filter(bookmark => !bookmark.hidden),
   );
-  const { points: aqhiPoints } = useAqhiData(center);
-
-  const weightedAqhiPoints = aqhiPoints.map(p => ({
-    latitude: p.latitude,
-    longitude: p.longitude,
-    value: p.aqhi,
-  }));
+  // Same rule as Home: no AQHI fetch for the fallback spot while locating.
+  const { points: aqhiPoints } = useAqhiData(
+    resolveDataCenter({ coords, loading: locating }),
+  );
 
   // Kept in the user's own (stored) order rather than ranked by severity —
   // the order is now theirs to set in Edit mode, and a list that re-sorts
@@ -75,23 +70,19 @@ const CommunityScreen = () => {
           bookmark.id in heatIndexById
             ? Math.round(heatIndexById[bookmark.id])
             : null,
-        aqhi: Math.round(
-          idwInterpolate(bookmark.latitude, bookmark.longitude, weightedAqhiPoints),
-        ),
-        distance: distanceMiles(
-          center.latitude,
-          center.longitude,
-          bookmark.latitude,
-          bookmark.longitude,
-        ),
+        aqhi: estimateAqhiAt(bookmark.latitude, bookmark.longitude, aqhiPoints),
+        // Measured from the real position only — a distance from the
+        // fallback spot would be a made-up number, so it shows "--" instead.
+        distance: coords
+          ? distanceMiles(
+              coords.latitude,
+              coords.longitude,
+              bookmark.latitude,
+              bookmark.longitude,
+            )
+          : null,
       })),
-    [
-      bookmarks,
-      heatIndexById,
-      weightedAqhiPoints,
-      center.latitude,
-      center.longitude,
-    ],
+    [bookmarks, heatIndexById, aqhiPoints, coords],
   );
   const visibleRows = bookmarkRows.filter(row => !row.hidden);
   const hiddenRows = bookmarkRows.filter(row => row.hidden);

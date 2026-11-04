@@ -24,8 +24,11 @@ import { getHeatIndexInfo } from '../../utils/heatIndexUtils';
 type Props = {
   width: number;
   height: number;
-  temperatureCelsius: number;
-  aqhi?: number;
+  // null = not loaded yet / unavailable: the scene then shows no reading
+  // (empty thermometer, no haze or sparkles, neutral face) instead of
+  // guessing one.
+  temperatureCelsius: number | null;
+  aqhi: number | null;
   scrollY?: SharedValue<number>;
 };
 
@@ -39,7 +42,7 @@ const HeatScene: React.FC<Props> = ({
   width,
   height,
   temperatureCelsius,
-  aqhi = 0,
+  aqhi,
   scrollY,
 }) => {
   const blurAmount = useDerivedValue(() => {
@@ -55,10 +58,11 @@ const HeatScene: React.FC<Props> = ({
   const layout = computeSceneLayout(width, height);
   const [skyTop, skyBottom] = getSkyColors();
 
-  const heatInfo = getHeatIndexInfo(temperatureCelsius);
-  const heatSevere = ['Danger', 'Extreme Danger'].includes(
-    heatInfo.classification,
-  );
+  const heatSevere =
+    temperatureCelsius !== null &&
+    ['Danger', 'Extreme Danger'].includes(
+      getHeatIndexInfo(temperatureCelsius).classification,
+    );
 
   return (
     <Canvas style={{ flex: 1 }}>
@@ -71,7 +75,8 @@ const HeatScene: React.FC<Props> = ({
         />
       </Rect>
 
-      {aqhi > 4 ? (
+      {/* Neither layer without a reading — sparkles would claim clean air. */}
+      {aqhi === null ? null : aqhi > 4 ? (
         <AqhiHazeLayer width={width} height={height} aqhi={aqhi} />
       ) : (
         <CleanAirSparkleLayer width={width} height={height} />

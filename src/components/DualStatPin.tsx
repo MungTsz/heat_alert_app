@@ -10,7 +10,7 @@ type Props = {
   temperature: number | null; // heat index
   airTemperature: number | null;
   humidity: number | null;
-  aqhi: number;
+  aqhi: number | null;
 };
 
 // Neutral grey, so a missing value never reads as a heat level color.
@@ -27,7 +27,8 @@ const DualStatPin: React.FC<Props> = ({
     temperature === null
       ? UNAVAILABLE_DOT_COLOR
       : getHeatIndexInfo(temperature).color;
-  const { color: aqhiColor } = getAqhiInfo(aqhi);
+  const aqhiColor =
+    aqhi === null ? UNAVAILABLE_DOT_COLOR : getAqhiInfo(aqhi).color;
 
   return (
     <View style={styles.wrapper}>
@@ -37,7 +38,7 @@ const DualStatPin: React.FC<Props> = ({
           <Text style={styles.text}>Feels Like {temperature ?? '--'}°</Text>
           <View style={styles.divider} />
           <View style={[styles.dot, { backgroundColor: aqhiColor }]} />
-          <Text style={styles.text}>AQHI {aqhi}</Text>
+          <Text style={styles.text}>AQHI {aqhi ?? '--'}</Text>
         </View>
         {/* Secondary context only: lets the user compare "feels like" with
             the thermometer at the exact spot they tapped, without a separate

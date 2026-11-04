@@ -22,7 +22,7 @@ type Props = {
   horizonY: number;
   centerX: number;
   petCx: number;
-  aqhi?: number;
+  aqhi: number | null; // null = no reading: no mask, neutral face
   heatSevere?: boolean;
 };
 
@@ -35,7 +35,7 @@ const CharacterLayer: React.FC<Props> = ({
   horizonY,
   centerX,
   petCx,
-  aqhi = 0,
+  aqhi,
   heatSevere = false,
 }) => {
   const bobProgress = useSharedValue(0);
@@ -112,14 +112,17 @@ const CharacterLayer: React.FC<Props> = ({
   const bodyY = groundY - bodyH;
   const petCy = groundY + 4;
 
-  const showMask = aqhi >= MASK_THRESHOLD_AQHI;
-  const showCough = aqhi >= COUGH_THRESHOLD_AQHI && !showMask;
-  const { color: aqhiAccentColor } = getAqhiInfo(aqhi);
+  // Without a reading the character shows no air-quality reaction at all —
+  // a smile would claim clean air just as a mask would claim bad air.
+  const showMask = aqhi !== null && aqhi >= MASK_THRESHOLD_AQHI;
+  const showCough =
+    aqhi !== null && aqhi >= COUGH_THRESHOLD_AQHI && !showMask;
+  const aqhiAccentColor = aqhi === null ? null : getAqhiInfo(aqhi).color;
 
   // Combined distress flag — either hazard being severe makes the character
   // unhappy. Masked characters keep a neutral mouth since the mask itself
   // already communicates "this is bad."
-  const isDistressed = heatSevere || aqhi >= 7;
+  const isDistressed = heatSevere || (aqhi !== null && aqhi >= 7);
 
   const mouthPath = showMask
     ? null
@@ -127,10 +130,12 @@ const CharacterLayer: React.FC<Props> = ({
     ? `M ${centerX - 6} ${headCy + 12} Q ${centerX} ${headCy + 6} ${
         centerX + 6
       } ${headCy + 12}` // frown
-    : aqhi <= 4
+    : aqhi !== null && aqhi <= 4
     ? `M ${centerX - 7} ${headCy + 8} Q ${centerX} ${headCy + 15} ${
         centerX + 7
       } ${headCy + 8}` // wide smile — good air
+    : aqhi === null
+    ? `M ${centerX - 5} ${headCy + 10} L ${centerX + 5} ${headCy + 10}` // flat — no reading yet
     : `M ${centerX - 6} ${headCy + 10} Q ${centerX} ${headCy + 5} ${
         centerX + 6
       } ${headCy + 10}`; // neutral
@@ -332,7 +337,7 @@ const CharacterLayer: React.FC<Props> = ({
           </Group>
         )}
 
-        {showCough && (
+        {showCough && aqhiAccentColor && (
           <Group transform={coughTransform}>
             <Circle
               cx={centerX + headR * 0.6}

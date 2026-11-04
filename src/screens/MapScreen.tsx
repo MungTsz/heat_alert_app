@@ -24,8 +24,8 @@ import { useHeatIndexForecastTiles } from '../hooks/useHeatIndexForecastTiles';
 import { useAqhiData } from '../hooks/useAqhiData';
 import { useIdwOverlayImage } from '../hooks/useIdwOverlayImage';
 import { useAqhiForecastTiles } from '../hooks/useAqhiForecastTiles';
-import { idwInterpolate } from '../utils/idw';
-import { valueToAqhiColor } from '../utils/aqhiUtils';
+import { estimateAqhiAt, valueToAqhiColor } from '../utils/aqhiUtils';
+import { FALLBACK_CENTER, resolveDataCenter } from '../config/locationConfig';
 import MapLayerPicker, { MapLayer } from '../components/MapLayerPicker';
 import DualStatPin from '../components/DualStatPin';
 import { usePraiseAqhiTile } from '../hooks/usePraiseAqhiTile';
@@ -42,15 +42,12 @@ import { MAP_LAYER_CONFIG } from '../config/mapLayerConfig';
 
 const BOTTOM_ROW_HEIGHT = 58; // approx height of the opacity-bar/locate-button row, used to space things above it
 
-const FALLBACK_LAT = 22.3375;
-const FALLBACK_LNG = 114.263;
-
 // Heat values for the pin aren't stored here — they're looked up from the
 // API by useHeatConditions, keyed on these coordinates.
 type SelectedPoint = {
   latitude: number;
   longitude: number;
-  aqhi: number;
+  aqhi: number | null; // null until AQHI samples arrive → "--"
 };
 
 type Coordinates = {
@@ -71,7 +68,7 @@ const MapScreen = ({
   enableForecastPlayback = false,
   fullscreen = false,
 }: Props) => {
-  const { coords } = useLocation();
+  const { coords, loading: locating } = useLocation();
   const { settings: mapSettings } = useMapSettings();
   const insets = useSafeAreaInsets();
   const [mapLayer, setMapLayer] = useState<MapLayer>('default');
@@ -91,9 +88,12 @@ const MapScreen = ({
 
   const mapRef = useRef<MapView>(null);
 
-  const center = overrideCenter ??
-    coords ?? { latitude: FALLBACK_LAT, longitude: FALLBACK_LNG };
-  const { points: aqhiPoints } = useAqhiData(center);
+  // dataCenter is null while still locating, so neither AQHI nor the
+  // auto-placed pin shows the fallback spot's numbers first. The camera
+  // (center) still needs somewhere to start, so it falls back right away.
+  const dataCenter = overrideCenter ?? resolveDataCenter({ coords, loading: locating });
+  const center = dataCenter ?? FALLBACK_CENTER;
+  const { points: aqhiPoints } = useAqhiData(dataCenter);
 
   const initialRegion: Region = {
     latitude: center.latitude,
@@ -231,10 +231,11 @@ const MapScreen = ({
   };
 
   const placeMarkerAt = (latitude: number, longitude: number) => {
-    const aqhi = Math.round(
-      idwInterpolate(latitude, longitude, weightedAqhiPoints, 2, 1),
-    );
-    setSelectedPoint({ latitude, longitude, aqhi });
+    setSelectedPoint({
+      latitude,
+      longitude,
+      aqhi: estimateAqhiAt(latitude, longitude, aqhiPoints),
+    });
   };
 
   const handleMapPress = (event: MapPressEvent) => {
@@ -250,10 +251,10 @@ const MapScreen = ({
   };
 
   useEffect(() => {
-    if (weightedAqhiPoints.length > 0 && !selectedPoint) {
-      placeMarkerAt(center.latitude, center.longitude);
+    if (dataCenter && weightedAqhiPoints.length > 0 && !selectedPoint) {
+      placeMarkerAt(dataCenter.latitude, dataCenter.longitude);
     }
-  }, [center.latitude, center.longitude, weightedAqhiPoints.length]);
+  }, [dataCenter?.latitude, dataCenter?.longitude, weightedAqhiPoints.length]);
 
   const recenter = () => {
     placeMarkerAt(center.latitude, center.longitude);

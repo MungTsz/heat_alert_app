@@ -19,8 +19,8 @@ import {
 } from '../services/notificationService';
 import { registerHeatAlertTrigger } from '../services/heatAlertBus';
 import { HeatAlert } from '../types/alerts';
+import { FALLBACK_CENTER } from '../config/locationConfig';
 
-const FALLBACK_CENTER = { latitude: 22.3375, longitude: 114.263 };
 const CHECK_INTERVAL_MS = 5 * 60 * 1000;
 
 // Reads heat index from the provider on every tick (rather than through a

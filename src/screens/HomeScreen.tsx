@@ -29,45 +29,38 @@ import FullscreenMapModal from '../components/FullscreenMapModal';
 import MapScreen from './MapScreen';
 import { useLocation } from '../utils/useLocation';
 import { getHeatIndexInfo } from '../utils/heatIndexUtils';
-import { getAqhiInfo } from '../utils/aqhiUtils';
+import { estimateAqhiAt, getAqhiInfo } from '../utils/aqhiUtils';
+import { FALLBACK_CENTER, resolveDataCenter } from '../config/locationConfig';
 import HeatScene from '../components/scene/HeatScene';
 import { computeSceneLayout } from '../utils/sceneLayout';
 import { useForecastData } from '../hooks/useForecastData';
 import { useAqhiForecastData } from '../hooks/useAqhiForecastData';
 import { useAqhiData } from '../hooks/useAqhiData';
 import { useHeatConditions } from '../hooks/useHeatData';
-import { idwInterpolate } from '../utils/idw';
-
 const LOCATION_BOX_WIDTH = 160;
 const MIN_GAP_BELOW_CHARACTER = 24;
-const FALLBACK_LAT = 22.3375;
-const FALLBACK_LNG = 114.263;
+// Plain white like the cards' labels, so a "--" never reads as a level color.
+const UNAVAILABLE_VALUE_COLOR = '#FFFFFF';
 
 const HomeScreen = () => {
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const { locationText, loading, coords } = useLocation();
 
-  const effectiveCenter = coords ?? {
-    latitude: FALLBACK_LAT,
-    longitude: FALLBACK_LNG,
-  };
+  // null while still locating, so nothing is fetched (and shown) for the
+  // fallback spot before the user's own position arrives.
+  const dataCenter = resolveDataCenter({ coords, loading });
 
-  const { days: heatForecastDays } = useForecastData(effectiveCenter);
-  const { days: aqhiForecastDays } = useAqhiForecastData(effectiveCenter);
-  const { points: aqhiPoints } = useAqhiData(effectiveCenter);
+  const { days: heatForecastDays, loading: heatForecastLoading } =
+    useForecastData(dataCenter);
+  const { days: aqhiForecastDays, loading: aqhiForecastLoading } =
+    useAqhiForecastData(dataCenter);
+  const { points: aqhiPoints } = useAqhiData(dataCenter);
 
-  const currentAqhi = Math.round(
-    idwInterpolate(
-      effectiveCenter.latitude,
-      effectiveCenter.longitude,
-      aqhiPoints.map(p => ({
-        latitude: p.latitude,
-        longitude: p.longitude,
-        value: p.aqhi,
-      })),
-    ),
-  );
+  // null until AQHI samples arrive (or if they never do) → "--", same as heat.
+  const currentAqhi = dataCenter
+    ? estimateAqhiAt(dataCenter.latitude, dataCenter.longitude, aqhiPoints)
+    : null;
 
   const scrollY = useSharedValue(0);
   const scrollHandler = useAnimatedScrollHandler(event => {
@@ -76,15 +69,15 @@ const HomeScreen = () => {
 
   // Temperature, humidity and heat index all at the user's own location, from
   // the same API hour as the map and forecast chart.
-  const { conditions } = useHeatConditions(effectiveCenter);
-  const heatIndexTemp = conditions ? Math.round(conditions.heatIndexC) : 0;
+  const { conditions } = useHeatConditions(dataCenter);
+  const heatIndexTemp = conditions ? Math.round(conditions.heatIndexC) : null;
   const actualTemp = conditions ? Math.round(conditions.temperatureC) : null;
   const currentHumidity = conditions
     ? Math.round(conditions.relativeHumidityPct)
     : null;
 
-  const heatInfo = getHeatIndexInfo(heatIndexTemp);
-  const aqhiInfo = getAqhiInfo(currentAqhi);
+  const heatInfo = heatIndexTemp === null ? null : getHeatIndexInfo(heatIndexTemp);
+  const aqhiInfo = currentAqhi === null ? null : getAqhiInfo(currentAqhi);
   const layout = computeSceneLayout(width, height);
 
   const [contentAboveHeight, setContentAboveHeight] = useState(0);
@@ -160,22 +153,22 @@ const HomeScreen = () => {
               label="Feels Like..."
               // "--" while loading or when the API is unreachable — never a
               // value from another source.
-              value={conditions ? `${heatIndexTemp}°` : '--°'}
-              classification={conditions ? heatInfo.classification : '—'}
-              valueColor={heatInfo.color}
+              value={heatInfo ? `${heatIndexTemp}°` : '--°'}
+              classification={heatInfo?.classification ?? '—'}
+              valueColor={heatInfo?.color ?? UNAVAILABLE_VALUE_COLOR}
               onPress={() => setHeatSheetOpen(true)}
             />
-            {/* aqhi card */}
+            {/* aqhi card — same "--" / "—" placeholders as the heat card */}
             <HazardCard
               icon={<Wind size={18} color="#FFFFFF" />}
               label="AQHI"
-              value={`${currentAqhi}`}
-              classification={aqhiInfo.classification}
+              value={aqhiInfo ? `${currentAqhi}` : '--'}
+              classification={aqhiInfo?.classification ?? '—'}
               // Same per-value color as the AQHI map layer and legend
               // (aqhiUtils' AQHI_COLOR_BY_VALUE), so the number reads as the
               // band the map shows — like the heat card's heatInfo.color.
               // Deliberately NOT the forecast chart's own background bands.
-              valueColor={aqhiInfo.color}
+              valueColor={aqhiInfo?.color ?? UNAVAILABLE_VALUE_COLOR}
               onPress={() => setAqhiSheetOpen(true)}
             />
           </View>
@@ -183,7 +176,7 @@ const HomeScreen = () => {
           <CurrentWeatherInfo
             temperature={actualTemp}
             humidity={currentHumidity}
-            heatIndex={conditions ? heatIndexTemp : null}
+            heatIndex={heatIndexTemp}
             onPressInfo={() => setHeatExplainerOpen(true)}
           />
 
@@ -200,7 +193,9 @@ const HomeScreen = () => {
 
       <FullscreenMapModal
         visible={mapFullscreen}
-        center={effectiveCenter}
+        // Camera only (no values are read off it), so the fallback is fine
+        // here while locating.
+        center={dataCenter ?? FALLBACK_CENTER}
         onClose={() => setMapFullscreen(false)}
       />
 
@@ -209,7 +204,10 @@ const HomeScreen = () => {
         title="Heat Index Forecast"
         onClose={() => setHeatSheetOpen(false)}
       >
-        <HeatHourlyForecastChart days={heatForecastDays} />
+        <HeatHourlyForecastChart
+          days={heatForecastDays}
+          loading={heatForecastLoading}
+        />
       </ForecastSheet>
 
       <ForecastSheet
@@ -217,7 +215,10 @@ const HomeScreen = () => {
         title="AQHI Forecast"
         onClose={() => setAqhiSheetOpen(false)}
       >
-        <AqhiHourlyForecastChart days={aqhiForecastDays} />
+        <AqhiHourlyForecastChart
+          days={aqhiForecastDays}
+          loading={aqhiForecastLoading}
+        />
       </ForecastSheet>
 
       <HeatIndexExplainerSheet

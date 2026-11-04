@@ -1,4 +1,7 @@
 // src/utils/aqhiUtils.ts
+import { AqhiPoint } from '../data/aqhi/types';
+import { idwInterpolate } from './idw';
+
 export interface AqhiInfo {
   classification: string;
   color: string;
@@ -55,6 +58,29 @@ export const valueToAqhiColor = (aqhi: number, alpha: number = 0.9): string => {
   const b = parseInt(color.slice(5, 7), 16);
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 };
+
+// AQHI at an arbitrary point, IDW-estimated from the provider's samples and
+// rounded to the whole number the UI shows. null when there are no samples
+// yet (loading) or at all (fetch failed) — callers show "--" rather than
+// idwInterpolate's numeric fallback, which would read as a real "1 Low".
+export const estimateAqhiAt = (
+  latitude: number,
+  longitude: number,
+  points: AqhiPoint[],
+): number | null =>
+  points.length === 0
+    ? null
+    : Math.round(
+        idwInterpolate(
+          latitude,
+          longitude,
+          points.map(p => ({
+            latitude: p.latitude,
+            longitude: p.longitude,
+            value: p.aqhi,
+          })),
+        ),
+      );
 
 // "10+" display label, matching the legend's own notation for the top value
 export const formatAqhiValue = (aqhi: number): string => {

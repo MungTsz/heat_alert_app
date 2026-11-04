@@ -13,7 +13,7 @@ type Props = {
   x: number;
   topY: number;
   bottomY: number;
-  temperatureCelsius: number;
+  temperatureCelsius: number | null; // null = no reading: empty glass
 };
 
 const MIN_TEMP = 15;
@@ -32,10 +32,13 @@ const ThermometerLayer: React.FC<Props> = ({
   const tubeHeight = bulbCy - topY;
   const glassInset = 5;
 
-  const fraction = Math.max(
-    0,
-    Math.min(1, (temperatureCelsius - MIN_TEMP) / (MAX_TEMP - MIN_TEMP)),
-  );
+  const fraction =
+    temperatureCelsius === null
+      ? 0
+      : Math.max(
+          0,
+          Math.min(1, (temperatureCelsius - MIN_TEMP) / (MAX_TEMP - MIN_TEMP)),
+        );
   const fillHeight = tubeHeight * fraction;
   const fillTopY = bulbCy - fillHeight;
 
@@ -76,26 +79,32 @@ const ThermometerLayer: React.FC<Props> = ({
         />
       ))}
 
-      <RoundedRect
-        x={x - (tubeWidth - glassInset) / 2}
-        y={fillTopY}
-        width={tubeWidth - glassInset}
-        height={bulbCy - fillTopY + (tubeWidth - glassInset) / 2}
-        r={(tubeWidth - glassInset) / 2}
-      >
-        <LinearGradient
-          start={vec(x - tubeWidth / 2, fillTopY)}
-          end={vec(x + tubeWidth / 2, fillTopY)}
-          colors={[MERCURY_COLOR, MERCURY_COLOR, 'rgba(255,255,255,0.35)']}
-          positions={[0, 0.55, 1]}
-        />
-      </RoundedRect>
-      <Circle
-        cx={x}
-        cy={bulbCy}
-        r={bulbR - glassInset / 2}
-        color={MERCURY_COLOR}
-      />
+      {/* No mercury at all without a reading — even a red bulb alone would
+          read as "cool" rather than "unknown". */}
+      {temperatureCelsius !== null && (
+        <>
+          <RoundedRect
+            x={x - (tubeWidth - glassInset) / 2}
+            y={fillTopY}
+            width={tubeWidth - glassInset}
+            height={bulbCy - fillTopY + (tubeWidth - glassInset) / 2}
+            r={(tubeWidth - glassInset) / 2}
+          >
+            <LinearGradient
+              start={vec(x - tubeWidth / 2, fillTopY)}
+              end={vec(x + tubeWidth / 2, fillTopY)}
+              colors={[MERCURY_COLOR, MERCURY_COLOR, 'rgba(255,255,255,0.35)']}
+              positions={[0, 0.55, 1]}
+            />
+          </RoundedRect>
+          <Circle
+            cx={x}
+            cy={bulbCy}
+            r={bulbR - glassInset / 2}
+            color={MERCURY_COLOR}
+          />
+        </>
+      )}
 
       <RoundedRect
         x={x - tubeWidth / 2}

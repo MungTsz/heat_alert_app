@@ -35,9 +35,9 @@ const LEGEND = [
 
 const PRIMARY = { label: 'AQHI', format: formatAqhiValue };
 
-type Props = { days: AqhiDayForecast[] };
+type Props = { days: AqhiDayForecast[]; loading?: boolean };
 
-const AqhiHourlyForecastChart: React.FC<Props> = ({ days }) => {
+const AqhiHourlyForecastChart: React.FC<Props> = ({ days, loading }) => {
   const chartDays = useMemo((): ForecastChartDay[] => {
     // AQHI's forecast is anchored on the phone's clock, so "now" is today's
     // point closest to the current time.
@@ -74,6 +74,7 @@ const AqhiHourlyForecastChart: React.FC<Props> = ({ days }) => {
       bands={BANDS}
       legendItems={LEGEND}
       primary={PRIMARY}
+      loading={loading}
     />
   );
 };

@@ -11,9 +11,10 @@ type Props = {
   label: string;
   category: PlaceCategory;
   radiusMeters: number;
-  temperature: number | null; // heat index; null = loading / unavailable
-  aqhi: number;
-  distance: number;
+  // null = loading / unavailable, shown as "--" on a neutral badge
+  temperature: number | null; // heat index
+  aqhi: number | null;
+  distance: number | null; // miles; null until the phone's position is known
   onPress: () => void;
   onChangeType: () => void;
   onRename: () => void;
@@ -37,7 +38,7 @@ const BookmarkCard = ({
   onRemove,
 }: Props) => {
   const heatInfo = temperature === null ? null : getHeatIndexInfo(temperature);
-  const aqhiInfo = getAqhiInfo(aqhi);
+  const aqhiInfo = aqhi === null ? null : getAqhiInfo(aqhi);
   const { Icon, label: categoryLabel } = PLACE_CATEGORY_CONFIG[category];
   const categoryColor = EXPOSURE_IO_CONFIG[category].color;
 
@@ -84,7 +85,7 @@ const BookmarkCard = ({
           <ChevronDown size={12} color={categoryColor} />
         </TouchableOpacity>
         <Text style={styles.distance} numberOfLines={1}>
-          {distance.toFixed(1)} miles away · {radiusMeters} m area
+          {distance === null ? '--' : distance.toFixed(1)} miles away · {radiusMeters} m area
         </Text>
       </View>
 
@@ -100,10 +101,15 @@ const BookmarkCard = ({
             {heatInfo ? `${temperature}° ${heatInfo.classification}` : '--'}
           </Text>
         </View>
-        <View style={[styles.badge, { backgroundColor: aqhiInfo.color }]}>
+        <View
+          style={[
+            styles.badge,
+            { backgroundColor: aqhiInfo?.color ?? UNAVAILABLE_BADGE_COLOR },
+          ]}
+        >
           <Text style={styles.badgeLabel}>AQHI</Text>
           <Text style={styles.badgeValue}>
-            {aqhi} {aqhiInfo.classification}
+            {aqhiInfo ? `${aqhi} ${aqhiInfo.classification}` : '--'}
           </Text>
         </View>
       </View>
