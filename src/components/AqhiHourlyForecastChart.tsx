@@ -28,6 +28,7 @@ import Animated, {
 import { AqhiDayForecast } from '../data/aqhiForecast/types';
 import { formatAqhiValue } from '../utils/aqhiUtils';
 import { clampedChartLabelX, estimateSvgTextWidth } from '../utils/svgChartLabel';
+import ChartBandLegend from './ChartBandLegend';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
@@ -343,17 +344,7 @@ const AqhiHourlyForecastChart: React.FC<Props> = ({ days }) => {
         </Svg>
       </View>
 
-      <View style={styles.legendRow}>
-        {LEGEND.map(item => (
-          <View key={item.label} style={styles.legendItem}>
-            <View
-              style={[styles.legendSwatch, { backgroundColor: item.color }]}
-            />
-            <Text style={styles.legendLabel}>{item.label}</Text>
-            <Text style={styles.legendRange}>{item.range}</Text>
-          </View>
-        ))}
-      </View>
+      <ChartBandLegend items={LEGEND} />
     </View>
   );
 };
@@ -384,20 +375,6 @@ const styles = StyleSheet.create({
   dayCircleActive: { backgroundColor: '#E99066' },
   dayNumberText: { fontSize: 16, fontWeight: '700', color: '#2D3748' },
   dayNumberTextActive: { color: '#FFFFFF' },
-  legendRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: 12,
-    marginTop: 16,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: '#EDF2F7',
-  },
-  legendItem: { alignItems: 'center', width: 60 },
-  legendSwatch: { width: 24, height: 14, borderRadius: 2, marginBottom: 3 },
-  legendLabel: { fontSize: 9, fontWeight: '700', color: '#333' },
-  legendRange: { fontSize: 8, color: '#666', marginTop: 1 },
 });
 
 export default AqhiHourlyForecastChart;

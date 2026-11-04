@@ -19,7 +19,8 @@ import { Navigation, Play, Square } from 'lucide-react-native';
 import Slider from '@react-native-community/slider';
 import { useLocation } from '../utils/useLocation';
 import { useHeatConditions } from '../hooks/useHeatData';
-import { useHeatIndexMapTile } from '../hooks/useHeatIndexMapTile';
+import { useHeatIndexTile } from '../hooks/useHeatIndexTile';
+import { useHeatIndexForecastTiles } from '../hooks/useHeatIndexForecastTiles';
 import { useAqhiData } from '../hooks/useAqhiData';
 import { useIdwOverlayImage } from '../hooks/useIdwOverlayImage';
 import { useAqhiForecastTiles } from '../hooks/useAqhiForecastTiles';
@@ -31,19 +32,15 @@ import { usePraiseAqhiTile } from '../hooks/usePraiseAqhiTile';
 import { isPraiseConfigured } from '../config/praiseConfig';
 import AqhiLegend from '../components/AqhiLegend';
 import HeatLegend from '../components/HeatLegend';
-import HeatIndexExplainerSheet from '../components/HeatIndexExplainerSheet';
 import {
   fetchPraisePointData,
   toHkTimestamp,
   formatHkTimestampLabel,
 } from '../services/praiseApi';
 import { useMapSettings } from '../hooks/useMapSettings';
+import { MAP_LAYER_CONFIG } from '../config/mapLayerConfig';
 
-const FORECAST_FRAME_INTERVAL_MS = 700;
 const BOTTOM_ROW_HEIGHT = 58; // approx height of the opacity-bar/locate-button row, used to space things above it
-// The API's heat index PNG is fully opaque, so it's drawn translucent to keep
-// streets and labels readable underneath.
-const HEAT_OVERLAY_OPACITY = 0.45;
 
 const FALLBACK_LAT = 22.3375;
 const FALLBACK_LNG = 114.263;
@@ -80,18 +77,23 @@ const MapScreen = ({
   const [mapLayer, setMapLayer] = useState<MapLayer>('default');
   const [forecastPlaying, setForecastPlaying] = useState(false);
   const [frameIndex, setFrameIndex] = useState(0);
-  const [heatExplainerOpen, setHeatExplainerOpen] = useState(false);
+
+  // Heat index and AQHI are peer hazard layers: everything below (current
+  // tile, opacity slider, legend, Play Forecast, locate button) is shared
+  // so the two always look and behave the same — only the data differs.
+  const isHazardLayer = mapLayer === 'heat' || mapLayer === 'aqhi';
 
   // 1. SPLIT STATES: One for the slider UI, one for the actual map overlay
-  const [sliderOpacity, setSliderOpacity] = useState(0.55);
-  const [mapOpacity, setMapOpacity] = useState(0.55);
+  const [sliderOpacity, setSliderOpacity] = useState(
+    MAP_LAYER_CONFIG.defaultOpacity,
+  );
+  const [mapOpacity, setMapOpacity] = useState(MAP_LAYER_CONFIG.defaultOpacity);
 
   const mapRef = useRef<MapView>(null);
 
   const center = overrideCenter ??
     coords ?? { latitude: FALLBACK_LAT, longitude: FALLBACK_LNG };
   const { points: aqhiPoints } = useAqhiData(center);
-  const { tile: heatIndexTile } = useHeatIndexMapTile(mapLayer === 'heat');
 
   const initialRegion: Region = {
     latitude: center.latitude,
@@ -110,6 +112,16 @@ const MapScreen = ({
   // While a new point loads, the hook still holds the previous point's
   // values — show "--" instead so the pin never shows another spot's numbers.
   const pinConditions = selectedLoading ? null : selectedConditions;
+  const pinHeatIndex = pinConditions
+    ? Math.round(pinConditions.heatIndexC)
+    : null;
+  const pinAirTemp = pinConditions
+    ? Math.round(pinConditions.temperatureC)
+    : null;
+  const pinHumidity = pinConditions
+    ? Math.round(pinConditions.relativeHumidityPct)
+    : null;
+  const pinSignature = `${pinHeatIndex}-${pinAirTemp}-${pinHumidity}-${selectedPoint?.aqhi}`;
 
   const weightedAqhiPoints = aqhiPoints.map(p => ({
     latitude: p.latitude,
@@ -127,16 +139,37 @@ const MapScreen = ({
     region,
     mapLayer === 'aqhi' && isPraiseConfigured() && !forecastPlaying,
   );
+  const { tile: heatIndexTile } = useHeatIndexTile(
+    region,
+    mapLayer === 'heat' && !forecastPlaying,
+  );
 
-  // Fetches (and fully pre-caches) forecast frames as soon as the AQHI layer
+  // AQHI's forecast needs PRAISE configured; heat's comes from the spatial
+  // temperature API, which is always on.
+  const forecastAvailable =
+    enableForecastPlayback &&
+    (mapLayer === 'heat' || (mapLayer === 'aqhi' && isPraiseConfigured()));
+
+  // Fetches (and fully pre-caches) forecast frames as soon as a hazard layer
   // is up, well before the user taps Play — so playback starts instantly
   // instead of stalling on network fetches for the first loop.
+  const aqhiForecast = useAqhiForecastTiles(
+    region,
+    forecastAvailable && mapLayer === 'aqhi',
+  );
+  const heatForecast = useHeatIndexForecastTiles(
+    region,
+    forecastAvailable && mapLayer === 'heat',
+  );
   const { frames: forecastFrames, loading: forecastLoading } =
-    useAqhiForecastTiles(
-      region,
-      enableForecastPlayback && mapLayer === 'aqhi' && isPraiseConfigured(),
-    );
+    mapLayer === 'heat' ? heatForecast : aqhiForecast;
   const forecastReady = !forecastLoading && forecastFrames.length > 0;
+
+  // Switching layers mid-playback would keep animating the old layer's
+  // frames, so playback always stops on a layer change.
+  useEffect(() => {
+    setForecastPlaying(false);
+  }, [mapLayer]);
 
   // Resets to the first frame whenever a fresh batch comes in (e.g. after panning)
   useEffect(() => {
@@ -147,7 +180,7 @@ const MapScreen = ({
     if (!forecastPlaying || forecastFrames.length === 0) return;
     const interval = setInterval(() => {
       setFrameIndex(prev => (prev + 1) % forecastFrames.length);
-    }, FORECAST_FRAME_INTERVAL_MS);
+    }, MAP_LAYER_CONFIG.frameIntervalMs);
     return () => clearInterval(interval);
   }, [forecastPlaying, forecastFrames.length]);
 
@@ -263,12 +296,13 @@ const MapScreen = ({
         showsUserLocation={!overrideCenter}
         showsMyLocationButton={false}
       >
-        {mapLayer === 'heat' && heatIndexTile && (
+        {mapLayer === 'heat' && heatIndexTile && !activeFrame && (
           <Overlay
-            key={`heat-${heatIndexTile.ts}`}
+            // Same remount-on-opacity trick as the AQHI tile below
+            key={`heat-real-${mapOpacity}`}
             image={{ uri: heatIndexTile.uri }}
             bounds={heatIndexTile.bounds}
-            opacity={HEAT_OVERLAY_OPACITY}
+            opacity={mapOpacity}
           />
         )}
 
@@ -291,9 +325,9 @@ const MapScreen = ({
           />
         )}
 
-        {mapLayer === 'aqhi' && activeFrame && (
+        {isHazardLayer && activeFrame && (
           <Overlay
-            key={`aqhi-forecast-${activeFrame.ts}`}
+            key={`${mapLayer}-forecast-${activeFrame.ts}`}
             image={{ uri: activeFrame.uri }}
             bounds={activeFrame.bounds}
             opacity={mapOpacity}
@@ -302,9 +336,13 @@ const MapScreen = ({
 
         {selectedPoint && (
           <Marker
+            // Android snapshots a custom marker at its first layout size; if
+            // the content later grows (values arriving), the overflow — the
+            // pin icon at the bottom — gets clipped off. Keying on the shown
+            // values remounts the marker so it re-measures with them.
             key={`marker-${selectedPoint.latitude.toFixed(
               4,
-            )}-${selectedPoint.longitude.toFixed(4)}`}
+            )}-${selectedPoint.longitude.toFixed(4)}-${pinSignature}`}
             coordinate={{
               latitude: selectedPoint.latitude,
               longitude: selectedPoint.longitude,
@@ -314,24 +352,16 @@ const MapScreen = ({
             tracksViewChanges={true}
           >
             <DualStatPin
-              temperature={
-                pinConditions ? Math.round(pinConditions.heatIndexC) : null
-              }
-              airTemperature={
-                pinConditions ? Math.round(pinConditions.temperatureC) : null
-              }
-              humidity={
-                pinConditions
-                  ? Math.round(pinConditions.relativeHumidityPct)
-                  : null
-              }
+              temperature={pinHeatIndex}
+              airTemperature={pinAirTemp}
+              humidity={pinHumidity}
               aqhi={selectedPoint.aqhi}
             />
           </Marker>
         )}
       </MapView>
 
-      {mapLayer === 'aqhi' && (
+      {isHazardLayer && (
         <>
           <View
             style={[
@@ -342,7 +372,7 @@ const MapScreen = ({
               },
             ]}
           >
-            <AqhiLegend />
+            {mapLayer === 'aqhi' ? <AqhiLegend /> : <HeatLegend />}
           </View>
 
           <View
@@ -390,7 +420,7 @@ const MapScreen = ({
             </TouchableOpacity>
           </View>
 
-          {enableForecastPlayback && isPraiseConfigured() && (
+          {forecastAvailable && (
             <TouchableOpacity
               style={[
                 styles.playForecastButton,
@@ -442,26 +472,7 @@ const MapScreen = ({
         </View>
       )}
 
-      {mapLayer === 'heat' && (
-        <View
-          style={[
-            styles.legendContainerRight,
-            fullscreen && {
-              top: insets.top + 16 + 54 + 12,
-              bottom: insets.bottom + 16 + BOTTOM_ROW_HEIGHT + 16,
-            },
-          ]}
-        >
-          <HeatLegend onPressInfo={() => setHeatExplainerOpen(true)} />
-        </View>
-      )}
-
-      <HeatIndexExplainerSheet
-        visible={heatExplainerOpen}
-        onClose={() => setHeatExplainerOpen(false)}
-      />
-
-      {mapLayer !== 'aqhi' && (
+      {!isHazardLayer && (
         <TouchableOpacity
           style={[
             styles.locateButton,

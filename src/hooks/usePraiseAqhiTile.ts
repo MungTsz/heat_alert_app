@@ -1,19 +1,12 @@
 // src/hooks/usePraiseAqhiTile.ts
 import { useEffect, useState } from 'react';
+import { Region } from 'react-native-maps';
 import { fetchPraiseTiles, toHkTimestamp } from '../services/praiseApi';
 import { isPraiseConfigured } from '../config/praiseConfig';
+import { MapTile } from '../types/mapSettings';
+import { regionToBounds } from '../utils/mapRegion';
 
-type Region = {
-  latitude: number;
-  longitude: number;
-  latitudeDelta: number;
-  longitudeDelta: number;
-};
-
-type TileResult = {
-  uri: string;
-  bounds: [[number, number], [number, number]]; // [northEast, southWest] — matches react-native-maps Overlay
-} | null;
+type TileResult = MapTile | null;
 
 export const usePraiseAqhiTile = (region: Region, active: boolean) => {
   const [tile, setTile] = useState<TileResult>(null);
@@ -28,12 +21,7 @@ export const usePraiseAqhiTile = (region: Region, active: boolean) => {
     let cancelled = false;
     setLoading(true);
 
-    const lng0 = region.longitude - Math.abs(region.longitudeDelta) / 2;
-    const lng1 = region.longitude + Math.abs(region.longitudeDelta) / 2;
-    const lat0 = region.latitude - Math.abs(region.latitudeDelta) / 2;
-    const lat1 = region.latitude + Math.abs(region.latitudeDelta) / 2;
-
-    fetchPraiseTiles('AQHIBN2024', toHkTimestamp(), { lng0, lat0, lng1, lat1 })
+    fetchPraiseTiles('AQHIBN2024', toHkTimestamp(), regionToBounds(region))
       .then(data => {
         if (cancelled) return;
         setTile({

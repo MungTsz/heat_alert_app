@@ -1,6 +1,7 @@
 // src/services/spatialTempApi.ts
 import { SPATIAL_TEMP_CONFIG } from '../config/spatialTempConfig';
 import { fetchWithTimeout } from '../utils/fetchWithTimeout';
+import { MapOverlayBounds } from '../types/mapSettings';
 
 export type SpatialTempFamily = 'temperature' | 'humidity' | 'heat-index';
 
@@ -27,7 +28,7 @@ export type PointSeries = {
 export type AreaTile = {
   ts: string;
   uri: string;
-  bounds: [[number, number], [number, number]]; // [northEast, southWest] — matches react-native-maps Overlay
+  bounds: MapOverlayBounds;
 };
 
 // Every JSON endpoint answers HTTP 200 and signals errors via status !== 0,
@@ -142,4 +143,26 @@ export const fetchAreaTile = async (
   const data = await getJson(`/${family}/area`, params);
   // tiles.url is an array (unlike PRAISE's single string); one bbox → one PNG.
   return toAreaTile(data.ts, data.tiles, data.tiles.url[0]);
+};
+
+// One PNG per hour t0..t1 for the same box — a whole map animation in one
+// request instead of one /area call per frame. Hours the API has no data for
+// are simply absent from the result.
+export const fetchAreaTimeseries = async (
+  family: SpatialTempFamily,
+  t0: string,
+  t1: string,
+  bounds: SpatialTempBounds,
+): Promise<AreaTile[]> => {
+  const data = await getJson(`/${family}/area/timeseries`, {
+    t0,
+    t1,
+    lng0: bounds.lng0.toString(),
+    lat0: bounds.lat0.toString(),
+    lng1: bounds.lng1.toString(),
+    lat1: bounds.lat1.toString(),
+  });
+  return data.bbox.frames.map((frame: { ts: string; url: string }) =>
+    toAreaTile(frame.ts, data.bbox, frame.url),
+  );
 };

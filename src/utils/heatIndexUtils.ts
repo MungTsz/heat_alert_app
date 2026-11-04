@@ -78,6 +78,13 @@ export const getHeatIndexInfo = (tempCelsius: number): HeatIndexInfo => {
   };
 };
 
+// A level's zone by its name — for UI that starts from a level (settings
+// toggles, multi-day alerts) rather than a measured value, so it never needs
+// a made-up sample temperature to look up the color/risk.
+export const getHeatZoneByClassification = (classification: string) =>
+  HEAT_INDEX_ZONES.find(z => z.classification === classification) ??
+  HEAT_INDEX_ZONES[HEAT_INDEX_ZONES.length - 1];
+
 // A zone's range in whole °C ("<27°C", "27-32°C", "52°C+") — one formatter
 // for every legend (forecast chart, map, heat index explainer) so they never
 // round the NWS °F thresholds differently.

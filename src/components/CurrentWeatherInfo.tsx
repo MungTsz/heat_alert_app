@@ -49,24 +49,20 @@ const CurrentWeatherInfo: React.FC<Props> = ({
         </View>
       </View>
 
-      {/* Always present (falls back to a plain question) so the explainer
-          stays reachable even when the gap is too small to mention. */}
-      <TouchableOpacity
-        style={styles.footer}
-        onPress={onPressInfo}
-        hitSlop={INFO_HIT_SLOP}
-        accessibilityLabel="What is the heat index?"
-      >
-        <Text
-          style={[
-            styles.footerText,
-            gapMessage !== null && styles.footerTextStrong,
-          ]}
+      {/* Only when there's an actual gap to explain. A standing "what is
+          the heat index?" link would single out heat over AQHI, which has no
+          such link; this line appears only in the case that needs it. */}
+      {gapMessage !== null && (
+        <TouchableOpacity
+          style={styles.footer}
+          onPress={onPressInfo}
+          hitSlop={INFO_HIT_SLOP}
+          accessibilityLabel="What is the heat index?"
         >
-          {gapMessage ?? "What's the heat index?"}
-        </Text>
-        <CircleQuestionMark size={15} color="#FFFFFF" />
-      </TouchableOpacity>
+          <Text style={styles.footerText}>{gapMessage}</Text>
+          <CircleQuestionMark size={15} color="#FFFFFF" />
+        </TouchableOpacity>
+      )}
     </View>
   );
 };
@@ -111,13 +107,8 @@ const styles = StyleSheet.create({
   },
   footerText: {
     fontSize: 13,
-    fontWeight: '500',
-    ...glassLabelText,
-    opacity: 0.85,
-  },
-  footerTextStrong: {
     fontWeight: '700',
-    opacity: 1,
+    ...glassLabelText,
   },
 });
 

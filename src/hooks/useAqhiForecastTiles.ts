@@ -1,27 +1,15 @@
 // src/hooks/useAqhiForecastTiles.ts
 import { useEffect, useState } from 'react';
 import { Image } from 'react-native';
+import { Region } from 'react-native-maps';
 import { fetchPraiseTiles, toHkTimestamp } from '../services/praiseApi';
 import { isPraiseConfigured } from '../config/praiseConfig';
-
-type Region = {
-  latitude: number;
-  longitude: number;
-  latitudeDelta: number;
-  longitudeDelta: number;
-};
-
-export type AqhiForecastFrame = {
-  ts: string; // YYYYMMDDhh, HKT
-  hourOffset: number; // 0..FORECAST_HOURS
-  uri: string;
-  bounds: [[number, number], [number, number]]; // [northEast, southWest]
-};
-
-const FORECAST_HOURS = 6;
+import { MAP_LAYER_CONFIG } from '../config/mapLayerConfig';
+import { MapForecastFrame } from '../types/mapSettings';
+import { regionToBounds } from '../utils/mapRegion';
 
 export const useAqhiForecastTiles = (region: Region, active: boolean) => {
-  const [frames, setFrames] = useState<AqhiForecastFrame[]>([]);
+  const [frames, setFrames] = useState<MapForecastFrame[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -36,15 +24,11 @@ export const useAqhiForecastTiles = (region: Region, active: boolean) => {
     setLoading(true);
     setError(null);
 
-    const lng0 = region.longitude - Math.abs(region.longitudeDelta) / 2;
-    const lng1 = region.longitude + Math.abs(region.longitudeDelta) / 2;
-    const lat0 = region.latitude - Math.abs(region.latitudeDelta) / 2;
-    const lat1 = region.latitude + Math.abs(region.latitudeDelta) / 2;
-    const bounds = { lng0, lat0, lng1, lat1 };
+    const bounds = regionToBounds(region);
 
     const now = new Date();
     const hourOffsets = Array.from(
-      { length: FORECAST_HOURS + 1 },
+      { length: MAP_LAYER_CONFIG.forecastHours + 1 },
       (_, i) => i,
     );
 
@@ -56,7 +40,7 @@ export const useAqhiForecastTiles = (region: Region, active: boolean) => {
 
         return fetchPraiseTiles('AQHIBN2024', ts, bounds)
           .then(
-            (data): AqhiForecastFrame => ({
+            (data): MapForecastFrame => ({
               ts,
               hourOffset,
               uri: data.tiles.url,
@@ -75,7 +59,7 @@ export const useAqhiForecastTiles = (region: Region, active: boolean) => {
       .then(async results => {
         if (cancelled) return;
         const valid = results.filter(
-          (frame): frame is AqhiForecastFrame => frame !== null,
+          (frame): frame is MapForecastFrame => frame !== null,
         );
         if (valid.length === 0) {
           setError('Forecast animation unavailable');

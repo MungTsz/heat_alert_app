@@ -41,12 +41,12 @@ const DualStatPin: React.FC<Props> = ({
         </View>
         {/* Secondary context only: lets the user compare "feels like" with
             the thermometer at the exact spot they tapped, without a separate
-            temperature map layer competing with the heat index one. */}
-        {airTemperature !== null && humidity !== null && (
-          <Text style={styles.subText}>
-            Air {airTemperature}° · RH {humidity}%
-          </Text>
-        )}
+            temperature map layer competing with the heat index one. Always
+            rendered ("--" while loading) so the pin's height never changes
+            after the marker is drawn — see MapScreen's marker key. */}
+        <Text style={styles.subText}>
+          Air {airTemperature ?? '--'}° · RH {humidity ?? '--'}%
+        </Text>
       </View>
 
       <MapPin size={42} color="#2B7A9E" fill="#2B7A9E" strokeWidth={1.5} />

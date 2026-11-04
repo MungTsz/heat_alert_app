@@ -1,10 +1,10 @@
-// import { mockHeatProvider } from './mockHeatProvider'; // 👈 uncomment for offline dev only
 import { apiHeatProvider } from './apiHeatProvider';
 import { HeatDataProvider } from './types';
 
-// This is the ONLY line you change to switch sources. The API is the single
-// source of truth — there's deliberately no automatic fallback to mock/HKO.
+// API only, by design: heat has no mock provider and no fallback (HKO,
+// on-device formula, IDW estimates) — every heat value must be the API's,
+// so nothing fake can ever reach the screen. If the API is down the UI
+// shows "--".
 export const heatDataProvider: HeatDataProvider = apiHeatProvider;
-// export const heatDataProvider: HeatDataProvider = mockHeatProvider;
 
 export * from './types';

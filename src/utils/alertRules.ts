@@ -1,4 +1,7 @@
-import { getHeatIndexInfo, HEAT_INDEX_ZONES } from './heatIndexUtils';
+import {
+  getHeatIndexInfo,
+  getHeatZoneByClassification,
+} from './heatIndexUtils';
 import { HeatAlert } from '../types/alerts';
 import {
   NotificationSettings,
@@ -108,7 +111,7 @@ export const evaluateSustainedTrend = (
     id: `sustained-trend:${worstClass}:${days.length}`,
     category: 'sustained_trend',
     title: `Hot weather continuing for ${days.length} days: up to ${worstClass}`,
-    body: HEAT_INDEX_ZONES.find(z => z.classification === worstClass)!.risk,
+    body: getHeatZoneByClassification(worstClass).risk,
   };
 };
 

@@ -24,19 +24,11 @@ import { useLocationPermissionStatus } from '../hooks/useLocationPermissionStatu
 import { useMapSettings } from '../hooks/useMapSettings';
 import { useExposureTrackingSettings } from '../hooks/useExposureTrackingSettings';
 import { HEAT_LEVELS_ORDERED } from '../types/settings';
-import { getHeatIndexInfo } from '../utils/heatIndexUtils';
+import { getHeatZoneByClassification } from '../utils/heatIndexUtils';
 import { getAqhiInfo } from '../utils/aqhiUtils';
 import { sendTestNotification } from '../services/notificationService';
 import { runHeatAlertCheckNow } from '../services/heatAlertBus';
 import { AqhiLevel } from '../types/settings';
-
-const LEVEL_SAMPLE_TEMP: Record<string, number> = {
-  Safe: 25,
-  Caution: 30,
-  'Extreme Caution': 35,
-  Danger: 45,
-  'Extreme Danger': 55,
-};
 
 // AQHI thresholds use the real 1-11 severity bands, grouped into named
 // levels for the toggle UI, mirroring how heat's levels work.
@@ -168,7 +160,7 @@ const SettingsScreen = () => {
 
           {activeIndexTab === 'heat'
             ? HEAT_LEVELS_ORDERED.map((level, i) => {
-                const { color } = getHeatIndexInfo(LEVEL_SAMPLE_TEMP[level]);
+                const { color } = getHeatZoneByClassification(level);
                 return (
                   <View key={level}>
                     <View style={styles.levelRowWrapper}>

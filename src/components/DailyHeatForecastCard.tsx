@@ -26,14 +26,13 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated';
 import { DayForecast, lastObservedIndex } from '../data/forecast/types';
-import { CircleQuestionMark } from 'lucide-react-native';
 import {
   HEAT_INDEX_ZONES,
   fahrenheitToCelsius,
   formatHeatZoneRangeC,
 } from '../utils/heatIndexUtils';
 import { clampedChartLabelX, estimateSvgTextWidth } from '../utils/svgChartLabel';
-import HeatIndexExplainerSheet from './HeatIndexExplainerSheet';
+import ChartBandLegend from './ChartBandLegend';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
@@ -48,7 +47,13 @@ const SELECTED_LABEL_FONT_SIZE = 13;
 const AIR_TEMP_LINE_COLOR = '#4A5568';
 const AIR_TEMP_LINE_DASH = '4,3';
 const LINE_KEY_WIDTH = 18;
-const INFO_HIT_SLOP = { top: 8, bottom: 8, left: 8, right: 8 };
+
+// Safe → Extreme Danger, left to right, matching the AQHI chart's key order.
+const LEGEND_ITEMS = [...HEAT_INDEX_ZONES].reverse().map(zone => ({
+  label: zone.classification,
+  range: formatHeatZoneRangeC(zone),
+  color: zone.color,
+}));
 
 // Chart bounds in Celsius, with headroom below "Safe" and above "Extreme
 // Danger" so every zone's band is visible even at the axis edges.
@@ -69,7 +74,6 @@ const DailyHeatForecastCard: React.FC<Props> = ({ days }) => {
   const [selectedHourIndex, setSelectedHourIndex] = useState<number | null>(
     null,
   );
-  const [explainerOpen, setExplainerOpen] = useState(false);
   const activeDay = days[activeDayIndex];
   const points = activeDay?.points ?? [];
 
@@ -401,33 +405,9 @@ const DailyHeatForecastCard: React.FC<Props> = ({ days }) => {
           </Svg>
           <Text style={styles.lineKeyText}>Air temp</Text>
         </View>
-        <TouchableOpacity
-          onPress={() => setExplainerOpen(true)}
-          hitSlop={INFO_HIT_SLOP}
-          accessibilityLabel="What is the heat index?"
-        >
-          <CircleQuestionMark size={16} color="#555" />
-        </TouchableOpacity>
       </View>
 
-      <View style={styles.legendRow}>
-        {[...HEAT_INDEX_ZONES].reverse().map(zone => (
-          <View key={zone.classification} style={styles.legendItem}>
-            <View
-              style={[styles.legendSwatch, { backgroundColor: zone.color }]}
-            />
-            <Text style={styles.legendLabel}>{zone.classification}</Text>
-            <Text style={styles.legendRange}>{formatHeatZoneRangeC(zone)}</Text>
-          </View>
-        ))}
-      </View>
-
-      {/* Rendered inside this card (itself inside ForecastSheet's Modal) so
-          iOS presents it on top of that modal rather than as a sibling. */}
-      <HeatIndexExplainerSheet
-        visible={explainerOpen}
-        onClose={() => setExplainerOpen(false)}
-      />
+      <ChartBandLegend items={LEGEND_ITEMS} />
     </View>
   );
 };
@@ -478,20 +458,6 @@ const styles = StyleSheet.create({
   },
   lineKeyItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   lineKeyText: { fontSize: 11, color: '#4A5568', fontWeight: '600' },
-  legendRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: 12,
-    marginTop: 10,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: '#EDF2F7',
-  },
-  legendItem: { alignItems: 'center', width: 68 },
-  legendSwatch: { width: 24, height: 14, borderRadius: 2, marginBottom: 3 },
-  legendLabel: { fontSize: 9, fontWeight: '700', color: '#333' },
-  legendRange: { fontSize: 8, color: '#666', marginTop: 1 },
 });
 
 export default DailyHeatForecastCard;
