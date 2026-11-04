@@ -145,6 +145,48 @@ export const fetchAreaTile = async (
   return toAreaTile(data.ts, data.tiles, data.tiles.url[0]);
 };
 
+const footprintCache = new Map<SpatialTempFamily, Promise<SpatialTempBounds>>();
+
+// The box the API actually has data for. Read from the API itself (an /area
+// call with no bbox returns the full footprint) rather than hardcoded, and
+// cached for the session since the grid doesn't move.
+const fetchDataFootprint = (
+  family: SpatialTempFamily,
+): Promise<SpatialTempBounds> => {
+  const cached = footprintCache.get(family);
+  if (cached) return cached;
+  const promise = fetchLatestTime(family)
+    .then(ts => getJson(`/${family}/area`, { ts }))
+    .then(data => {
+      const { lng0, lat0, lng1, lat1 } = data.tiles;
+      return { lng0, lat0, lng1, lat1 };
+    });
+  footprintCache.set(family, promise);
+  promise.catch(() => footprintCache.delete(family));
+  return promise;
+};
+
+// Trims a map box to the data footprint before requesting a PNG. Any part of
+// a box outside the footprint comes back as opaque white pixels, which would
+// lay a white veil over the map when zoomed out or panned to the edge —
+// trimming first means the server never draws them, and the overlay only
+// covers where there is data. null = the box has no data at all.
+export const clipToDataFootprint = async (
+  family: SpatialTempFamily,
+  bounds: SpatialTempBounds,
+): Promise<SpatialTempBounds | null> => {
+  const footprint = await fetchDataFootprint(family);
+  const clipped = {
+    lng0: Math.max(bounds.lng0, footprint.lng0),
+    lat0: Math.max(bounds.lat0, footprint.lat0),
+    lng1: Math.min(bounds.lng1, footprint.lng1),
+    lat1: Math.min(bounds.lat1, footprint.lat1),
+  };
+  return clipped.lng0 < clipped.lng1 && clipped.lat0 < clipped.lat1
+    ? clipped
+    : null;
+};
+
 // One PNG per hour t0..t1 for the same box — a whole map animation in one
 // request instead of one /area call per frame. Hours the API has no data for
 // are simply absent from the result.

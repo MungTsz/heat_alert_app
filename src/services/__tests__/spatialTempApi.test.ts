@@ -9,6 +9,7 @@ jest.mock('../../config/spatialTempConfig', () => ({
 }));
 
 import {
+  clipToDataFootprint,
   fetchAreaTile,
   fetchLatestTime,
   fetchPointSeries,
@@ -104,6 +105,55 @@ describe('spatialTempApi', () => {
     expect(a).toBe('2026110408');
     expect(b).toBe('2026110408');
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('trims a map box to the data footprint so no white out-of-bound pixels are requested', async () => {
+    fetchMock.mockImplementation(async (url: string) =>
+      url.includes('/latest')
+        ? jsonResponse({ status: 0, msg: null, latest_time: '2026110409' })
+        : jsonResponse({
+            status: 0,
+            msg: null,
+            ts: '2026110409',
+            param: 'heat_index',
+            tiles: {
+              lng0: 113.8195,
+              lat0: 22.15,
+              lng1: 114.4505,
+              lat1: 22.58,
+              url: ['http://hqlx188.ust.hk:8000/static/full.png'],
+            },
+          }),
+    );
+
+    // Box sticking out past the east and south edges → clipped to them
+    await expect(
+      clipToDataFootprint('heat-index', {
+        lng0: 114.3,
+        lat0: 22.1,
+        lng1: 114.6,
+        lat1: 22.3,
+      }),
+    ).resolves.toEqual({ lng0: 114.3, lat0: 22.15, lng1: 114.4505, lat1: 22.3 });
+
+    // Box entirely outside → no data at all
+    await expect(
+      clipToDataFootprint('heat-index', {
+        lng0: 114.6,
+        lat0: 22.1,
+        lng1: 114.8,
+        lat1: 22.3,
+      }),
+    ).resolves.toBeNull();
+
+    // The footprint is looked up once and reused
+    const areaCalls = fetchMock.mock.calls.filter(([url]) =>
+      String(url).includes('/area'),
+    );
+    expect(areaCalls).toHaveLength(1);
+    expect(areaCalls[0][0]).toBe(
+      'http://api.test:8001/heat-index/area?ts=2026110409',
+    );
   });
 
   it('does not cache a failed /latest lookup', async () => {

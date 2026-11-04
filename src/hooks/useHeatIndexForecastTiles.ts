@@ -4,6 +4,7 @@ import { Image } from 'react-native';
 import { Region } from 'react-native-maps';
 import {
   AreaTile,
+  clipToDataFootprint,
   fetchAreaTile,
   fetchAreaTimeseries,
   fetchLatestTime,
@@ -41,13 +42,18 @@ export const useHeatIndexForecastTiles = (region: Region, active: boolean) => {
     setLoading(true);
     setError(null);
 
-    const bounds = regionToBounds(region);
     const { forecastHours } = MAP_LAYER_CONFIG;
     const { forecastFromHistory, forecastHorizonHours: horizon } =
       SPATIAL_TEMP_CONFIG;
 
     const loadFrames = async (): Promise<MapForecastFrame[]> => {
-      const latest = await fetchLatestTime('heat-index');
+      const [latest, bounds] = await Promise.all([
+        fetchLatestTime('heat-index'),
+        // Same trimming as the current-hour tile, so no frame has white
+        // out-of-data edges; a view with no data has no animation.
+        clipToDataFootprint('heat-index', regionToBounds(region)),
+      ]);
+      if (!bounds) return [];
       const latestMs = parseHkTimestamp(latest);
       const toFrame = (tile: AreaTile, ts: string): MapForecastFrame => ({
         ts,

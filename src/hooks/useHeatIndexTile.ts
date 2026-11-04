@@ -1,7 +1,11 @@
 // src/hooks/useHeatIndexTile.ts
 import { useEffect, useState } from 'react';
 import { Region } from 'react-native-maps';
-import { fetchAreaTile, fetchLatestTime } from '../services/spatialTempApi';
+import {
+  clipToDataFootprint,
+  fetchAreaTile,
+  fetchLatestTime,
+} from '../services/spatialTempApi';
 import { MapTile } from '../types/mapSettings';
 import { regionToBounds } from '../utils/mapRegion';
 
@@ -22,10 +26,18 @@ export const useHeatIndexTile = (region: Region, active: boolean) => {
     let cancelled = false;
     setLoading(true);
 
-    fetchLatestTime('heat-index')
-      .then(ts => fetchAreaTile('heat-index', ts, regionToBounds(region)))
+    Promise.all([
+      fetchLatestTime('heat-index'),
+      clipToDataFootprint('heat-index', regionToBounds(region)),
+    ])
+      .then(([ts, bounds]) =>
+        // A view entirely outside the data area simply has no tile.
+        bounds ? fetchAreaTile('heat-index', ts, bounds) : null,
+      )
       .then(data => {
-        if (!cancelled) setTile({ uri: data.uri, bounds: data.bounds });
+        if (!cancelled) {
+          setTile(data && { uri: data.uri, bounds: data.bounds });
+        }
       })
       .catch(err => {
         console.log('Heat index tile fetch error:', err);
