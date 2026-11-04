@@ -34,7 +34,7 @@ import { computeSceneLayout } from '../utils/sceneLayout';
 import { useForecastData } from '../hooks/useForecastData';
 import { useAqhiForecastData } from '../hooks/useAqhiForecastData';
 import { useAqhiData } from '../hooks/useAqhiData';
-import { useCurrentWeather } from '../hooks/useCurrentWeather';
+import { useHeatConditions } from '../hooks/useHeatData';
 import { idwInterpolate } from '../utils/idw';
 
 const LOCATION_BOX_WIDTH = 160;
@@ -73,14 +73,14 @@ const HomeScreen = () => {
     scrollY.value = event.contentOffset.y;
   });
 
-  const { data: currentWeather } = useCurrentWeather();
-  const heatIndexTemp = currentWeather
-    ? Math.round(currentWeather.heatIndexC)
-    : 0;
-  const actualTemp = currentWeather ? Math.round(currentWeather.temperatureC) : 0;
-  const currentHumidity = currentWeather
-    ? Math.round(currentWeather.relativeHumidityPct)
-    : 0;
+  // Temperature, humidity and heat index all at the user's own location, from
+  // the same API hour as the map and forecast chart.
+  const { conditions } = useHeatConditions(effectiveCenter);
+  const heatIndexTemp = conditions ? Math.round(conditions.heatIndexC) : 0;
+  const actualTemp = conditions ? Math.round(conditions.temperatureC) : null;
+  const currentHumidity = conditions
+    ? Math.round(conditions.relativeHumidityPct)
+    : null;
 
   const heatInfo = getHeatIndexInfo(heatIndexTemp);
   const aqhiInfo = getAqhiInfo(currentAqhi);
@@ -156,8 +156,10 @@ const HomeScreen = () => {
             <HazardCard
               icon={<User size={18} color="#FFFFFF" />}
               label="Feels Like..."
-              value={`${heatIndexTemp}°`}
-              classification={heatInfo.classification}
+              // "--" while loading or when the API is unreachable — never a
+              // value from another source.
+              value={conditions ? `${heatIndexTemp}°` : '--°'}
+              classification={conditions ? heatInfo.classification : '—'}
               valueColor={heatInfo.color}
               onPress={() => setHeatSheetOpen(true)}
             />

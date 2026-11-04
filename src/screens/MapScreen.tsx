@@ -18,11 +18,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Navigation, Play, Square } from 'lucide-react-native';
 import Slider from '@react-native-community/slider';
 import { useLocation } from '../utils/useLocation';
-import { useHeatData } from '../hooks/useHeatData';
+import { usePlacesHeatIndex } from '../hooks/useHeatData';
+import { useHeatIndexMapTile } from '../hooks/useHeatIndexMapTile';
 import { useAqhiData } from '../hooks/useAqhiData';
 import { useIdwOverlayImage } from '../hooks/useIdwOverlayImage';
 import { useAqhiForecastTiles } from '../hooks/useAqhiForecastTiles';
-import { idwInterpolate, valueToColor } from '../utils/idw';
+import { idwInterpolate } from '../utils/idw';
 import { valueToAqhiColor } from '../utils/aqhiUtils';
 import MapLayerPicker, { MapLayer } from '../components/MapLayerPicker';
 import DualStatPin from '../components/DualStatPin';
@@ -38,14 +39,19 @@ import { useMapSettings } from '../hooks/useMapSettings';
 
 const FORECAST_FRAME_INTERVAL_MS = 700;
 const BOTTOM_ROW_HEIGHT = 58; // approx height of the opacity-bar/locate-button row, used to space things above it
+// The API's heat index PNG is fully opaque, so it's drawn translucent to keep
+// streets and labels readable underneath.
+const HEAT_OVERLAY_OPACITY = 0.45;
 
 const FALLBACK_LAT = 22.3375;
 const FALLBACK_LNG = 114.263;
+const SELECTED_PLACE_ID = 'selected';
 
+// Heat index for the pin isn't stored here — it's looked up from the API by
+// usePlacesHeatIndex, keyed on these coordinates.
 type SelectedPoint = {
   latitude: number;
   longitude: number;
-  temperature: number;
   aqhi: number;
 };
 
@@ -82,8 +88,8 @@ const MapScreen = ({
 
   const center = overrideCenter ??
     coords ?? { latitude: FALLBACK_LAT, longitude: FALLBACK_LNG };
-  const { points: heatPoints } = useHeatData(center);
   const { points: aqhiPoints } = useAqhiData(center);
+  const { tile: heatIndexTile } = useHeatIndexMapTile(mapLayer === 'heat');
 
   const initialRegion: Region = {
     latitude: center.latitude,
@@ -97,22 +103,28 @@ const MapScreen = ({
     null,
   );
 
-  const weightedHeatPoints = heatPoints.map(p => ({
-    latitude: p.latitude,
-    longitude: p.longitude,
-    value: p.temperature,
-  }));
+  const { heatIndexById } = usePlacesHeatIndex(
+    selectedPoint
+      ? [
+          {
+            id: SELECTED_PLACE_ID,
+            latitude: selectedPoint.latitude,
+            longitude: selectedPoint.longitude,
+          },
+        ]
+      : [],
+  );
+  const selectedHeatIndex =
+    SELECTED_PLACE_ID in heatIndexById
+      ? Math.round(heatIndexById[SELECTED_PLACE_ID])
+      : null;
+
   const weightedAqhiPoints = aqhiPoints.map(p => ({
     latitude: p.latitude,
     longitude: p.longitude,
     value: p.aqhi,
   }));
 
-  const heatOverlayUri = useIdwOverlayImage(
-    weightedHeatPoints,
-    region,
-    valueToColor,
-  );
   const aqhiOverlayUri = useIdwOverlayImage(
     weightedAqhiPoints,
     region,
@@ -194,13 +206,10 @@ const MapScreen = ({
   };
 
   const placeMarkerAt = (latitude: number, longitude: number) => {
-    const temperature = Math.round(
-      idwInterpolate(latitude, longitude, weightedHeatPoints),
-    );
     const aqhi = Math.round(
       idwInterpolate(latitude, longitude, weightedAqhiPoints, 2, 1),
     );
-    setSelectedPoint({ latitude, longitude, temperature, aqhi });
+    setSelectedPoint({ latitude, longitude, aqhi });
   };
 
   const handleMapPress = (event: MapPressEvent) => {
@@ -216,19 +225,10 @@ const MapScreen = ({
   };
 
   useEffect(() => {
-    if (
-      weightedHeatPoints.length > 0 &&
-      weightedAqhiPoints.length > 0 &&
-      !selectedPoint
-    ) {
+    if (weightedAqhiPoints.length > 0 && !selectedPoint) {
       placeMarkerAt(center.latitude, center.longitude);
     }
-  }, [
-    center.latitude,
-    center.longitude,
-    weightedHeatPoints.length,
-    weightedAqhiPoints.length,
-  ]);
+  }, [center.latitude, center.longitude, weightedAqhiPoints.length]);
 
   const recenter = () => {
     placeMarkerAt(center.latitude, center.longitude);
@@ -271,11 +271,12 @@ const MapScreen = ({
         showsUserLocation={!overrideCenter}
         showsMyLocationButton={false}
       >
-        {mapLayer === 'heat' && heatOverlayUri && (
+        {mapLayer === 'heat' && heatIndexTile && (
           <Overlay
-            image={{ uri: heatOverlayUri }}
-            bounds={overlayBounds}
-            opacity={0.45}
+            key={`heat-${heatIndexTile.ts}`}
+            image={{ uri: heatIndexTile.uri }}
+            bounds={heatIndexTile.bounds}
+            opacity={HEAT_OVERLAY_OPACITY}
           />
         )}
 
@@ -321,7 +322,7 @@ const MapScreen = ({
             tracksViewChanges={true}
           >
             <DualStatPin
-              temperature={selectedPoint.temperature}
+              temperature={selectedHeatIndex}
               aqhi={selectedPoint.aqhi}
             />
           </Marker>

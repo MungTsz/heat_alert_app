@@ -35,6 +35,7 @@ const generateDayPoints = (
       timestamp: pointDate.getTime(),
       time: `${hour.toString().padStart(2, '0')}:00`,
       heatIndex: Math.round(heatIndex * 10) / 10,
+      observed: pointDate.getTime() <= Date.now(),
     });
   }
   return points;

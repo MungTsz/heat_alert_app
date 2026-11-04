@@ -11,7 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronDown, ChevronUp, Plus } from 'lucide-react-native';
 import { useLocation } from '../utils/useLocation';
-import { useHeatData } from '../hooks/useHeatData';
+import { usePlacesHeatIndex } from '../hooks/useHeatData';
 import { useAqhiData } from '../hooks/useAqhiData';
 import { useBookmarkList } from '../hooks/useBookmarkList';
 import { idwInterpolate } from '../utils/idw';
@@ -50,14 +50,14 @@ const CommunityScreen = () => {
   const [dragging, setDragging] = useState(false);
 
   const center = coords ?? { latitude: FALLBACK_LAT, longitude: FALLBACK_LNG };
-  const { points: heatPoints } = useHeatData(center);
+  // Each place's heat index is looked up at its own coordinates from the API
+  // (not interpolated from nearby samples), so it matches the map exactly.
+  // Hidden places never show a heat badge, so they aren't looked up.
+  const { heatIndexById } = usePlacesHeatIndex(
+    bookmarks.filter(bookmark => !bookmark.hidden),
+  );
   const { points: aqhiPoints } = useAqhiData(center);
 
-  const weightedHeatPoints = heatPoints.map(p => ({
-    latitude: p.latitude,
-    longitude: p.longitude,
-    value: p.temperature,
-  }));
   const weightedAqhiPoints = aqhiPoints.map(p => ({
     latitude: p.latitude,
     longitude: p.longitude,
@@ -71,9 +71,10 @@ const CommunityScreen = () => {
     () =>
       bookmarks.map(bookmark => ({
         ...bookmark,
-        temperature: Math.round(
-          idwInterpolate(bookmark.latitude, bookmark.longitude, weightedHeatPoints),
-        ),
+        temperature:
+          bookmark.id in heatIndexById
+            ? Math.round(heatIndexById[bookmark.id])
+            : null,
         aqhi: Math.round(
           idwInterpolate(bookmark.latitude, bookmark.longitude, weightedAqhiPoints),
         ),
@@ -86,7 +87,7 @@ const CommunityScreen = () => {
       })),
     [
       bookmarks,
-      weightedHeatPoints,
+      heatIndexById,
       weightedAqhiPoints,
       center.latitude,
       center.longitude,

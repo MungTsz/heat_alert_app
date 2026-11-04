@@ -25,7 +25,7 @@ import Animated, {
   interpolate,
   Easing,
 } from 'react-native-reanimated';
-import { DayForecast } from '../data/forecast/types';
+import { DayForecast, lastObservedIndex } from '../data/forecast/types';
 import { HEAT_INDEX_ZONES, fahrenheitToCelsius } from '../utils/heatIndexUtils';
 import { clampedChartLabelX, estimateSvgTextWidth } from '../utils/svgChartLabel';
 
@@ -92,18 +92,13 @@ const DailyHeatForecastCard: React.FC<Props> = ({ days }) => {
     .filter(({ hour }) => hour % 4 === 0)
     .map(({ i }) => i);
 
-  // "Now" marker — only meaningful on today's tab
+  // "Now" marker — only meaningful on today's tab. It sits on the latest
+  // observed hour (not the phone's clock), since API data lands an hour or
+  // two late; that keeps it equal to the current-conditions card's value.
   const nowIndex = useMemo(() => {
     if (!activeDay?.isToday) return null;
-    const now = Date.now();
-    return points.reduce(
-      (closestIdx, p, idx) =>
-        Math.abs(p.timestamp - now) <
-        Math.abs(points[closestIdx].timestamp - now)
-          ? idx
-          : closestIdx,
-      0,
-    );
+    const idx = lastObservedIndex(points);
+    return idx >= 0 ? idx : null;
   }, [activeDay, points]);
 
   // Drives the pulsing halo behind the "now" dot — loops indefinitely

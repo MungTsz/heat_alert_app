@@ -32,7 +32,7 @@ Every data domain lives under `src/data/<domain>/` with the same shape:
 Domains: `heat`, `forecast`, `aqhi`, `aqhiForecast`.
 
 Two different switching strategies are in use:
-- `heat` and `forecast` currently hardcode the mock provider, with the api provider import commented out (flip the `export const ...DataProvider =` line to go live — see the comment in each `index.ts`).
+- `heat` and `forecast` hardcode the api provider (the Spatial Temperature API below), with the mock import commented out for offline dev only — there is deliberately no automatic fallback.
 - `aqhi` and `aqhiForecast` switch automatically based on `isPraiseConfigured()` (from `src/config/praiseConfig.ts`), which checks whether `PRAISE_API_KEY` is set.
 
 When adding a feature that needs new backend data, follow this same pattern rather than fetching directly from a component/hook.
@@ -41,20 +41,27 @@ When adding a feature that needs new backend data, follow this same pattern rath
 
 `src/config/praiseConfig.ts` reads `PRAISE_API_KEY`, `PRAISE_MYID`, `PRAISE_BASE_URL` via `react-native-config` from the `.env` file. `src/services/praiseApi.ts` talks to this API directly (used by `MapScreen` for tapped-point lookups). When PRAISE isn't configured, AQHI features transparently fall back to mock data — don't assume the API key is always present.
 
+### Spatial Temperature API (heat data source — single source of truth)
+
+`src/config/spatialTempConfig.ts` (base URL defaults to the public deployment; override with `SPATIAL_TEMP_API_BASE_URL`) + `src/services/spatialTempApi.ts`. Families: `temperature`, `humidity`, `heat-index`. Every heat value in the app — current temp/RH/heat index, bookmark and tapped-point heat index, the map layer (server-rendered PNG via `useHeatIndexMapTile`), the forecast chart, and the alert engine — comes from this API. Never compute heat index on-device, IDW-estimate heat, or fall back to another source; show "--" when it's unavailable. Key gotchas:
+- Endpoints return HTTP 200 with `status: 1` on errors — check `status`, not `response.ok` alone.
+- Anchor queries on `/{family}/latest`, not the phone's clock (data lands 1–2 h late).
+- The API has no forecast yet: while `forecastFromHistory` is true, future hours repeat the reading from 48 h earlier (demo), and the alert engine skips its forecast-based trend rules.
+
 Google Maps requires `GOOGLE_ANDROID_MAP_KEY` in `.env` (wired into the native Android config).
 
 ### Hooks wrap providers for components
 
-`src/hooks/use*.ts` (e.g. `useHeatData`, `useAqhiData`, `useForecastData`, `useAqhiForecastData`) are thin `useEffect`/`useState` wrappers around the domain data providers, keyed on location. Components consume these hooks rather than the providers directly.
+`src/hooks/use*.ts` (e.g. `useHeatData`'s `useHeatConditions`/`usePlacesHeatIndex`, `useAqhiData`, `useForecastData`, `useAqhiForecastData`) are thin `useEffect`/`useState` wrappers around the domain data providers, keyed on location. Components consume these hooks rather than the providers directly.
 
 ### IDW spatial interpolation
 
-Heat/AQHI providers return discrete sample points (`{ latitude, longitude, value }`). `src/utils/idw.ts` (`idwInterpolate`, `valueToColor`) does inverse-distance-weighted interpolation to estimate a value at an arbitrary coordinate (e.g. the user's exact location, or a tapped map point) and to render a color scale. `src/utils/renderIdwBitmap.ts` + `src/hooks/useIdwOverlayImage.ts` rasterize this into an image overlay for `react-native-maps`.
+AQHI only (heat values come straight from the Spatial Temperature API). AQHI providers return discrete sample points (`{ latitude, longitude, value }`). `src/utils/idw.ts` (`idwInterpolate`) does inverse-distance-weighted interpolation to estimate a value at an arbitrary coordinate (e.g. the user's exact location, or a tapped map point). `src/utils/renderIdwBitmap.ts` + `src/hooks/useIdwOverlayImage.ts` rasterize this into an image overlay for `react-native-maps`.
 
 ### Alert engine
 
 `HeatAlertEngine` (`src/components/HeatAlertEngine.tsx`) is mounted once at the root in `App.tsx` and runs headless (`return null`). On a 5-minute interval it:
-1. Pulls current location, heat points, forecast, bookmarks, and notification settings.
+1. Pulls current location, forecast, bookmarks, and notification settings, and fetches fresh heat index for the location and each bookmark from the heat provider on every tick.
 2. Runs threshold/trend rules from `src/utils/alertRules.ts` (`evaluateCurrentThreshold`, `evaluateUpcomingTrend`, `evaluateSustainedTrend`, `evaluateCommunityThresholds`).
 3. Delivers any resulting `HeatAlert`s via `src/services/notificationService.ts`, which uses Notifee and de-dupes/cools down repeat alerts per-alert-id in AsyncStorage (3h cooldown, 48h history retention).
 

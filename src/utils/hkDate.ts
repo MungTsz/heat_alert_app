@@ -1,11 +1,41 @@
 // src/utils/hkDate.ts
 
+const HK_UTC_OFFSET_HOURS = 8;
+const HOUR_MS = 60 * 60 * 1000;
+
+// Formats a Date as YYYYMMDDhh in Hong Kong time (UTC+8) — the hourly key
+// both PRAISE and the spatial temperature API use. Lives here (re-exported by
+// praiseApi.ts) so services don't import date math from each other.
+export const toHkTimestamp = (date: Date = new Date()): string => {
+  const utcMs = date.getTime() + date.getTimezoneOffset() * 60000;
+  const hkDate = new Date(utcMs + HK_UTC_OFFSET_HOURS * HOUR_MS);
+  const yyyy = hkDate.getFullYear();
+  const mm = (hkDate.getMonth() + 1).toString().padStart(2, '0');
+  const dd = hkDate.getDate().toString().padStart(2, '0');
+  const hh = hkDate.getHours().toString().padStart(2, '0');
+  return `${yyyy}${mm}${dd}${hh}`;
+};
+
+// Inverse of toHkTimestamp: a YYYYMMDDhh HK-time key back to epoch ms.
+export const parseHkTimestamp = (ts: string): number =>
+  Date.UTC(
+    Number(ts.slice(0, 4)),
+    Number(ts.slice(4, 6)) - 1,
+    Number(ts.slice(6, 8)),
+    Number(ts.slice(8, 10)) - HK_UTC_OFFSET_HOURS,
+  );
+
+// Moves a YYYYMMDDhh key by whole hours (negative = earlier), going through
+// epoch ms so day/month/year rollovers come out right.
+export const shiftHkTimestamp = (ts: string, hours: number): string =>
+  toHkTimestamp(new Date(parseHkTimestamp(ts) + hours * HOUR_MS));
+
 // Formats a Date as YYYY-MM-DD in Hong Kong local time (UTC+8) — same offset
-// math praiseApi.ts's toHkTimestamp uses, factored out here since the
-// exposure history store keys days by HK-local boundaries too.
+// math as toHkTimestamp, since the exposure history store keys days by
+// HK-local boundaries too.
 export const toHkDateKey = (date: Date = new Date()): string => {
   const utcMs = date.getTime() + date.getTimezoneOffset() * 60000;
-  const hkDate = new Date(utcMs + 8 * 60 * 60 * 1000);
+  const hkDate = new Date(utcMs + HK_UTC_OFFSET_HOURS * HOUR_MS);
   const yyyy = hkDate.getFullYear();
   const mm = (hkDate.getMonth() + 1).toString().padStart(2, '0');
   const dd = hkDate.getDate().toString().padStart(2, '0');

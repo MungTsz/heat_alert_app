@@ -4,9 +4,10 @@ import { View, Text, StyleSheet } from 'react-native';
 import { Thermometer, Droplets } from 'lucide-react-native';
 import { glassCardStyle, glassLabelText } from '../styles/glassCard';
 
+// null = not loaded / unavailable, shown as "--" rather than a fake 0.
 interface Props {
-  temperature: number;
-  humidity: number;
+  temperature: number | null;
+  humidity: number | null;
 }
 
 const CurrentWeatherInfo: React.FC<Props> = ({ temperature, humidity }) => {
@@ -14,12 +15,12 @@ const CurrentWeatherInfo: React.FC<Props> = ({ temperature, humidity }) => {
     <View style={styles.wrapper}>
       <View style={styles.item}>
         <Thermometer size={16} color="#FFFFFF" />
-        <Text style={styles.text}>Temp: {temperature}°C</Text>
+        <Text style={styles.text}>Temp: {temperature ?? '--'}°C</Text>
       </View>
       <View style={styles.divider} />
       <View style={styles.item}>
         <Droplets size={16} color="#FFFFFF" />
-        <Text style={styles.text}>Humidity: {humidity}%</Text>
+        <Text style={styles.text}>Humidity: {humidity ?? '--'}%</Text>
       </View>
     </View>
   );

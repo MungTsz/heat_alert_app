@@ -1,34 +1,47 @@
 import { apiHeatProvider } from '../apiHeatProvider';
-import { fetchHkoCurrentWeather } from '../../../services/hkoApi';
+import {
+  fetchLatestTime,
+  fetchPointValue,
+} from '../../../services/spatialTempApi';
 
-jest.mock('../../../services/hkoApi');
+jest.mock('../../../services/spatialTempApi');
 
-describe('apiHeatProvider.getHeatPoints', () => {
-  it('returns multiple points around the center, all sharing the computed heat index', async () => {
-    (fetchHkoCurrentWeather as jest.Mock).mockResolvedValue({
-      temperatureC: 32,
-      relativeHumidityPct: 75,
+const VALUES: Record<string, number> = {
+  temperature: 25.43,
+  humidity: 83.4,
+  'heat-index': 25.4,
+};
+
+describe('apiHeatProvider', () => {
+  beforeEach(() => {
+    (fetchLatestTime as jest.Mock).mockResolvedValue('2026110408');
+    (fetchPointValue as jest.Mock).mockImplementation(
+      async (family: string) => VALUES[family],
+    );
+  });
+
+  it('returns temperature, RH and heat index all from the API for one shared hour', async () => {
+    const conditions = await apiHeatProvider.getConditionsAt({
+      latitude: 22.3,
+      longitude: 114.17,
     });
 
-    const center = { latitude: 22.3, longitude: 114.17 };
-    const points = await apiHeatProvider.getHeatPoints(center);
-
-    expect(points.length).toBeGreaterThan(1);
-    const values = new Set(points.map(p => p.temperature));
-    expect(values.size).toBe(1); // every point shares the same heat index
-
-    points.forEach(p => {
-      expect(Math.abs(p.latitude - center.latitude)).toBeLessThan(0.5);
-      expect(Math.abs(p.longitude - center.longitude)).toBeLessThan(0.5);
+    expect(conditions).toEqual({
+      ts: '2026110408',
+      temperatureC: 25.43,
+      relativeHumidityPct: 83.4,
+      heatIndexC: 25.4,
+    });
+    // Every family is queried at the same anchored hour, never the phone's clock.
+    (fetchPointValue as jest.Mock).mock.calls.forEach(call => {
+      expect(call.slice(1)).toEqual([22.3, 114.17, '2026110408']);
     });
   });
 
-  it('propagates errors from the HKO fetch (no mock fallback, per product decision)', async () => {
-    (fetchHkoCurrentWeather as jest.Mock).mockRejectedValue(
-      new Error('network down'),
-    );
+  it('propagates API errors instead of falling back to another source', async () => {
+    (fetchPointValue as jest.Mock).mockRejectedValue(new Error('network down'));
     await expect(
-      apiHeatProvider.getHeatPoints({ latitude: 22.3, longitude: 114.17 }),
+      apiHeatProvider.getHeatIndexAt({ latitude: 22.3, longitude: 114.17 }),
     ).rejects.toThrow('network down');
   });
 });

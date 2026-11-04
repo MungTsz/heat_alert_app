@@ -11,7 +11,7 @@ type Props = {
   label: string;
   category: PlaceCategory;
   radiusMeters: number;
-  temperature: number;
+  temperature: number | null; // heat index; null = loading / unavailable
   aqhi: number;
   distance: number;
   onPress: () => void;
@@ -21,6 +21,8 @@ type Props = {
 };
 
 const ACTION_HIT_SLOP = { top: 8, bottom: 8, left: 8, right: 8 };
+// Neutral grey, so a missing value never reads as a heat level color.
+const UNAVAILABLE_BADGE_COLOR = '#E2E2E2';
 
 const BookmarkCard = ({
   label,
@@ -34,7 +36,7 @@ const BookmarkCard = ({
   onRename,
   onRemove,
 }: Props) => {
-  const heatInfo = getHeatIndexInfo(temperature);
+  const heatInfo = temperature === null ? null : getHeatIndexInfo(temperature);
   const aqhiInfo = getAqhiInfo(aqhi);
   const { Icon, label: categoryLabel } = PLACE_CATEGORY_CONFIG[category];
   const categoryColor = EXPOSURE_IO_CONFIG[category].color;
@@ -87,10 +89,15 @@ const BookmarkCard = ({
       </View>
 
       <View style={styles.badgeRow}>
-        <View style={[styles.badge, { backgroundColor: heatInfo.color }]}>
+        <View
+          style={[
+            styles.badge,
+            { backgroundColor: heatInfo?.color ?? UNAVAILABLE_BADGE_COLOR },
+          ]}
+        >
           <Text style={styles.badgeLabel}>Heat</Text>
           <Text style={styles.badgeValue}>
-            {temperature}° {heatInfo.classification}
+            {heatInfo ? `${temperature}° ${heatInfo.classification}` : '--'}
           </Text>
         </View>
         <View style={[styles.badge, { backgroundColor: aqhiInfo.color }]}>

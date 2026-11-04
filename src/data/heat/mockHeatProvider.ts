@@ -1,35 +1,36 @@
-import { HeatDataProvider, HeatPoint, Coordinates } from './types';
+import { HeatDataProvider, Coordinates } from './types';
+import { toHkTimestamp } from '../../utils/hkDate';
 
-// Fixed anchor points spread across a wide area, with deliberately varied temperatures.
-// This mirrors real heat-index behavior: distinct microclimates (urban core, waterfront,
-// green space, etc.) rather than random noise clustered in one spot.
-const STATION_TEMPLATE = [
-  { latOffset: 0.05, lngOffset: 0.05, temp: 36 },
-  { latOffset: 0.05, lngOffset: -0.05, temp: 30 },
-  { latOffset: -0.05, lngOffset: 0.05, temp: 33 },
-  { latOffset: -0.05, lngOffset: -0.05, temp: 26 },
-  { latOffset: 0.1, lngOffset: 0, temp: 40 },
-  { latOffset: -0.1, lngOffset: 0, temp: 24 },
-  { latOffset: 0, lngOffset: 0.1, temp: 38 },
-  { latOffset: 0, lngOffset: -0.1, temp: 28 },
-  { latOffset: 0.02, lngOffset: 0.02, temp: 34 },
-  { latOffset: -0.02, lngOffset: -0.02, temp: 29 },
-  { latOffset: 0.15, lngOffset: 0.1, temp: 31 },
-  { latOffset: -0.15, lngOffset: -0.1, temp: 27 },
-];
+// Dev-only stand-in for the API (switched in index.ts, never an automatic
+// fallback). A gentle north-south gradient so different places still show
+// different values when testing lists and the map pin.
+const BASE_TEMPERATURE_C = 31;
+const BASE_HUMIDITY_PCT = 78;
+const BASE_HEAT_INDEX_C = 37;
+const GRADIENT_C_PER_DEGREE_LAT = 20;
+const REFERENCE_LAT = 22.3;
 
-const generateMockPoints = (center: Coordinates): HeatPoint[] => {
-  return STATION_TEMPLATE.map((station, i) => ({
-    id: `mock-${i}`,
-    latitude: center.latitude + station.latOffset,
-    longitude: center.longitude + station.lngOffset,
-    temperature: station.temp,
-  }));
-};
+const heatIndexFor = ({ latitude }: Coordinates): number =>
+  Math.round(
+    (BASE_HEAT_INDEX_C +
+      (latitude - REFERENCE_LAT) * GRADIENT_C_PER_DEGREE_LAT) *
+      10,
+  ) / 10;
+
+const delay = () => new Promise<void>(resolve => setTimeout(resolve, 300));
 
 export const mockHeatProvider: HeatDataProvider = {
-  getHeatPoints: async center => {
-    await new Promise<void>(resolve => setTimeout(() => resolve(), 400));
-    return generateMockPoints(center);
+  getConditionsAt: async coords => {
+    await delay();
+    return {
+      ts: toHkTimestamp(),
+      temperatureC: BASE_TEMPERATURE_C,
+      relativeHumidityPct: BASE_HUMIDITY_PCT,
+      heatIndexC: heatIndexFor(coords),
+    };
+  },
+  getHeatIndexAt: async coords => {
+    await delay();
+    return heatIndexFor(coords);
   },
 };

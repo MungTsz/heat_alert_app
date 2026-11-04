@@ -1,4 +1,25 @@
-import { toHkDateKey, addHkDays, getHkWeekStartKey } from '../hkDate';
+import {
+  toHkDateKey,
+  addHkDays,
+  getHkWeekStartKey,
+  toHkTimestamp,
+  parseHkTimestamp,
+  shiftHkTimestamp,
+} from '../hkDate';
+
+describe('HK hourly timestamps (YYYYMMDDhh)', () => {
+  it('formats and parses as HK time, independent of the device timezone', () => {
+    // 2026-11-04T00:00:00Z is 08:00 HKT
+    expect(toHkTimestamp(new Date('2026-11-04T00:00:00Z'))).toBe('2026110408');
+    expect(parseHkTimestamp('2026110408')).toBe(Date.parse('2026-11-04T00:00:00Z'));
+  });
+
+  it('shifts across day, month and year boundaries', () => {
+    expect(shiftHkTimestamp('2026110408', -47)).toBe('2026110209');
+    expect(shiftHkTimestamp('2026103123', 1)).toBe('2026110100');
+    expect(shiftHkTimestamp('2026123123', 1)).toBe('2027010100');
+  });
+});
 
 describe('toHkDateKey', () => {
   it('formats a date as YYYY-MM-DD in Hong Kong local time', () => {

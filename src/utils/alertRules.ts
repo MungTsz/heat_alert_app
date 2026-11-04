@@ -1,4 +1,4 @@
-import { getHeatIndexInfo } from './heatIndexUtils';
+import { getHeatIndexInfo, HEAT_INDEX_ZONES } from './heatIndexUtils';
 import { HeatAlert } from '../types/alerts';
 import {
   NotificationSettings,
@@ -21,22 +21,18 @@ export const evaluateCurrentThreshold = (
 ): HeatAlert | null => {
   if (!settings.notifyCurrentLocation) return null;
 
-  const { classification } = getHeatIndexInfo(currentTemp);
+  const { classification, risk } = getHeatIndexInfo(currentTemp);
   if (!isEnabled(settings, classification)) return null;
   if (rank(classification) <= rank('Caution')) return null; // don't alert on mild levels even if toggled on accidentally
 
-  const actionByLevel: Record<string, string> = {
-    'Extreme Caution': 'Stay hydrated and take breaks in the shade.',
-    Danger: 'Avoid outdoor activity where possible. Stay hydrated and cool.',
-    'Extreme Danger':
-      'Avoid outdoor activity now. If indoors, turn on air conditioning and stay hydrated.',
-  };
-
+  // Every alert body is the level's "effect on the body" text from
+  // HEAT_INDEX_ZONES (the NWS reference table), so notifications say exactly
+  // what the in-app classification says — no separately-worded advice.
   return {
     id: `current-threshold:${classification}`,
     category: 'current_threshold',
     title: `Heat Index: ${classification} (${currentTemp}°C)`,
-    body: actionByLevel[classification] ?? 'Take precautions against the heat.',
+    body: risk,
   };
 };
 
@@ -62,7 +58,9 @@ export const evaluateUpcomingTrend = (
   const peakPoint = lookahead.reduce((max, p) =>
     p.heatIndex > max.heatIndex ? p : max,
   );
-  const peakClass = getHeatIndexInfo(peakPoint.heatIndex).classification;
+  const { classification: peakClass, risk: peakRisk } = getHeatIndexInfo(
+    peakPoint.heatIndex,
+  );
 
   if (rank(peakClass) <= rank(currentClass)) return null; // not actually rising
   if (!isEnabled(settings, peakClass)) return null;
@@ -72,7 +70,7 @@ export const evaluateUpcomingTrend = (
     id: `upcoming-trend:${currentClass}->${peakClass}:${peakPoint.time}`,
     category: 'upcoming_trend',
     title: `Heat rising to ${peakClass} by ${peakPoint.time}`,
-    body: `Plan to head indoors and avoid outdoor activity before then. If you're already inside, turn on air conditioning.`,
+    body: peakRisk,
   };
 };
 
@@ -89,7 +87,6 @@ export const evaluateSustainedTrend = (
       p.heatIndex > max.heatIndex ? p : max,
     );
     return {
-      dayLabel: day.dayLabel,
       classification: getHeatIndexInfo(maxPoint.heatIndex).classification,
     };
   });
@@ -110,8 +107,8 @@ export const evaluateSustainedTrend = (
   return {
     id: `sustained-trend:${worstClass}:${days.length}`,
     category: 'sustained_trend',
-    title: `Hot weather continuing for ${days.length} days`,
-    body: `Heat index is expected to reach ${worstClass} on multiple upcoming days. Plan outdoor activities for early morning or evening.`,
+    title: `Hot weather continuing for ${days.length} days: up to ${worstClass}`,
+    body: HEAT_INDEX_ZONES.find(z => z.classification === worstClass)!.risk,
   };
 };
 
@@ -124,7 +121,7 @@ export const evaluateCommunityThresholds = (
 
   const alerts: HeatAlert[] = [];
   for (const house of housesWithTemp) {
-    const { classification } = getHeatIndexInfo(house.temperature);
+    const { classification, risk } = getHeatIndexInfo(house.temperature);
     if (!isEnabled(settings, classification)) continue;
     if (rank(classification) <= rank('Caution')) continue;
 
@@ -132,7 +129,7 @@ export const evaluateCommunityThresholds = (
       id: `community:${house.id}:${classification}`,
       category: 'community_threshold',
       title: `${house.label}: ${classification} (${house.temperature}°C)`,
-      body: `Heat index at ${house.label} has reached ${classification}. Consider checking in.`,
+      body: risk,
     });
   }
   return alerts;

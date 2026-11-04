@@ -13,18 +13,10 @@ const buildUrl = (
   return `${baseUrl}?${query.toString()}`;
 };
 
-// Formats a Date as YYYYMMDDhh in Hong Kong time (UTC+8) — matches the
-// confirmed-working format from live testing, rather than relying on the
-// docs' claim that ISO is equally accepted.
-export const toHkTimestamp = (date: Date = new Date()): string => {
-  const utcMs = date.getTime() + date.getTimezoneOffset() * 60000;
-  const hkDate = new Date(utcMs + 8 * 60 * 60 * 1000);
-  const yyyy = hkDate.getFullYear();
-  const mm = (hkDate.getMonth() + 1).toString().padStart(2, '0');
-  const dd = hkDate.getDate().toString().padStart(2, '0');
-  const hh = hkDate.getHours().toString().padStart(2, '0');
-  return `${yyyy}${mm}${dd}${hh}`;
-};
+// PRAISE takes YYYYMMDDhh HK-time keys — the confirmed-working format from
+// live testing, rather than relying on the docs' claim that ISO is equally
+// accepted. Re-exported so existing PRAISE callers keep one import.
+export { toHkTimestamp } from '../utils/hkDate';
 
 // Renders a toHkTimestamp() string (YYYYMMDDhh) as a wall-clock label, e.g.
 // "1:00PM" — used to show forecast frames as real times instead of "+Nh".
