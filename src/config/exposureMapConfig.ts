@@ -1,4 +1,5 @@
 // src/config/exposureMapConfig.ts
+import { ExposureIo } from '../types/exposure';
 
 // Tunables for the exposure trajectory map (ExposureTrajectoryMap.tsx) — kept
 // here rather than hardcoded in the component so the clustering radius, dot
@@ -52,10 +53,13 @@ export const EXPOSURE_MAP_CONFIG = {
   routeLineWidthPx: 4,
   routeCasingWidthPx: 7,
   routeCasingColor: 'rgba(255,255,255,0.95)',
-  // Dashes = "path not traced by GPS" (an underground MTR ride, drawn as a
-  // straight line between stations). Dashed legs must use lineCap 'butt':
-  // on Android a round cap turns every dash into a dot.
-  inferredPathDashPattern: [10, 7],
+  // Dashes = "rode a train", the classic map symbol for rail. Keyed on io
+  // (not on whether GPS traced the path), so every MTR ride reads the same —
+  // above-ground rail and an underground straight-line guess alike; the trip
+  // sheet's reason text tells the two apart. Dashed legs must use lineCap
+  // 'butt': on Android a round cap turns every dash into a dot.
+  dashedRouteIoTypes: ['MTR'] as readonly ExposureIo[],
+  railDashPattern: [10, 7],
   // A light outside-HK fill vanishes as a thin line on light tiles, so
   // outside-HK legs use the darker outline gray instead.
   outsideHkRouteColor: '#8E8E93',

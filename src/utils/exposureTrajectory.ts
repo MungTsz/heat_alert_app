@@ -26,8 +26,9 @@ export const bearingDeg = (a: LatLng, b: LatLng): number => {
 const samePosition = (a: LatLng, b: LatLng): boolean =>
   a.latitude === b.latitude && a.longitude === b.longitude;
 
-// A leg changes wherever its line has to change style: io (color), the HK
-// boundary (gray outside) or a GPS jump (dashed).
+// A leg changes wherever its line has to change style — io (color/dashes),
+// the HK boundary (gray outside) — or where its trip sheet must explain
+// differently: a GPS jump (underground guess) vs. a traced rail ride.
 const legStyleKey = (segment: ExposureSegmentResult): string =>
   `${segment.io}|${segment.inHk}|${segment.reason === 'jump'}`;
 

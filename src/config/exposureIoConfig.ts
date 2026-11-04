@@ -61,7 +61,7 @@ export const EXPOSURE_IO_GROUPS: readonly (readonly ExposureIo[])[] = [
 // saving a place, so these only explain. Unknown reasons show nothing
 // rather than a raw rule id.
 export const EXPOSURE_IO_REASON_TEXT: Record<string, string> = {
-  jump: 'Underground: no GPS between stations, so the dashed line is a straight guess',
+  jump: 'Underground: no GPS between stations, so the line is a straight guess',
   rail: 'Moved along a railway, away from roads',
   interchange: 'Short stop between two MTR rides',
   vehicle: 'Moved at road speed along roads',

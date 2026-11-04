@@ -42,12 +42,15 @@ const clusterDotSize = (totalDurationMs: number): number => {
 const legColor = (leg: ExposureTripLeg): string =>
   leg.inHk ? EXPOSURE_IO_CONFIG[leg.io].color : EXPOSURE_MAP_CONFIG.outsideHkRouteColor;
 
+const isDashedLeg = (leg: ExposureTripLeg): boolean =>
+  EXPOSURE_MAP_CONFIG.dashedRouteIoTypes.includes(leg.io);
+
 // The day's trajectory, shared by a single day's ExposureReportView and the
 // compact device view. Three layers, each answering one question:
 // - stay dots (where was I?): sized by dwell time, indoor ones carry their
 //   category icon so they read without the legend;
 // - route lines (how did I get there?): one polyline per leg in its io
-//   color, dashed where the path is a straight-line guess (underground MTR);
+//   color, every MTR ride dashed (see dashedRouteIoTypes);
 // - direction arrows (which way?): evenly spaced on screen along each leg.
 // The lines connect the backend's own points; no routing API is called.
 const ExposureTrajectoryMap: React.FC<Props> = ({ segments }) => {
@@ -206,10 +209,8 @@ const ExposureTrajectoryMap: React.FC<Props> = ({ segments }) => {
             coordinates={leg.path}
             strokeColor={legColor(leg)}
             strokeWidth={EXPOSURE_MAP_CONFIG.routeLineWidthPx}
-            lineDashPattern={
-              leg.pathInferred ? EXPOSURE_MAP_CONFIG.inferredPathDashPattern : undefined
-            }
-            lineCap={leg.pathInferred ? 'butt' : 'round'}
+            lineDashPattern={isDashedLeg(leg) ? EXPOSURE_MAP_CONFIG.railDashPattern : undefined}
+            lineCap={isDashedLeg(leg) ? 'butt' : 'round'}
             lineJoin="round"
             zIndex={2}
             tappable

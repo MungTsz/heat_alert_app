@@ -47,7 +47,8 @@ const timelineRowContent = (item: ExposureTimelineItem) => {
     endTime: leg.endTime,
     durationMs: leg.totalDurationMs,
     exposure: leg.totalExposure,
-    // Roads for a vehicle ride; "underground" explains a dashed MTR line.
+    // Roads for a vehicle ride; "underground" marks an MTR ride whose line
+    // is a straight guess between stations.
     detail:
       formatRoadList(leg.roadNames, EXPOSURE_MAP_CONFIG.maxRoadNamesShown) ??
       (leg.pathInferred ? 'underground' : null),

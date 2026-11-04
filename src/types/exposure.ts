@@ -197,7 +197,8 @@ export type ExposureTripLeg = {
   inHk: boolean;
   // true for an MTR ride the backend inferred from a GPS jump (no pings
   // underground): the line between stations is a straight-line guess, not
-  // the travelled path, so it's drawn dashed.
+  // the travelled path. Only drives the "underground" detail text — line
+  // style is per io (every MTR leg is dashed, see dashedRouteIoTypes).
   pathInferred: boolean;
   path: { latitude: number; longitude: number }[];
   startTime: number;
