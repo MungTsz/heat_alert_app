@@ -1,8 +1,8 @@
 // src/utils/niceAxisTicks.ts
 // Generic "nice numbers" tick calculation, shared by ExposureDailyBarChart
-// and ExposureTrendChart's y-axes. Unlike AqhiHourlyForecastChart/
-// DailyHeatForecastCard — which hardcode ticks because AQHI/heat-index have
-// fixed, known domains — exposure totals (%AR·h) have no fixed range, so
+// and ExposureTrendChart's y-axes. Unlike the forecast
+// charts (HourlyForecastChart) — which hardcode ticks because AQHI/heat-index
+// have fixed, known domains — exposure totals (%AR·h) have no fixed range, so
 // ticks have to be derived from whatever data is on screen.
 export type NiceAxisTicks = { ticks: number[]; niceMax: number };
 

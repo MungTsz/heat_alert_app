@@ -32,7 +32,7 @@ const HeatIndexExplainerSheet: React.FC<Props> = ({ visible, onClose }) => (
       {/* Worked example from the NWS heat index chart (88°F / 80% RH ≈ 106°F) */}
       <View style={styles.example}>
         <Text style={styles.exampleText}>
-          31°C air at 80% humidity feels like about{' '}
+          A temperature of 31°C at 80% humidity feels like about{' '}
           <Text style={styles.exampleStrong}>41°C</Text> — already at the
           Danger level.
         </Text>

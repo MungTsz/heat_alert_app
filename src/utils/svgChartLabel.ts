@@ -1,6 +1,6 @@
 // src/utils/svgChartLabel.ts
 // Shared helper for every Svg bar/line chart's tap-to-reveal value label
-// (ExposureTrendChart, AqhiHourlyForecastChart, DailyHeatForecastCard, …).
+// (ExposureTrendChart, ExposureDailyBarChart, …).
 // A label centered on the selected point clips against the chart's left/right
 // edge — or overlaps a neighboring bar — whenever the selection is near
 // either end, since react-native-svg has no text-measurement API to react

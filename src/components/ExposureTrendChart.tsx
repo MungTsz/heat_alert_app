@@ -24,8 +24,8 @@ const PADDING_TOP = 26;
 const PADDING_BOTTOM = 26;
 const GRAPH_HEIGHT = SVG_HEIGHT - PADDING_TOP - PADDING_BOTTOM;
 // Rotated axis-title column + tick-value column to the left of the main
-// bar Svg — same side-by-side-Svg convention AqhiHourlyForecastChart/
-// DailyHeatForecastCard use for their y-axes.
+// bar Svg — same side-by-side-Svg convention HourlyForecastChart uses for
+// its y-axis.
 const Y_TITLE_WIDTH = 14;
 const Y_AXIS_WIDTH = 32;
 const CHART_WIDTH = SCREEN_WIDTH - Y_TITLE_WIDTH - Y_AXIS_WIDTH;

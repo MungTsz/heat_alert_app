@@ -19,7 +19,7 @@ export const fahrenheitToCelsius = (fahrenheit: number): number => {
 // Danger), plus a "Safe" tier below Caution — the single source of truth for
 // classification/color/risk, shared by current-conditions displays, map pins,
 // alert messages and the hourly forecast chart's background bands (see
-// DailyHeatForecastCard.tsx). Colors and risk text are taken verbatim from
+// HeatHourlyForecastChart.tsx). Colors and risk text are taken verbatim from
 // the NWS reference table the project follows (colors pixel-sampled from it);
 // "Safe" isn't in that table, so it keeps the app's own blue.
 export const HEAT_INDEX_ZONES: {

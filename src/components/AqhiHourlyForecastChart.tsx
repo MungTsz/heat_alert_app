@@ -1,55 +1,28 @@
 // src/components/AqhiHourlyForecastChart.tsx
-import React, { useState, useMemo, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  Dimensions,
-  TouchableOpacity,
-} from 'react-native';
-import Svg, {
-  Rect,
-  Line,
-  Path,
-  Circle,
-  Text as SvgText,
-  Defs,
-  ClipPath,
-  G,
-} from 'react-native-svg';
-import Animated, {
-  useSharedValue,
-  useAnimatedProps,
-  withRepeat,
-  withTiming,
-  interpolate,
-  Easing,
-} from 'react-native-reanimated';
+import React, { useMemo } from 'react';
 import { AqhiDayForecast } from '../data/aqhiForecast/types';
 import { formatAqhiValue } from '../utils/aqhiUtils';
-import { clampedChartLabelX, estimateSvgTextWidth } from '../utils/svgChartLabel';
-import ChartBandLegend from './ChartBandLegend';
+import HourlyForecastChart, {
+  ForecastChartBand,
+  ForecastChartDay,
+} from './HourlyForecastChart';
 
-const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+const VALUE_RANGE = { min: 0, max: 11 }; // top band is "10+"
 
-const SCREEN_WIDTH = Dimensions.get('window').width - 72;
-const SVG_HEIGHT = 260;
-const Y_AXIS_WIDTH = 26;
-const PADDING_TOP = 15;
-const PADDING_BOTTOM = 30;
-const MIN_AQHI = 0;
-const MAX_AQHI = 11; // top band is "10+"
-const SELECTED_LABEL_FONT_SIZE = 13;
+const Y_AXIS_LABELS = [
+  ...[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(v => ({ value: v, label: `${v}` })),
+  { value: 11, label: '10+' },
+];
 
 // Fixed EPD severity bands — background zones, not per-point colors. This is
 // a deliberately independent, coarser 5-color palette for the chart backdrop,
 // separate from aqhiUtils' per-value gradient used by the map/legend/pins.
-const BANDS = [
-  { min: 0, max: 3, color: '#4CAF33' }, // Low
-  { min: 3, max: 6, color: '#F2C300' }, // Moderate
-  { min: 6, max: 7, color: '#E8242A' }, // High
-  { min: 7, max: 10, color: '#8D4A3C' }, // Very High
-  { min: 10, max: 11, color: '#000000' }, // Serious ("10+")
+const BANDS: ForecastChartBand[] = [
+  { min: 0, max: 3, color: '#4CAF33', opacity: 0.55 }, // Low
+  { min: 3, max: 6, color: '#F2C300', opacity: 0.55 }, // Moderate
+  { min: 6, max: 7, color: '#E8242A', opacity: 0.55 }, // High
+  { min: 7, max: 10, color: '#8D4A3C', opacity: 0.55 }, // Very High
+  { min: 10, max: 11, color: '#000000', opacity: 0.85 }, // Serious ("10+")
 ];
 
 const LEGEND = [
@@ -60,321 +33,49 @@ const LEGEND = [
   { label: 'Serious', range: '10+', color: '#000000' },
 ];
 
+const PRIMARY = { label: 'AQHI', format: formatAqhiValue };
+
 type Props = { days: AqhiDayForecast[] };
 
 const AqhiHourlyForecastChart: React.FC<Props> = ({ days }) => {
-  const [activeDayIndex, setActiveDayIndex] = useState(0);
-  const [selectedHourIndex, setSelectedHourIndex] = useState<number | null>(
-    null,
-  );
-  const activeDay = days[activeDayIndex];
-  const points = activeDay?.points ?? [];
-
-  const GRAPH_WIDTH = SCREEN_WIDTH - Y_AXIS_WIDTH;
-  const GRAPH_HEIGHT = SVG_HEIGHT - PADDING_TOP - PADDING_BOTTOM;
-  const slotWidth = GRAPH_WIDTH / Math.max(points.length - 1, 1);
-
-  const getY = (val: number) => {
-    const c = Math.min(Math.max(val, MIN_AQHI), MAX_AQHI);
-    const pct = (c - MIN_AQHI) / (MAX_AQHI - MIN_AQHI);
-    return PADDING_TOP + GRAPH_HEIGHT - pct * GRAPH_HEIGHT;
-  };
-  const getX = (i: number) => i * slotWidth;
-
-  const linePath = useMemo(() => {
-    return points.reduce((acc, p, i) => {
-      const cmd = i === 0 ? 'M' : 'L';
-      return `${acc} ${cmd} ${getX(i)},${getY(p.aqhi)}`;
-    }, '');
-  }, [points, slotWidth]);
-
-  const formatHourLabel = (hour24: number): string => {
-    if (hour24 === 0) return '12AM';
-    if (hour24 === 12) return '12NN';
-    if (hour24 < 12) return `${hour24}AM`;
-    return `${hour24 - 12}PM`;
-  };
-
-  const labelIndices = points
-    .map((p, i) => ({ hour: parseInt(p.time.split(':')[0], 10), i }))
-    .filter(({ hour }) => hour % 4 === 0)
-    .map(({ i }) => i);
-
-  // "Now" marker — only meaningful on today's tab
-  const nowIndex = useMemo(() => {
-    if (!activeDay?.isToday) return null;
+  const chartDays = useMemo((): ForecastChartDay[] => {
+    // AQHI's forecast is anchored on the phone's clock, so "now" is today's
+    // point closest to the current time.
     const now = Date.now();
-    return points.reduce(
-      (closestIdx, p, idx) =>
-        Math.abs(p.timestamp - now) <
-        Math.abs(points[closestIdx].timestamp - now)
-          ? idx
-          : closestIdx,
-      0,
-    );
-  }, [activeDay, points]);
-
-  // Drives the pulsing halo behind the "now" dot — loops indefinitely
-  const pulseProgress = useSharedValue(0);
-  useEffect(() => {
-    pulseProgress.value = withRepeat(
-      withTiming(1, { duration: 1200, easing: Easing.inOut(Easing.ease) }),
-      -1,
-      true,
-    );
-  }, [pulseProgress]);
-  const haloAnimatedProps = useAnimatedProps(() => ({
-    r: interpolate(pulseProgress.value, [0, 1], [6, 13]),
-    opacity: interpolate(pulseProgress.value, [0, 1], [0.45, 0]),
-  }));
-
-  const gridValues = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-  const selectedPoint =
-    selectedHourIndex !== null ? points[selectedHourIndex] : null;
+    return days.map(day => ({
+      key: String(day.dateMs),
+      weekdayShort: day.weekdayShort,
+      dayOfMonth: day.dayOfMonth,
+      isToday: day.isToday,
+      nowIndex:
+        day.isToday && day.points.length > 0
+          ? day.points.reduce(
+              (closest, p, i) =>
+                Math.abs(p.timestamp - now) <
+                Math.abs(day.points[closest].timestamp - now)
+                  ? i
+                  : closest,
+              0,
+            )
+          : null,
+      points: day.points.map(p => ({
+        timestamp: p.timestamp,
+        hour: parseInt(p.time.slice(0, 2), 10),
+        value: p.aqhi,
+      })),
+    }));
+  }, [days]);
 
   return (
-    <View>
-      <Text style={styles.title}>AQHI</Text>
-
-      <View style={styles.dayTabRow}>
-        {days.map((day, i) => {
-          const isSelected = activeDayIndex === i;
-          return (
-            <TouchableOpacity
-              key={day.dateMs}
-              style={styles.dayTab}
-              onPress={() => {
-                setActiveDayIndex(i);
-                setSelectedHourIndex(null);
-              }}
-            >
-              <Text
-                style={[
-                  styles.weekdayText,
-                  isSelected && styles.weekdayTextActive,
-                ]}
-              >
-                {day.weekdayShort}
-              </Text>
-              <View
-                style={[styles.dayCircle, isSelected && styles.dayCircleActive]}
-              >
-                <Text
-                  style={[
-                    styles.dayNumberText,
-                    isSelected && styles.dayNumberTextActive,
-                  ]}
-                >
-                  {day.dayOfMonth}
-                </Text>
-              </View>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-
-      <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
-        <Svg width={Y_AXIS_WIDTH} height={SVG_HEIGHT}>
-          {gridValues.map(v => (
-            <SvgText
-              key={v}
-              x={Y_AXIS_WIDTH - 6}
-              y={getY(v) + 4}
-              fontSize="10"
-              fill="#333"
-              textAnchor="end"
-            >
-              {v}
-            </SvgText>
-          ))}
-          <SvgText
-            x={Y_AXIS_WIDTH - 6}
-            y={getY(11) + 4}
-            fontSize="9"
-            fill="#333"
-            textAnchor="end"
-          >
-            10+
-          </SvgText>
-        </Svg>
-
-        <Svg width={GRAPH_WIDTH} height={SVG_HEIGHT}>
-          <Defs>
-            <ClipPath id="aqhiChartClip">
-              <Rect
-                x={0}
-                y={PADDING_TOP}
-                width={GRAPH_WIDTH}
-                height={GRAPH_HEIGHT}
-              />
-            </ClipPath>
-          </Defs>
-
-          {/* Fixed EPD color bands, full width, behind everything */}
-          <G clipPath="url(#aqhiChartClip)">
-            {BANDS.map((band, idx) => (
-              <Rect
-                key={idx}
-                x={0}
-                y={getY(band.max)}
-                width={GRAPH_WIDTH}
-                height={getY(band.min) - getY(band.max)}
-                fill={band.color}
-                opacity={band.color === '#000000' ? 0.85 : 0.55}
-              />
-            ))}
-
-            {/* History recedes visually behind the "now" point */}
-            {nowIndex !== null && (
-              <Rect
-                x={0}
-                y={PADDING_TOP}
-                width={getX(nowIndex)}
-                height={GRAPH_HEIGHT}
-                fill="#2D3748"
-                opacity={0.12}
-              />
-            )}
-
-            {/* Grid lines tying each x-axis label to its point */}
-            {labelIndices.map(i => (
-              <Line
-                key={`grid-${i}`}
-                x1={getX(i)}
-                y1={PADDING_TOP}
-                x2={getX(i)}
-                y2={PADDING_TOP + GRAPH_HEIGHT}
-                stroke="#718096"
-                strokeWidth={1}
-                opacity={0.25}
-              />
-            ))}
-          </G>
-
-          {/* Connecting line, matching the reference's gray line */}
-          <Path
-            d={linePath}
-            stroke="#FFFFFF"
-            strokeWidth={3}
-            fill="none"
-            strokeLinejoin="round"
-          />
-          <Path
-            d={linePath}
-            stroke="#888888"
-            strokeWidth={1.5}
-            fill="none"
-            strokeLinejoin="round"
-          />
-
-          {points.map((p, i) => (
-            <Circle
-              key={`dot-${i}`}
-              cx={getX(i)}
-              cy={getY(p.aqhi)}
-              r={selectedHourIndex === i ? 6 : 4}
-              fill="#FFFFFF"
-              stroke="#888888"
-              strokeWidth={1.5}
-              onPress={() => setSelectedHourIndex(i)}
-            />
-          ))}
-
-          {/* "Now" marker: pulsing halo behind an enlarged solid dot */}
-          {nowIndex !== null && (
-            <>
-              <AnimatedCircle
-                cx={getX(nowIndex)}
-                cy={getY(points[nowIndex].aqhi)}
-                fill="#0073df"
-                animatedProps={haloAnimatedProps}
-              />
-              <Circle
-                cx={getX(nowIndex)}
-                cy={getY(points[nowIndex].aqhi)}
-                r={7}
-                fill="#0073df"
-                stroke="#FFFFFF"
-                strokeWidth={2}
-                onPress={() => setSelectedHourIndex(nowIndex)}
-              />
-            </>
-          )}
-
-          {selectedPoint && selectedHourIndex !== null && (() => {
-            const labelText = formatAqhiValue(selectedPoint.aqhi);
-            const { x, textAnchor } = clampedChartLabelX(
-              getX(selectedHourIndex),
-              GRAPH_WIDTH,
-              estimateSvgTextWidth(labelText, SELECTED_LABEL_FONT_SIZE),
-            );
-            return (
-              <SvgText
-                x={x}
-                y={PADDING_TOP - 3}
-                fontSize={SELECTED_LABEL_FONT_SIZE}
-                fontWeight="bold"
-                fill="#d36565"
-                textAnchor={textAnchor}
-              >
-                {labelText}
-              </SvgText>
-            );
-          })()}
-
-          {labelIndices.map(i => {
-            const hour24 = parseInt(points[i].time.split(':')[0], 10);
-            // Edge labels are anchored inward so they never render past the
-            // chart's left/right bounds and get clipped (e.g. "12AM" at i=0).
-            const textAnchor =
-              i === 0 ? 'start' : i === points.length - 1 ? 'end' : 'middle';
-            return (
-              <SvgText
-                key={`label-${i}`}
-                x={getX(i)}
-                y={SVG_HEIGHT - 10}
-                fontSize="9"
-                fill="#333"
-                textAnchor={textAnchor}
-              >
-                {formatHourLabel(hour24)}
-              </SvgText>
-            );
-          })}
-        </Svg>
-      </View>
-
-      <ChartBandLegend items={LEGEND} />
-    </View>
+    <HourlyForecastChart
+      days={chartDays}
+      valueRange={VALUE_RANGE}
+      yAxisLabels={Y_AXIS_LABELS}
+      bands={BANDS}
+      legendItems={LEGEND}
+      primary={PRIMARY}
+    />
   );
 };
-
-const styles = StyleSheet.create({
-  title: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#2D3748',
-    marginBottom: 10,
-  },
-  dayTabRow: {
-    flexDirection: 'row',
-    gap: 18,
-    paddingHorizontal: 4,
-    marginBottom: 12,
-  },
-  dayTab: { alignItems: 'center', gap: 6 },
-  weekdayText: { fontSize: 12, fontWeight: '600', color: '#A0AEC0' },
-  weekdayTextActive: { color: '#E99066' },
-  dayCircle: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  dayCircleActive: { backgroundColor: '#E99066' },
-  dayNumberText: { fontSize: 16, fontWeight: '700', color: '#2D3748' },
-  dayNumberTextActive: { color: '#FFFFFF' },
-});
 
 export default AqhiHourlyForecastChart;

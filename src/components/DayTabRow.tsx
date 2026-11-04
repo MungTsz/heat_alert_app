@@ -2,9 +2,8 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 
-// Generic version of the day-selector row already duplicated between
-// AqhiHourlyForecastChart.tsx and DailyHeatForecastCard.tsx (weekday +
-// circled day-of-month). Extracted here rather than adding a third copy,
+// Generic version of the day-selector row first used by the forecast charts
+// (now HourlyForecastChart.tsx) — weekday + circled day-of-month. Extracted here rather than adding a third copy,
 // since this feature needs it in two places (the daily history picker, and
 // each multi-day import's internal day-tabs).
 

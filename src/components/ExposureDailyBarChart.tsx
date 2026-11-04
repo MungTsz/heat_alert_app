@@ -16,8 +16,8 @@ const PADDING_TOP = 26;
 const PADDING_BOTTOM = 26;
 const GRAPH_HEIGHT = SVG_HEIGHT - PADDING_TOP - PADDING_BOTTOM;
 // Rotated axis-title column + tick-value column to the left of the main
-// bar Svg — same side-by-side-Svg convention AqhiHourlyForecastChart/
-// DailyHeatForecastCard use for their y-axes, and matches ExposureTrendChart.
+// bar Svg — same side-by-side-Svg convention HourlyForecastChart uses for
+// its y-axis, and matches ExposureTrendChart.
 // The tick column lives INSIDE each page (every week gets its own scale);
 // only the title column stays fixed outside the swipeable pages.
 export const Y_TITLE_WIDTH = 14;

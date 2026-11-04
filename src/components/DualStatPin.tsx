@@ -45,7 +45,7 @@ const DualStatPin: React.FC<Props> = ({
             rendered ("--" while loading) so the pin's height never changes
             after the marker is drawn — see MapScreen's marker key. */}
         <Text style={styles.subText}>
-          Air {airTemperature ?? '--'}° · RH {humidity ?? '--'}%
+          Temp {airTemperature ?? '--'}° · Humidity {humidity ?? '--'}%
         </Text>
       </View>
 

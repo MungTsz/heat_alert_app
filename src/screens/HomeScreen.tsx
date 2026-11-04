@@ -20,7 +20,7 @@ import {
 import { MapPin, User, Wind } from 'lucide-react-native';
 import TextTicker from 'react-native-text-ticker';
 import CurrentWeatherInfo from '../components/CurrentWeatherInfo';
-import DailyHeatForecastCard from '../components/DailyHeatForecastCard';
+import HeatHourlyForecastChart from '../components/HeatHourlyForecastChart';
 import AqhiHourlyForecastChart from '../components/AqhiHourlyForecastChart';
 import HazardCard from '../components/HazardCard';
 import ForecastSheet from '../components/ForecastSheet';
@@ -209,7 +209,7 @@ const HomeScreen = () => {
         title="Heat Index Forecast"
         onClose={() => setHeatSheetOpen(false)}
       >
-        <DailyHeatForecastCard days={heatForecastDays} />
+        <HeatHourlyForecastChart days={heatForecastDays} />
       </ForecastSheet>
 
       <ForecastSheet
