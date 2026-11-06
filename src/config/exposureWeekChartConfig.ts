@@ -26,6 +26,10 @@ export const EXPOSURE_WEEK_CHART_CONFIG = {
   // Neutral gray rather than red/green: the week-over-week chip reports a
   // change, not a verdict (same treatment as iOS Screen Time).
   trendColor: '#8E8E93',
+  // The headline is per hour (%AR·h ÷ scored hours), roughly a day's total
+  // ÷ 24, so 2 decimals would round most weeks to 0.0x — 3 keeps a visible
+  // week-to-week difference.
+  hourlyAverageDecimals: 3,
   // A change smaller than this (in %) reads as "Same as last week" instead of
   // a noisy "↑ 0%" — tiny day-to-day fluctuations aren't a real trend.
   sameAsLastWeekThresholdPct: 1,

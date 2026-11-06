@@ -4,22 +4,28 @@ import {
   computeWeekStats,
   listWeekStarts,
 } from '../exposureWeekStats';
-import { ExposureIo } from '../../types/exposure';
+import { ExposureIoTotals } from '../exposureIoTotals';
 
-const byIo = (outdoor: number, home = 0): Record<ExposureIo, number> => ({
-  Outdoor: outdoor,
-  Vehicle: 0,
-  MTR: 0,
-  'Other Indoor': 0,
-  School: 0,
-  Office: 0,
-  Home: home,
+// One day's totals; hours defaults to a full day so the daily-only tests
+// don't have to care about it.
+const totals = (outdoor: number, home = 0, hours = 24): ExposureIoTotals => ({
+  byIo: {
+    Outdoor: outdoor,
+    Vehicle: 0,
+    MTR: 0,
+    'Other Indoor': 0,
+    School: 0,
+    Office: 0,
+    Home: home,
+  },
+  total: outdoor + home,
+  hours,
 });
 
 describe('buildWeekDays', () => {
   const dailyMap = new Map([
-    ['2026-10-11', byIo(1, 0.5)],
-    ['2026-10-13', byIo(0)],
+    ['2026-10-11', totals(1, 0.5)],
+    ['2026-10-13', totals(0)],
   ]);
   const days = buildWeekDays('2026-10-11', dailyMap, '2026-10-14');
 
@@ -53,17 +59,32 @@ describe('computeWeekStats', () => {
     const days = buildWeekDays(
       '2026-10-11',
       new Map([
-        ['2026-10-11', byIo(3)],
-        ['2026-10-12', byIo(0)],
+        ['2026-10-11', totals(3)],
+        ['2026-10-12', totals(0)],
       ]),
       '2026-10-17',
     );
-    expect(computeWeekStats(days)).toEqual({ total: 3, trackedDays: 2, dailyAverage: 1.5 });
+    expect(computeWeekStats(days)).toMatchObject({ total: 3, trackedDays: 2, dailyAverage: 1.5 });
+  });
+
+  it('averages per scored hour, so a part-tracked day is not read as low', () => {
+    const days = buildWeekDays(
+      '2026-10-11',
+      new Map([
+        ['2026-10-11', totals(2.4, 0, 24)],
+        ['2026-10-12', totals(0.6, 0, 6)],
+      ]),
+      '2026-10-17',
+    );
+    const stats = computeWeekStats(days);
+    expect(stats.trackedHours).toBe(30);
+    expect(stats.hourlyAverage).toBeCloseTo(0.1);
   });
 
   it('returns a null average for a week with no tracked days', () => {
     const days = buildWeekDays('2026-10-11', new Map(), '2026-10-17');
     expect(computeWeekStats(days).dailyAverage).toBeNull();
+    expect(computeWeekStats(days).hourlyAverage).toBeNull();
   });
 });
 

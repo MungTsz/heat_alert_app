@@ -1,6 +1,6 @@
 // src/utils/exposureWeekStats.ts
-import { DailyExposureEntry, EXPOSURE_IO_TYPES, ExposureIo } from '../types/exposure';
-import { sumExposureByIo } from './exposureIoTotals';
+import { DailyExposureEntry, ExposureIo } from '../types/exposure';
+import { ExposureIoTotals, sumExposureByIo } from './exposureIoTotals';
 import { addHkDays, formatHkDateLabel } from './hkDate';
 import { EXPOSURE_WEEK_CHART_CONFIG, WEEKDAY_LABELS } from '../config/exposureWeekChartConfig';
 
@@ -13,6 +13,7 @@ export type DayBar = {
   label: string;
   byIo: Record<ExposureIo, number> | null;
   total: number | null;
+  hours: number | null; // scored hours behind total; null with it
   // After todayKey — the rest of an in-progress week. Rendered with no
   // placeholder bar and not tappable, since there's nothing to show yet.
   isFuture: boolean;
@@ -21,8 +22,12 @@ export type DayBar = {
 export type WeekStats = {
   total: number;
   trackedDays: number;
+  trackedHours: number;
   // null when nothing in the week was tracked — distinct from a real 0 avg.
+  // Daily is the chart's reference line (same scale as the day bars);
+  // hourly is the headline and the week-over-week comparison.
   dailyAverage: number | null;
+  hourlyAverage: number | null;
 };
 
 export type WeekComparison = {
@@ -30,33 +35,34 @@ export type WeekComparison = {
   pct: number; // absolute % change, rounded
 };
 
-// date → per-io totals for every tracked day, built once and shared by every
-// week page (rather than re-summing segments per page). Today's split comes
-// from the live report when given — the persisted history can lag a poll
-// tick behind it.
+// date → per-io totals (+ scored hours) for every tracked day, built once
+// and shared by every week page (rather than re-summing segments per page).
+// Today's totals come from the live report when given — the persisted
+// history can lag a poll tick behind it.
 export const buildDailyIoMap = (
   history: DailyExposureEntry[],
-  todayOverride?: { date: string; byIo: Record<ExposureIo, number> },
-): Map<string, Record<ExposureIo, number>> => {
-  const map = new Map<string, Record<ExposureIo, number>>();
-  for (const entry of history) map.set(entry.date, sumExposureByIo(entry.report.segments).byIo);
-  if (todayOverride) map.set(todayOverride.date, todayOverride.byIo);
+  todayOverride?: { date: string; totals: ExposureIoTotals },
+): Map<string, ExposureIoTotals> => {
+  const map = new Map<string, ExposureIoTotals>();
+  for (const entry of history) map.set(entry.date, sumExposureByIo(entry.report.segments));
+  if (todayOverride) map.set(todayOverride.date, todayOverride.totals);
   return map;
 };
 
 export const buildWeekDays = (
   weekStart: string,
-  dailyMap: Map<string, Record<ExposureIo, number>>,
+  dailyMap: Map<string, ExposureIoTotals>,
   todayKey: string,
 ): DayBar[] =>
   Array.from({ length: DAYS_PER_WEEK }, (_, i) => {
     const date = addHkDays(weekStart, i);
-    const byIo = dailyMap.get(date) ?? null;
+    const totals = dailyMap.get(date);
     return {
       date,
       label: WEEKDAY_LABELS[i],
-      byIo,
-      total: byIo ? EXPOSURE_IO_TYPES.reduce((sum, io) => sum + byIo[io], 0) : null,
+      byIo: totals?.byIo ?? null,
+      total: totals?.total ?? null,
+      hours: totals?.hours ?? null,
       isFuture: date > todayKey,
     };
   });
@@ -65,13 +71,18 @@ export const buildWeekDays = (
 // 0-exposure day, so counting it would drag the average down (and make an
 // in-progress week look artificially low against a complete last week).
 // A tracked day that scored 0 (e.g. entirely outside HK) still counts.
+// The hourly average goes further and divides by scored hours, so a day
+// tracked for only part of its 24 h isn't read as a low-exposure day.
 export const computeWeekStats = (days: DayBar[]): WeekStats => {
   const tracked = days.filter(d => d.total !== null);
   const total = tracked.reduce((sum, d) => sum + (d.total ?? 0), 0);
+  const trackedHours = tracked.reduce((sum, d) => sum + (d.hours ?? 0), 0);
   return {
     total,
     trackedDays: tracked.length,
+    trackedHours,
     dailyAverage: tracked.length > 0 ? total / tracked.length : null,
+    hourlyAverage: trackedHours > 0 ? total / trackedHours : null,
   };
 };
 

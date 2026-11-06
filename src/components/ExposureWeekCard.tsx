@@ -37,7 +37,7 @@ type Props = {
   onWeekChange: (weekStart: string) => void;
 };
 
-// The Exposure tab's weekly summary: daily average + week-over-week change
+// The Exposure tab's weekly summary: hourly average + week-over-week change
 // for the visible week, above a swipeable Sun→Sat bar chart (one page per
 // week). The caller owns weekStart/selectedDate so a calendar pick, a swipe
 // and the ‹ › buttons all go through the same state.
@@ -54,14 +54,17 @@ const ExposureWeekCard: React.FC<Props> = ({
     () =>
       buildDailyIoMap(
         history,
-        todayReport ? { date: todayKey, byIo: sumExposureByIo(todayReport.segments).byIo } : undefined,
+        todayReport ? { date: todayKey, totals: sumExposureByIo(todayReport.segments) } : undefined,
       ),
     [history, todayKey, todayReport],
   );
 
   // Every io with a bar on any page (not just the visible week), so the
   // shared legend above the pager doesn't change while swiping.
-  const presentIos = useMemo(() => ioTypesWithExposure(dailyMap.values()), [dailyMap]);
+  const presentIos = useMemo(
+    () => ioTypesWithExposure(Array.from(dailyMap.values(), totals => totals.byIo)),
+    [dailyMap],
+  );
 
   // Pages run from the oldest tracked week (or the visible week, if a
   // calendar pick landed earlier) through the current week — empty weeks in
@@ -88,7 +91,9 @@ const ExposureWeekCard: React.FC<Props> = ({
   const previousStats = computeWeekStats(
     buildWeekDays(addHkWeeks(weekStart, -1), dailyMap, todayKey),
   );
-  const comparison = compareWeeks(currentStats.dailyAverage, previousStats.dailyAverage);
+  // Compared per hour, not per day: a week with a few part-tracked days
+  // shouldn't read as a drop against a fully tracked one.
+  const comparison = compareWeeks(currentStats.hourlyAverage, previousStats.hourlyAverage);
 
   const renderWeek = useCallback(
     ({ item }: { item: string }) => {
@@ -115,10 +120,12 @@ const ExposureWeekCard: React.FC<Props> = ({
     <View style={styles.card}>
       <View style={styles.headerRow}>
         <View>
-          <Text style={styles.averageLabel}>Daily Average</Text>
+          <Text style={styles.averageLabel}>Hourly Average</Text>
           <Text style={styles.averageValue}>
-            {currentStats.dailyAverage !== null ? currentStats.dailyAverage.toFixed(2) : '—'}
-            <Text style={styles.averageUnit}> %AR·h</Text>
+            {currentStats.hourlyAverage !== null
+              ? currentStats.hourlyAverage.toFixed(EXPOSURE_WEEK_CHART_CONFIG.hourlyAverageDecimals)
+              : '—'}
+            <Text style={styles.averageUnit}> %AR·h / h</Text>
           </Text>
         </View>
         {comparison && (

@@ -1,18 +1,29 @@
 // src/utils/exposureIoTotals.ts
 import { EXPOSURE_IO_TYPES, ExposureIo, ExposureSegmentResult } from '../types/exposure';
 
-export type ExposureIoTotals = { byIo: Record<ExposureIo, number>; total: number };
+const MS_PER_HOUR = 3600000;
+
+export type ExposureIoTotals = {
+  byIo: Record<ExposureIo, number>;
+  total: number;
+  // Duration of the segments counted into total — the denominator for an
+  // hourly average (%AR·h ÷ h), so it follows exactly the same inclusion rule.
+  hours: number;
+};
 
 // Keyed off EXPOSURE_IO_TYPES so a new io type only has to be added there —
 // every per-io total starts at 0 instead of being undefined.
 export const emptyIoTotals = (): ExposureIoTotals => ({
   byIo: Object.fromEntries(EXPOSURE_IO_TYPES.map(io => [io, 0])) as Record<ExposureIo, number>,
   total: 0,
+  hours: 0,
 });
 
 // Adds one segment into a running per-io total. Shared by the day-level sum
 // below and the per-hour bucketer (exposureHourlyBuckets.ts) so both apply
 // the same rule: failed rows (a non-positive exposure sentinel) are excluded.
+// Their time is excluded too — as are out-of-HK rows, which always carry 0 —
+// so unscored hours don't dilute an hourly average.
 export const addSegmentToIoTotals = (
   totals: ExposureIoTotals,
   segment: ExposureSegmentResult,
@@ -20,6 +31,7 @@ export const addSegmentToIoTotals = (
   if (segment.exposure <= 0) return;
   totals.byIo[segment.io] += segment.exposure;
   totals.total += segment.exposure;
+  totals.hours += (segment.endTime - segment.startTime) / MS_PER_HOUR;
 };
 
 // "Outdoor 0.42 · Home 0.10" for a chart's selected-bar label — only io
