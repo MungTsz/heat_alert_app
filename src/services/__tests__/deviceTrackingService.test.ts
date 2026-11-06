@@ -1,9 +1,75 @@
-// The native tracking plugin can't load under Jest — only the pure ping
-// conversion is under test here.
-jest.mock('react-native-background-geolocation', () => ({}));
+jest.mock('@react-native-async-storage/async-storage', () => ({
+  __esModule: true,
+  default: { getItem: jest.fn(), setItem: jest.fn() },
+}));
 
-import { Location } from 'react-native-background-geolocation';
-import { toIngestablePings } from '../deviceTrackingService';
+// The native tracking plugin can't load under Jest — stubbed down to the
+// calls the heartbeat path makes.
+jest.mock('react-native-background-geolocation', () => ({
+  __esModule: true,
+  default: {
+    Event: { Heartbeat: 'heartbeat', Terminate: 'terminate' },
+    getState: jest.fn(),
+    getCurrentPosition: jest.fn(),
+  },
+}));
+
+import BackgroundGeolocation, {
+  HeadlessEvent,
+  Location,
+} from 'react-native-background-geolocation';
+import {
+  handleTrackingHeadlessEvent,
+  toIngestablePings,
+} from '../deviceTrackingService';
+import { EXPOSURE_TRACKING_CONFIG } from '../../config/exposureTrackingConfig';
+
+const getState = BackgroundGeolocation.getState as jest.Mock;
+const getCurrentPosition = BackgroundGeolocation.getCurrentPosition as jest.Mock;
+
+const headless = (name: string): HeadlessEvent =>
+  ({ name, params: {} }) as HeadlessEvent;
+
+describe('handleTrackingHeadlessEvent', () => {
+  beforeEach(() => {
+    getState.mockReset();
+    getCurrentPosition.mockReset().mockResolvedValue({});
+  });
+
+  it('records a persisted fix on a heartbeat while the phone is still', async () => {
+    getState.mockResolvedValue({ enabled: true, isMoving: false });
+    await handleTrackingHeadlessEvent(headless('heartbeat'));
+    expect(getCurrentPosition).toHaveBeenCalledWith({
+      samples: EXPOSURE_TRACKING_CONFIG.currentPosition.samples,
+      timeout: EXPOSURE_TRACKING_CONFIG.currentPosition.timeoutSeconds,
+      maximumAge: EXPOSURE_TRACKING_CONFIG.currentPosition.maximumAgeMs,
+      persist: true,
+    });
+  });
+
+  it('leaves moving phones to the distance filter', async () => {
+    getState.mockResolvedValue({ enabled: true, isMoving: true });
+    await handleTrackingHeadlessEvent(headless('heartbeat'));
+    expect(getCurrentPosition).not.toHaveBeenCalled();
+  });
+
+  it('records nothing once tracking is off', async () => {
+    getState.mockResolvedValue({ enabled: false, isMoving: false });
+    await handleTrackingHeadlessEvent(headless('heartbeat'));
+    expect(getCurrentPosition).not.toHaveBeenCalled();
+  });
+
+  it('ignores other plugin events', async () => {
+    await handleTrackingHeadlessEvent(headless('terminate'));
+    expect(getState).not.toHaveBeenCalled();
+  });
+
+  it('swallows a fix that times out indoors', async () => {
+    getState.mockResolvedValue({ enabled: true, isMoving: false });
+    getCurrentPosition.mockRejectedValue(new Error('timeout'));
+    await expect(handleTrackingHeadlessEvent(headless('heartbeat'))).resolves.toBeUndefined();
+  });
+});
 
 const location = (overrides: Partial<Location> = {}): Location =>
   ({

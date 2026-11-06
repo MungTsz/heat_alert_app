@@ -1,13 +1,16 @@
 // src/hooks/useExposureTrackingSettings.ts
 import { useCallback, useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { startTracking, stopTracking } from '../services/deviceTrackingService';
-
-const STORAGE_KEY = 'exposure_tracking_enabled';
+import {
+  startTracking,
+  stopTracking,
+  TRACKING_ENABLED_STORAGE_KEY,
+} from '../services/deviceTrackingService';
 
 // Background location is sensitive, so this is opt-in and off by default —
 // mirrors the AsyncStorage-backed settings pattern used by
-// useBookmarkList/useNotificationSettings.
+// useBookmarkList/useNotificationSettings. Resuming tracking on launch is
+// App.tsx's job (resumeTrackingIfEnabled), so this hook only reads the flag.
 export const useExposureTrackingSettings = () => {
   const [enabled, setEnabledState] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -15,10 +18,8 @@ export const useExposureTrackingSettings = () => {
   useEffect(() => {
     (async () => {
       try {
-        const raw = await AsyncStorage.getItem(STORAGE_KEY);
-        const value = raw === 'true';
-        setEnabledState(value);
-        if (value) await startTracking();
+        const raw = await AsyncStorage.getItem(TRACKING_ENABLED_STORAGE_KEY);
+        setEnabledState(raw === 'true');
       } catch (error) {
         console.log('Failed to load exposure tracking setting:', error);
       } finally {
@@ -29,11 +30,18 @@ export const useExposureTrackingSettings = () => {
 
   const setEnabled = useCallback(async (value: boolean) => {
     setEnabledState(value);
-    await AsyncStorage.setItem(STORAGE_KEY, value ? 'true' : 'false');
-    if (value) {
-      await startTracking();
-    } else {
-      await stopTracking();
+    try {
+      if (value) {
+        await startTracking();
+      } else {
+        await stopTracking();
+      }
+      await AsyncStorage.setItem(TRACKING_ENABLED_STORAGE_KEY, value ? 'true' : 'false');
+    } catch (error) {
+      // e.g. location permission denied — flip the switch back so it never
+      // shows "on" while nothing is actually being tracked.
+      console.log('Failed to change exposure tracking:', error);
+      setEnabledState(!value);
     }
   }, []);
 

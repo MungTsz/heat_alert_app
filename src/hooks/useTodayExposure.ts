@@ -1,7 +1,11 @@
 // src/hooks/useTodayExposure.ts
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ExposureReport } from '../types/exposure';
-import { getTodayRawLocations, toIngestablePings } from '../services/deviceTrackingService';
+import {
+  getTodayRawLocations,
+  recordCurrentPosition,
+  toIngestablePings,
+} from '../services/deviceTrackingService';
 import { exposureDataProvider } from '../data/exposure';
 import { DEFAULT_PID } from '../utils/exposurePid';
 import { refreshHistoryCache } from '../services/exposureHistoryService';
@@ -25,6 +29,9 @@ export const useTodayExposure = (trackingEnabled: boolean) => {
     setLoading(true);
     setError(null);
     try {
+      // A phone sitting still records nothing on its own between heartbeats,
+      // so take a fix now — the report then always reaches "where I am".
+      await recordCurrentPosition();
       const locations = await getTodayRawLocations();
       const newLocations = locations.filter(
         location => new Date(location.timestamp).getTime() > lastIngestedAtMsRef.current,

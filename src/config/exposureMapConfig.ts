@@ -30,8 +30,8 @@ export const EXPOSURE_MAP_CONFIG = {
   // day) — the map flies to the new points instead of staying put.
   refitAnimationMs: 500,
   // "Same location" judgment threshold for merging consecutive segments into
-  // one stay-point cluster — matches deviceTrackingService.ts's existing
-  // distanceFilter of 30m.
+  // one stay-point cluster — matches EXPOSURE_TRACKING_CONFIG's
+  // distanceFilterMeters (exposureTrackingConfig.ts).
   stayRadiusMeters: 30,
   // == the map's previous fixed dot size, so a singleton (unmerged) cluster
   // renders identically to before.
