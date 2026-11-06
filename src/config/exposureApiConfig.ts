@@ -1,8 +1,10 @@
 import Config from 'react-native-config';
 
-// The local exposure ETL backend (exposure_api_github) — no safe hardcoded
-// default is possible since its LAN IP is per-dev-machine, unlike PRAISE's
-// fixed public base URLs.
+// The exposure ETL backend (exposure_api_github) — normally the office PC's
+// ngrok tunnel, with a local `adb reverse` backend as the fallback (both
+// documented in .env). No hardcoded default: an internal, unauthenticated
+// server shouldn't be baked into the bundle, and leaving it unset falls back
+// to mock data.
 //
 // timeoutMs defaults well above the platform's ~60s default networking
 // timeout: /ingest triggers GPS-spike rejection, indoor/outdoor dwell

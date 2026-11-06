@@ -39,7 +39,10 @@ describe('ingestExposureGpx', () => {
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe('http://etl.test/ingest/gpx?pid=my%20device');
     expect(init.method).toBe('POST');
-    expect(init.headers).toEqual({ 'Content-Type': 'application/gpx+xml' });
+    expect(init.headers).toEqual({
+      'ngrok-skip-browser-warning': '1',
+      'Content-Type': 'application/gpx+xml',
+    });
     expect(init.body).toBe(GPX);
   });
 
@@ -74,7 +77,10 @@ describe('ingestExposurePings', () => {
 
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe('http://etl.test/ingest');
-    expect(init.headers).toEqual({ 'Content-Type': 'application/json' });
+    expect(init.headers).toEqual({
+      'ngrok-skip-browser-warning': '1',
+      'Content-Type': 'application/json',
+    });
     expect(JSON.parse(init.body)).toEqual({ pid: 'p', features: [] });
   });
 });

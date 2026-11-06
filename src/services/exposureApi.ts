@@ -9,10 +9,26 @@ import {
   ExposureIngestFeature,
 } from '../types/exposure';
 
-// Every exposure-backend call shares one timeout — long, since /ingest
-// uploads can be large.
+// The backend sits behind an ngrok free-plan tunnel, which may answer with an
+// HTML interstitial instead of the API's JSON unless this header is present.
+// Harmless when the base URL points at a local backend instead.
+const NGROK_SKIP_WARNING_HEADERS = { 'ngrok-skip-browser-warning': '1' };
+
+// Every exposure-backend call (exposure and place labels) goes through here:
+// one shared timeout — long, since /ingest uploads can be large — and the
+// ngrok header merged under any per-call headers.
 const fetchWithTimeout = (input: string, init: RequestInit = {}): Promise<Response> =>
-  fetchWithTimeoutMs(input, init, EXPOSURE_API_CONFIG.timeoutMs);
+  fetchWithTimeoutMs(
+    input,
+    {
+      ...init,
+      headers: {
+        ...NGROK_SKIP_WARNING_HEADERS,
+        ...(init.headers as Record<string, string> | undefined),
+      },
+    },
+    EXPOSURE_API_CONFIG.timeoutMs,
+  );
 
 const BYTES_PER_MB = 1024 * 1024;
 const formatMb = (bytes: number): string => `${(bytes / BYTES_PER_MB).toFixed(1)} MB`;
