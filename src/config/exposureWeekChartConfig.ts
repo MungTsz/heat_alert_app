@@ -19,7 +19,7 @@ export const EXPOSURE_WEEK_CHART_CONFIG = {
   // Neutral dark ink, drawn dashed: the average is a reference line, not a
   // series, so it takes no hue at all — with seven io colors in
   // EXPOSURE_IO_CONFIG any hue would sit close to one of them (the old
-  // system green was ΔE 15.6 from School's emerald).
+  // system green was ΔE 15.6 from the old School emerald).
   avgLineColor: '#3A3A3C',
   avgLineDash: '4,4',
   avgLabel: 'Avg',

@@ -14,31 +14,37 @@ type ExposureIoPresentation = { color: string; label: string };
 // (placeCategoryConfig.ts reuses the indoor entries), so one io reads the
 // same everywhere. Icons live in exposureIoIconConfig.ts.
 //
-// The meaning is carried by warmth, so a glance at a bar answers "was I out
-// in it?" without the legend: Outdoor is the only bright warm hue, the
-// indoor kinds are all cool (blue / teal / green). MTR takes the red of the
-// MTR logo every HK rider already knows; Vehicle takes the remaining
-// distinct hue, violet. Office/School stay off orange-ish hues so they never
-// read as "outside".
+// Each hue follows an everyday association so the legend is rarely needed:
+// red home, blue office, teal school, green outdoors, purple for any other
+// building, brown for road vehicles. MTR keeps the dark red of the MTR logo
+// every HK rider already knows.
 //
-// The hexes were picked by search, not by eye: every one of the 21 pairs
-// (not just stack neighbours — a stack skips absent io types, so any two can
-// touch, and the map mixes them freely) keeps OKLab ΔE ≥ 16.7 for normal
-// vision and ≥ 9.2 under simulated protan/deutan CVD, and each is ≥ 3:1
-// against white (icons on cards, white text on chips). Re-validate all
-// pairs before changing any of them — e.g. the old violet Other Indoor next
-// to a blue Office collapsed to ΔE 2.9 for deuteranopes.
+// The exact hexes were picked by search, not by eye, over all 21 pairs (not
+// just stack neighbours — a stack skips absent io types, so any two can
+// touch, and the map mixes them freely), each ≥ 3:1 against white (icons on
+// cards, white text on chips). A red Home plus a brown Vehicle can't reach
+// the old floors (OKLab ΔE ≥ 16.7 normal, ≥ 9.2 protan/deutan CVD) — red
+// and brown are close for protanopes whatever the shades — so this set
+// maximises the worst pair instead: ΔE ≥ 11.4 normal and ≥ 5.1 under CVD,
+// both Vehicle/MTR — the weak spot, softened by their distinct icons (bus
+// vs train) in the legend and sheets. Re-validate all pairs before changing
+// any of them — e.g. an orange-red Home next to a brown collapses to ΔE 3
+// for protanopes, and purple next to a darker blue Office to ΔE 2 for
+// deuteranopes.
 export const EXPOSURE_IO_CONFIG: Record<ExposureIo, ExposureIoPresentation> = {
-  // Orange (not the old amber) so a walk line can't be mistaken for Google
-  // Maps' yellow-orange highways.
-  Outdoor: { color: '#EA580C', label: 'Outdoor' },
-  Vehicle: { color: '#7C3AED', label: 'Vehicle' },
+  // Emerald, not a yellow-green: those collapse onto Home's red under
+  // deuteranopia (ΔE 5).
+  Outdoor: { color: '#059669', label: 'Outdoor' },
+  // Dark brown that still reads as brown, not black. Of the browns tried this
+  // keeps the most CVD distance from both reds: redder/warmer browns
+  // (e.g. #8B4513) collapse onto MTR for deuteranopes (ΔE 2).
+  Vehicle: { color: '#6D4C41', label: 'Vehicle' },
   MTR: { color: '#991B1B', label: 'MTR' },
-  'Other Indoor': { color: '#115E59', label: 'Other Indoor' },
-  School: { color: '#059669', label: 'School' },
-  Office: { color: '#0284C7', label: 'Office' },
-  // Kept the deepest blue (as before) so existing users' "navy = home" holds.
-  Home: { color: '#1E40AF', label: 'Home' },
+  'Other Indoor': { color: '#7E22CE', label: 'Other Indoor' },
+  // Cyan-teal rather than green-teal, to keep a hue gap from Outdoor.
+  School: { color: '#0E7490', label: 'School' },
+  Office: { color: '#3B82F6', label: 'Office' },
+  Home: { color: '#DC2626', label: 'Home' },
 };
 
 // Indoor io types are the stays that get a category icon on the map (and
