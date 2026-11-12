@@ -5,7 +5,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BookmarkEntry, PlaceCategory } from '../types/bookmark';
 import { PlaceAlertProfile } from '../types/alerts';
 import { PLACE_LABEL_CONFIG } from '../config/placeLabelConfig';
-import { DEFAULT_PLACE_ALERT_PROFILE } from '../config/alertConfig';
+import { NEW_PLACE_ALERT_PROFILE } from '../config/alertConfig';
+import { useNotificationSettings } from '../hooks/useNotificationSettings';
+import { resolvePlaceAlertProfile } from '../utils/alertProfile';
 import PlaceCategoryStep from './addPlace/PlaceCategoryStep';
 import PlaceAudienceStep from './addPlace/PlaceAudienceStep';
 import MapPickerModal, { PickedPlace } from './MapPickerModal';
@@ -40,12 +42,17 @@ const AddBookmarkModal = ({
   const insets = useSafeAreaInsets();
   const [step, setStep] = useState<Step>('category');
   const [category, setCategory] = useState<PlaceCategory | null>(null);
-  const [alertProfile, setAlertProfile] = useState<PlaceAlertProfile>(DEFAULT_PLACE_ALERT_PROFILE);
+  const [alertProfile, setAlertProfile] = useState<PlaceAlertProfile>(NEW_PLACE_ALERT_PROFILE);
+  const aboutYou = useNotificationSettings().settings.currentLocationProfile;
+  // Resolved on every render rather than once: a new place starts as "for
+  // myself, same as About you", and About you may still be loading when
+  // this modal mounts.
+  const resolvedProfile = resolvePlaceAlertProfile(alertProfile, aboutYou);
 
   const resetAndClose = () => {
     setStep('category');
     setCategory(null);
-    setAlertProfile(DEFAULT_PLACE_ALERT_PROFILE);
+    setAlertProfile(NEW_PLACE_ALERT_PROFILE);
     onClose();
   };
 
@@ -58,7 +65,7 @@ const AddBookmarkModal = ({
       longitude: place.longitude,
       radiusMeters: place.radiusMeters,
       category,
-      alertProfile,
+      alertProfile: resolvedProfile,
     });
     resetAndClose();
   };
@@ -90,7 +97,8 @@ const AddBookmarkModal = ({
               />
             ) : (
               <PlaceAudienceStep
-                profile={alertProfile}
+                profile={resolvedProfile}
+                aboutYouAudience={aboutYou.audience}
                 onChange={setAlertProfile}
                 onBack={() => setStep('category')}
                 onNext={() => setStep('location')}

@@ -2,34 +2,30 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { ChevronDown, ChevronUp } from 'lucide-react-native';
-import { CaringFor, HazardKind, PlaceAlertProfile } from '../../types/alerts';
+import { AudienceGroup, HazardKind, PlaceAlertProfile } from '../../types/alerts';
 import { ADVANCED_LEVEL_CHOICES, HAZARD_KINDS } from '../../config/alertConfig';
-import { CARING_FOR_COPY, HAZARD_COPY, PROFILE_EDITOR_COPY } from '../../config/alertCopy';
+import { HAZARD_COPY, PROFILE_EDITOR_COPY } from '../../config/alertCopy';
 import { ALERT_UI } from '../../config/alertUiConfig';
 import { formatLevelWithRange } from '../../utils/hazardLevels';
 import { alertLevelFor, hasLevelOverride, withAlertLevel } from '../../utils/alertProfile';
 import SettingsToggleRow from '../SettingsToggleRow';
-import SegmentedControl from '../SegmentedControl';
 import AudiencePicker from './AudiencePicker';
+import PlaceAudienceSection from './PlaceAudienceSection';
 
 type Props = {
   profile: PlaceAlertProfile;
   onChange: (profile: PlaceAlertProfile) => void;
-  question: string;
-  // Off for "About you": your own location is always for yourself.
-  showCaringFor: boolean;
+  // Set when editing a saved place (who it's for, and the owner's About
+  // you answer a place for yourself uses). Absent for About you itself,
+  // which is always for yourself and simply asks who you are.
+  forPlace?: { aboutYouAudience: AudienceGroup };
 };
-
-const CARING_FOR_OPTIONS: { value: CaringFor; label: string }[] = [
-  { value: 'self', label: CARING_FOR_COPY.self },
-  { value: 'family', label: CARING_FOR_COPY.family },
-];
 
 // The one editor for "who is here and what to alert on" — used by the
 // About you sheet, the Community alert sheet and the Add place flow, so the
 // question reads the same everywhere. Heat and air quality appear in the
 // same order with the same controls, as peer hazards.
-const AlertProfileEditor = ({ profile, onChange, question, showCaringFor }: Props) => {
+const AlertProfileEditor = ({ profile, onChange, forPlace }: Props) => {
   const anyOverride = HAZARD_KINDS.some(h => hasLevelOverride(profile, h));
   // Collapsed by default, and opened if a level was already changed so the
   // change is never hidden from the person who made it.
@@ -40,22 +36,20 @@ const AlertProfileEditor = ({ profile, onChange, question, showCaringFor }: Prop
 
   return (
     <View>
-      <Text style={styles.question}>{question}</Text>
-      {showCaringFor && <Text style={styles.hint}>{PROFILE_EDITOR_COPY.pickMostCare}</Text>}
-
-      <AudiencePicker value={profile.audience} onChange={audience => onChange({ ...profile, audience })} />
-
-      {showCaringFor && (
-        <View style={styles.block}>
-          <SegmentedControl
-            options={CARING_FOR_OPTIONS}
-            value={profile.caringFor}
-            onChange={caringFor => onChange({ ...profile, caringFor })}
+      {forPlace ? (
+        <PlaceAudienceSection
+          profile={profile}
+          onChange={onChange}
+          aboutYouAudience={forPlace.aboutYouAudience}
+        />
+      ) : (
+        <>
+          <Text style={styles.question}>{PROFILE_EDITOR_COPY.selfQuestion}</Text>
+          <AudiencePicker
+            value={profile.audience}
+            onChange={audience => onChange({ ...profile, audience })}
           />
-          {profile.caringFor === 'family' && (
-            <Text style={styles.hint}>{PROFILE_EDITOR_COPY.familyHint}</Text>
-          )}
-        </View>
+        </>
       )}
 
       <Text style={[styles.subheading, styles.block]}>{PROFILE_EDITOR_COPY.hazardsTitle}</Text>

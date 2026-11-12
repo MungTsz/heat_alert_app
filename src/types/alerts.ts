@@ -28,6 +28,11 @@ export type PlaceAlertProfile = {
   // Advanced: replaces the audience's default alert level for one hazard.
   // Absent = follow the audience, which is what almost everyone should use.
   levelOverride?: { heat?: HeatLevel; aqhi?: AqhiLevel };
+  // Places only, and only 'self' ones: the audience is the owner's "About
+  // you" answer, looked up on every read, so changing About you moves all
+  // of your own places with it. Absent on About you itself and on places
+  // saved before it existed — read places through resolvePlaceAlertProfile().
+  followsAboutYou?: boolean;
 };
 
 // Where an event is in its life:

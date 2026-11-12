@@ -24,7 +24,7 @@ import {
 import { fetchPlaceReadings } from './alertReadings';
 import { displayAlertMessage, ensureNotificationSetup } from './notificationService';
 import { notifyAlertCheckDone } from './alertCheckBus';
-import { resolveAlertProfile } from '../utils/alertProfile';
+import { resolvePlaceAlertProfile } from '../utils/alertProfile';
 import { buildHazardSignal } from '../utils/alertSignals';
 import { advanceEvent, markNoticeDelivered } from '../utils/alertEvents';
 import {
@@ -82,7 +82,7 @@ const buildPlaces = (
       places.push({
         id: b.id,
         label: b.label,
-        profile: resolveAlertProfile(b.alertProfile),
+        profile: resolvePlaceAlertProfile(b.alertProfile, settings.currentLocationProfile),
         coords: { latitude: b.latitude, longitude: b.longitude },
       });
     }
@@ -208,7 +208,11 @@ export const sendSampleNotification = async (): Promise<void> => {
   const [settings, bookmarks] = await Promise.all([readNotificationSettings(), readBookmarks()]);
   const firstPlace = bookmarks.find(b => !b.hidden);
   const place: AlertPlace = firstPlace
-    ? { id: firstPlace.id, label: firstPlace.label, profile: resolveAlertProfile(firstPlace.alertProfile) }
+    ? {
+        id: firstPlace.id,
+        label: firstPlace.label,
+        profile: resolvePlaceAlertProfile(firstPlace.alertProfile, settings.currentLocationProfile),
+      }
     : { id: CURRENT_LOCATION_PLACE_ID, label: CURRENT_LOCATION_LABEL, profile: settings.currentLocationProfile };
   const nowMs = Date.now();
   const sample = buildSampleMessage(place, nowMs);
@@ -244,7 +248,7 @@ export const sendSampleGallery = async (): Promise<void> => {
     ? {
         id: firstPlace.id,
         label: firstPlace.label,
-        profile: resolveAlertProfile(firstPlace.alertProfile),
+        profile: resolvePlaceAlertProfile(firstPlace.alertProfile, settings.currentLocationProfile),
         coords: { latitude: firstPlace.latitude, longitude: firstPlace.longitude },
       }
     : current;

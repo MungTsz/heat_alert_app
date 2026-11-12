@@ -1,5 +1,5 @@
 // src/utils/alertProfile.ts
-import { HazardKind, PlaceAlertProfile } from '../types/alerts';
+import { AudienceGroup, CaringFor, HazardKind, PlaceAlertProfile } from '../types/alerts';
 import {
   AUDIENCE_ALERT_LEVELS,
   DEFAULT_PLACE_ALERT_PROFILE,
@@ -24,6 +24,51 @@ export const resolveAlertProfile = (
   ...DEFAULT_PLACE_ALERT_PROFILE,
   ...profile,
   hazards: { ...DEFAULT_PLACE_ALERT_PROFILE.hazards, ...profile?.hazards },
+});
+
+// A saved place's profile, complete, with its audience taken from "About
+// you" when the place is for yourself and hasn't been given its own — the
+// owner's identity lives in one place only.
+export const resolvePlaceAlertProfile = (
+  stored: Partial<PlaceAlertProfile> | undefined,
+  aboutYou: PlaceAlertProfile,
+): PlaceAlertProfile => {
+  const profile = resolveAlertProfile(stored);
+  // Saved before followsAboutYou existed: a place for yourself left on the
+  // General adult default was never really answered (the old flow
+  // preselected it), so it follows About you; any other choice was a real
+  // answer and is kept.
+  const follows =
+    profile.caringFor === 'self' &&
+    (stored?.followsAboutYou ?? profile.audience === DEFAULT_PLACE_ALERT_PROFILE.audience);
+  return follows
+    ? { ...profile, followsAboutYou: true, audience: aboutYou.audience }
+    : { ...profile, followsAboutYou: false };
+};
+
+// "For myself" means "the same as me" until shown otherwise, so switching
+// to it always starts from the About you answer; switching to family keeps
+// whatever is picked, for the person to confirm in the list it reveals.
+export const withCaringFor = (
+  profile: PlaceAlertProfile,
+  caringFor: CaringFor,
+  aboutYouAudience: AudienceGroup,
+): PlaceAlertProfile =>
+  caringFor === 'self'
+    ? { ...profile, caringFor, followsAboutYou: true, audience: aboutYouAudience }
+    : { ...profile, caringFor, followsAboutYou: false };
+
+// Picks who is at a place. Picking your own About you answer at a place for
+// yourself means "same as me" again — one representation, like
+// withAlertLevel, so a later About you change still reaches this place.
+export const withPlaceAudience = (
+  profile: PlaceAlertProfile,
+  audience: AudienceGroup,
+  aboutYouAudience: AudienceGroup,
+): PlaceAlertProfile => ({
+  ...profile,
+  audience,
+  followsAboutYou: profile.caringFor === 'self' && audience === aboutYouAudience,
 });
 
 // The level this place starts alerting at: the Advanced override if set,

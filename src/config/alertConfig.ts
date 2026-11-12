@@ -139,6 +139,13 @@ export const DEFAULT_PLACE_ALERT_PROFILE: PlaceAlertProfile = {
   hazards: { heat: true, aqhi: true },
 };
 
+// Where Add place starts: a place for yourself, alerting at your About you
+// answer — most places people save are their own.
+export const NEW_PLACE_ALERT_PROFILE: PlaceAlertProfile = {
+  ...DEFAULT_PLACE_ALERT_PROFILE,
+  followsAboutYou: true,
+};
+
 // "Preview a notification" shows a heads-up starting at this HK hour
 // tomorrow and lasting this many hours — a typical afternoon
 // pollution/heat peak.

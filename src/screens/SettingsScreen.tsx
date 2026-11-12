@@ -18,7 +18,6 @@ import {
   ALL_CLEAR_COPY,
   AUDIENCE_COPY,
   DELIVERY_SETTINGS_COPY,
-  PROFILE_EDITOR_COPY,
 } from '../config/alertCopy';
 import { DIGEST_CONFIG } from '../config/alertConfig';
 import { sendSampleGallery, sendSampleNotification } from '../services/alertCheckService';
@@ -297,8 +296,6 @@ const SettingsScreen = () => {
       {editingAboutYou && (
         <AlertProfileSheet
           title={ABOUT_YOU_COPY.sheetTitle}
-          question={PROFILE_EDITOR_COPY.selfQuestion}
-          showCaringFor={false}
           initialProfile={settings.currentLocationProfile}
           onSave={currentLocationProfile => {
             // Saving here answers the first-launch question too.

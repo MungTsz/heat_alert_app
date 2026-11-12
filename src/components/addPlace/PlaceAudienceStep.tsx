@@ -1,7 +1,7 @@
 // src/components/addPlace/PlaceAudienceStep.tsx
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, useWindowDimensions } from 'react-native';
-import { PlaceAlertProfile } from '../../types/alerts';
+import { AudienceGroup, PlaceAlertProfile } from '../../types/alerts';
 import { PROFILE_EDITOR_COPY } from '../../config/alertCopy';
 import { ADD_PLACE_STEPS, ALERT_UI } from '../../config/alertUiConfig';
 import AlertProfileEditor from '../alerts/AlertProfileEditor';
@@ -10,28 +10,30 @@ import InfoNote from './InfoNote';
 
 type Props = {
   profile: PlaceAlertProfile;
+  aboutYouAudience: AudienceGroup;
   onChange: (profile: PlaceAlertProfile) => void;
   onBack: () => void;
   onNext: () => void;
 };
 
-// Step 2 of Add place: the one alert question every place needs. It comes
-// preselected as General adult (the design doc's default), so Next is
-// always available — unlike the category step, a wrong guess here only
-// changes when alerts arrive and is easy to fix from the card later.
-const PlaceAudienceStep: React.FC<Props> = ({ profile, onChange, onBack, onNext }) => {
+// Step 2 of Add place: who the place is for. It starts as "for myself" with
+// the About you answer, so the common case is just Next — and, unlike the
+// category step, a wrong guess here only changes when alerts arrive and is
+// easy to fix from the card later.
+const PlaceAudienceStep: React.FC<Props> = ({
+  profile,
+  aboutYouAudience,
+  onChange,
+  onBack,
+  onNext,
+}) => {
   const { height } = useWindowDimensions();
   return (
     <View>
       <StepDots current={ADD_PLACE_STEPS.audience} total={ADD_PLACE_STEPS.total} />
 
       <ScrollView style={{ maxHeight: height * ALERT_UI.sheetScrollMaxHeightRatio }}>
-        <AlertProfileEditor
-          profile={profile}
-          onChange={onChange}
-          question={PROFILE_EDITOR_COPY.placeQuestion}
-          showCaringFor
-        />
+        <AlertProfileEditor profile={profile} onChange={onChange} forPlace={{ aboutYouAudience }} />
         <InfoNote>{PROFILE_EDITOR_COPY.privacyNote}</InfoNote>
       </ScrollView>
 

@@ -10,7 +10,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { PlaceAlertProfile } from '../../types/alerts';
+import { AudienceGroup, PlaceAlertProfile } from '../../types/alerts';
 import { PROFILE_EDITOR_COPY } from '../../config/alertCopy';
 import { ALERT_UI } from '../../config/alertUiConfig';
 import AlertProfileEditor from './AlertProfileEditor';
@@ -21,9 +21,8 @@ import InfoNote from '../addPlace/InfoNote';
 type Props = {
   title: string;
   subtitle?: string;
-  question: string;
-  // Off for "About you": your own location is always for yourself.
-  showCaringFor: boolean;
+  // See AlertProfileEditor: set for a place, absent for About you.
+  forPlace?: { aboutYouAudience: AudienceGroup };
   initialProfile: PlaceAlertProfile;
   onSave: (profile: PlaceAlertProfile) => void;
   onCancel: () => void;
@@ -36,8 +35,7 @@ type Props = {
 const AlertProfileSheet = ({
   title,
   subtitle,
-  question,
-  showCaringFor,
+  forPlace,
   initialProfile,
   onSave,
   onCancel,
@@ -60,12 +58,7 @@ const AlertProfileSheet = ({
           ) : null}
 
           <ScrollView style={{ maxHeight: height * ALERT_UI.sheetScrollMaxHeightRatio }}>
-            <AlertProfileEditor
-              profile={profile}
-              onChange={setProfile}
-              question={question}
-              showCaringFor={showCaringFor}
-            />
+            <AlertProfileEditor profile={profile} onChange={setProfile} forPlace={forPlace} />
             {/* "Long-term condition" is health information — say plainly
                 where it goes. */}
             <InfoNote>{PROFILE_EDITOR_COPY.privacyNote}</InfoNote>

@@ -16,7 +16,8 @@ import { usePlacesAqhi } from '../hooks/useAqhiData';
 import { useActiveAlerts } from '../hooks/useActiveAlerts';
 import { useBookmarkList } from '../hooks/useBookmarkList';
 import { distanceMiles } from '../utils/distance';
-import { resolveAlertProfile, summarizeAlertProfile } from '../utils/alertProfile';
+import { useNotificationSettings } from '../hooks/useNotificationSettings';
+import { resolvePlaceAlertProfile, summarizeAlertProfile } from '../utils/alertProfile';
 import { HAZARD_KINDS } from '../config/alertConfig';
 import BookmarkCard from '../components/BookmarkCard';
 import AlertProfileSheet from '../components/alerts/AlertProfileSheet';
@@ -43,6 +44,8 @@ const CommunityScreen = () => {
     setBookmarkHidden,
     setBookmarkAlertProfile,
   } = useBookmarkList();
+  // Places for yourself take their audience from About you.
+  const aboutYou = useNotificationSettings().settings.currentLocationProfile;
   const [alertingBookmark, setAlertingBookmark] = useState<BookmarkEntry | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedBookmark, setSelectedBookmark] =
@@ -74,7 +77,7 @@ const CommunityScreen = () => {
             ? Math.round(heatIndexById[bookmark.id])
             : null,
         aqhi: bookmark.id in aqhiById ? Math.round(aqhiById[bookmark.id]) : null,
-        alertProfile: resolveAlertProfile(bookmark.alertProfile),
+        alertProfile: resolvePlaceAlertProfile(bookmark.alertProfile, aboutYou),
         // Measured from the real position only — a distance from the
         // fallback spot would be a made-up number, so it shows "--" instead.
         distance: coords
@@ -86,7 +89,7 @@ const CommunityScreen = () => {
             )
           : null,
       })),
-    [bookmarks, heatIndexById, aqhiById, coords],
+    [bookmarks, heatIndexById, aqhiById, coords, aboutYou],
   );
   const visibleRows = bookmarkRows.filter(row => !row.hidden);
   const hiddenRows = bookmarkRows.filter(row => row.hidden);
@@ -257,9 +260,8 @@ const CommunityScreen = () => {
           key={alertingBookmark.id}
           title={PROFILE_EDITOR_COPY.sheetTitle}
           subtitle={alertingBookmark.label}
-          question={PROFILE_EDITOR_COPY.placeQuestion}
-          showCaringFor
-          initialProfile={resolveAlertProfile(alertingBookmark.alertProfile)}
+          forPlace={{ aboutYouAudience: aboutYou.audience }}
+          initialProfile={resolvePlaceAlertProfile(alertingBookmark.alertProfile, aboutYou)}
           onSave={profile => {
             setBookmarkAlertProfile(alertingBookmark.id, profile);
             setAlertingBookmark(null);

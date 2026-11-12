@@ -46,7 +46,11 @@ export const ALL_CLEAR_COPY: Record<AllClearMode, string> = {
 };
 
 export const PROFILE_EDITOR_COPY = {
+  placeForQuestion: 'Who is this place for?',
   placeQuestion: "Who's usually here?",
+  // Under the About you answer a place for yourself uses, until changed.
+  ownAudienceHint: 'Your answer in About you',
+  change: 'Change',
   selfQuestion: 'Which best describes you?',
   pickMostCare: 'If several people are here, pick the one who needs the most care.',
   familyHint: 'Alerts will suggest calling them.',
