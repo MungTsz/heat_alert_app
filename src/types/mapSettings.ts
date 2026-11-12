@@ -1,8 +1,8 @@
 import type { HazardKind } from './alerts';
 
-// GoogleMapType is intentionally narrowed to what the map's layer picker
-// exposes — 'standard' (Google's default light map) and 'hybrid' (satellite
-// imagery with street/building labels layered on top).
+// GoogleMapType is intentionally narrowed to what the map's layer picker and
+// App settings expose — 'standard' (Google's default light map) and 'hybrid'
+// (satellite imagery with street/building labels layered on top).
 export type GoogleMapType = 'standard' | 'hybrid';
 
 // A map always shows one of the two peer hazards — there is no plain

@@ -66,9 +66,13 @@ type Props = {
   onLayerChange?: (layer: MapLayer) => void;
   overrideCenter?: Coordinates;
   showModeToggle?: boolean;
-  // The opacity slider and locate button. Off for a preview that only
-  // opens the full-screen map when tapped, where they couldn't be used.
+  // The opacity slider and locate button. Off for a small preview.
   showLayerControls?: boolean;
+  // Makes this a preview: the map itself doesn't pan, zoom or take point
+  // taps, and a tap anywhere on it calls this (e.g. to open full screen).
+  // The tap area sits under the map's own controls, so the layer picker
+  // still works on the preview.
+  onPreviewPress?: () => void;
   enableForecastPlayback?: boolean;
   fullscreen?: boolean;
   // Saved places to pin on the map.
@@ -82,6 +86,7 @@ const MapScreen = ({
   overrideCenter,
   showModeToggle = true,
   showLayerControls = true,
+  onPreviewPress,
   enableForecastPlayback = false,
   fullscreen = false,
   places = [],
@@ -404,6 +409,16 @@ const MapScreen = ({
           </Marker>
         )}
       </MapView>
+
+      {onPreviewPress && (
+        <TouchableOpacity
+          style={StyleSheet.absoluteFill}
+          activeOpacity={0.9}
+          onPress={onPreviewPress}
+          accessibilityRole="button"
+          accessibilityLabel="Open the full-screen map"
+        />
+      )}
 
       <View
         style={[

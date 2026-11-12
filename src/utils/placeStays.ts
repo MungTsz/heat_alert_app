@@ -3,23 +3,13 @@ import { ExposureSegmentResult } from '../types/exposure';
 import { BookmarkEntry } from '../types/bookmark';
 import { haversineMeters } from './geoClustering';
 
-const HOUR_MS = 60 * 60 * 1000;
-
-export type TimeInterval = { startMs: number; endMs: number };
-
-// One data hour of either hazard (heat's HourlyHeatIndex, AQHI's
-// HourlyAqhi): the hour starting at timestampMs.
-export type HourlySample = { timestampMs: number; value: number };
-
-// Today's time at one saved place — where Exposure meets Places.
+// Today's exposure at one saved place — where Exposure meets Places.
 export type PlaceStay = {
   placeId: string;
   label: string;
-  latitude: number;
-  longitude: number;
   durationMs: number;
-  // Each stay at the place, to pick out the heat index hours inside them.
-  intervals: TimeInterval[];
+  // %AR·h, the same unit and the same per-row values as the day's total.
+  exposure: number;
 };
 
 // The saved place a stay was at: the nearest one whose circle contains it.
@@ -41,10 +31,12 @@ const placeOf = (
   return best;
 };
 
-// Stays (not routes) grouped by saved place, longest total first. Hidden
+// Stays (not routes) grouped by saved place, highest exposure first. Hidden
 // places count too: hiding only tidies the Places list, and places saved
-// just to label exposure stays are usually hidden. Stays outside Hong Kong
-// are left out, since neither hazard has data there.
+// just to label exposure stays are usually hidden. Rows outside Hong Kong
+// are never scored, and a non-positive value is the backend's "couldn't
+// score this row" — both are left out, as in the day's total, and a place
+// with nothing scored isn't listed at all.
 export const summarizePlaceStays = (
   segments: readonly ExposureSegmentResult[],
   places: readonly BookmarkEntry[],
@@ -58,31 +50,14 @@ export const summarizePlaceStays = (
     const stay = byPlace.get(place.id) ?? {
       placeId: place.id,
       label: place.label,
-      latitude: place.latitude,
-      longitude: place.longitude,
       durationMs: 0,
-      intervals: [],
+      exposure: 0,
     };
     stay.durationMs += segment.endTime - segment.startTime;
-    stay.intervals.push({ startMs: segment.startTime, endMs: segment.endTime });
+    if (segment.exposure > 0) stay.exposure += segment.exposure;
     byPlace.set(place.id, stay);
   }
-  return [...byPlace.values()].sort((a, b) => b.durationMs - a.durationMs);
-};
-
-// The highest API value among the data hours that overlap a stay — a pick
-// from the API's own numbers, never an estimate. null when none of those
-// hours has data yet (heat data lands 1-2 h late).
-export const maxDuringIntervals = (
-  series: readonly HourlySample[],
-  intervals: readonly TimeInterval[],
-): number | null => {
-  const values = series
-    .filter(hour =>
-      intervals.some(
-        ({ startMs, endMs }) => hour.timestampMs < endMs && hour.timestampMs + HOUR_MS > startMs,
-      ),
-    )
-    .map(hour => hour.value);
-  return values.length > 0 ? Math.max(...values) : null;
+  return [...byPlace.values()]
+    .filter(stay => stay.exposure > 0)
+    .sort((a, b) => b.exposure - a.exposure);
 };

@@ -1,4 +1,12 @@
-import type { MapLayer } from '../types/mapSettings';
+import type { GoogleMapType, MapLayer } from '../types/mapSettings';
+
+// The base map styles, in the order both places that offer them list them:
+// the map's own layer picker and App settings (one stored value, via the
+// shared useMapSettings).
+export const MAP_TYPE_OPTIONS: readonly { key: GoogleMapType; label: string }[] = [
+  { key: 'standard', label: 'Default' },
+  { key: 'hybrid', label: 'Satellite' },
+];
 
 // Map hazard-layer behavior shared by every layer (heat index, AQHI). One
 // set of values on purpose: the layers must look and behave the same —

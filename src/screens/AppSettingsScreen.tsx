@@ -2,10 +2,12 @@
 import React from 'react';
 import { Modal, View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ArrowLeft, MapPin, CheckCircle2, XCircle } from 'lucide-react-native';
+import { ArrowLeft, Check, MapPin, CheckCircle2, XCircle } from 'lucide-react-native';
 import SettingsSection from '../components/SettingsSection';
 import SettingsToggleRow from '../components/SettingsToggleRow';
 import { useNotificationSettings } from '../hooks/useNotificationSettings';
+import { useMapSettings } from '../hooks/useMapSettings';
+import { MAP_TYPE_OPTIONS } from '../config/mapLayerConfig';
 import { useLocationPermissionStatus } from '../hooks/useLocationPermissionStatus';
 import { useExposureTrackingSettings } from '../hooks/useExposureTrackingSettings';
 import { ALERTS_SCREEN_COPY } from '../config/alertCopy';
@@ -17,13 +19,14 @@ type Props = {
   onClose: () => void;
 };
 
-// App-wide settings that are set once and rarely touched again — location
-// access, background exposure tracking and (dev builds) testing tools.
-// Behind the Alerts tab's gear, its one fixed home, so they don't crowd the
-// alert settings people do come back to. The map style lives on the map's
-// own layer picker, where it is wanted.
+// App-wide settings that are set once and rarely touched again — map style,
+// location access, background exposure tracking and (dev builds) testing
+// tools. Behind the Alerts tab's gear, its one fixed home, so they don't
+// crowd the alert settings people do come back to. The map style is also
+// on the map's own layer picker; both write the same stored value.
 const AppSettingsScreen = ({ visible, onClose }: Props) => {
   const { update } = useNotificationSettings();
+  const { settings: mapSettings, update: updateMapSettings } = useMapSettings();
   const { granted, requestPermission, openAppSettings } = useLocationPermissionStatus();
   const { enabled: exposureTrackingEnabled, setEnabled: setExposureTrackingEnabled } =
     useExposureTrackingSettings();
@@ -64,6 +67,23 @@ const AppSettingsScreen = ({ visible, onClose }: Props) => {
         </View>
 
         <ScrollView contentContainerStyle={styles.scrollContent}>
+          <SettingsSection title="MAP DISPLAY">
+            {MAP_TYPE_OPTIONS.map(({ key, label }, index) => (
+              <View key={key}>
+                {index > 0 && <View style={styles.divider} />}
+                <TouchableOpacity
+                  style={styles.mapTypeRow}
+                  onPress={() => updateMapSettings({ ...mapSettings, mapType: key })}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: mapSettings.mapType === key }}
+                >
+                  <Text style={styles.mapTypeLabel}>{label}</Text>
+                  {mapSettings.mapType === key && <Check size={18} color="#D9534F" />}
+                </TouchableOpacity>
+              </View>
+            ))}
+          </SettingsSection>
+
           <SettingsSection
             title="EXPOSURE TRACKING"
             subtitle="Track my location in the background to show today's spatial-temporal exposure on the Exposure tab"
@@ -169,6 +189,13 @@ const styles = StyleSheet.create({
   },
   scrollContent: { paddingHorizontal: 20, paddingBottom: 40 },
   divider: { height: 1, backgroundColor: '#EEE' },
+  mapTypeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 14,
+  },
+  mapTypeLabel: { fontSize: 15, color: '#333' },
   permissionRow: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -1,6 +1,4 @@
 // src/config/exposureScreenConfig.ts
-import type { HazardKind } from '../types/alerts';
-
 // Words and limits for the Exposure tab. Worded around the person's own day
 // ("My day", "Imported tracks") rather than the system's devices and ids.
 export const EXPOSURE_SCREEN_COPY = {
@@ -16,17 +14,14 @@ export const EXPOSURE_SCREEN_COPY = {
   calculating: 'Calculating…',
   importedEmpty:
     'Tap + to import a GPS track and browse its exposure by date, kept apart from your own day.',
-  placesHeading: 'At your places',
-  // Each hazard's name as the Home cards show it.
-  hazardNames: { heat: 'Heat index', aqhi: 'AQHI' } as Record<HazardKind, string>,
-  // e.g. "Heat index up to 34°C", "AQHI up to 6" — the highest the API
-  // reported during the stays.
-  stayPeak: (hazard: string, value: string) => `${hazard} up to ${value}`,
-  stayPeakUnavailable: (hazard: string) => `${hazard} --`,
+  placesHeading: 'Highest at your places',
+  // Same 2 decimals as the day's total above it.
+  placeExposure: (value: number) => `${value.toFixed(2)} %AR·h`,
 };
 
 export const EXPOSURE_PLACE_STAYS_CONFIG = {
-  // Places listed under today's total, longest stay first — enough for a
-  // typical day (home, work, one more) without turning the card into a list.
+  // Saved places listed under today's total, highest exposure first —
+  // enough for a typical day (home, work, one more) without turning the
+  // card into a list.
   maxPlaces: 3,
 };

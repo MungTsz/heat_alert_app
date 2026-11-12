@@ -10,6 +10,9 @@ import {
 } from 'react-native';
 import { Layers, Check } from 'lucide-react-native';
 import { GoogleMapType, MapLayer } from '../types/mapSettings';
+// The base map style is offered here too, not only in App settings: it is
+// usually wanted while looking at the map.
+import { MAP_TYPE_OPTIONS } from '../config/mapLayerConfig';
 
 type Props = {
   layer: MapLayer;
@@ -25,12 +28,6 @@ const LAYER_OPTIONS: { key: MapLayer; label: string }[] = [
   { key: 'aqhi', label: 'AQHI' },
 ];
 
-// The base map style sits here rather than in a settings page: it is
-// wanted while looking at the map, not before.
-const MAP_TYPE_OPTIONS: { key: GoogleMapType; label: string }[] = [
-  { key: 'standard', label: 'Default' },
-  { key: 'hybrid', label: 'Satellite' },
-];
 
 type OptionProps = {
   label: string;

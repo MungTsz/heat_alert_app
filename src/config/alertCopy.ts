@@ -67,17 +67,22 @@ export const PROFILE_EDITOR_COPY = {
     `Alerts at heat index ${heatLevel} · air quality ${aqhiLevel}`,
 };
 
-// The Alerts tab: what is happening now and what was sent come first, then
-// how alerts reach you. Real app settings sit behind the header's gear.
+// The Alerts tab: two summary rows (what is happening now, what was sent)
+// that open their lists in a sheet, then how alerts reach you. Real app
+// settings sit behind the header's gear.
 export const ALERTS_SCREEN_COPY = {
   title: 'Alerts',
-  activeTitle: 'ACTIVE NOW',
+  sectionTitle: 'YOUR ALERTS',
+  activeLabel: 'Active now',
   activeEmpty: 'No active alerts',
-  recentTitle: 'RECENT ALERTS',
+  // e.g. "Heat index · Your location and 2 more"
+  activeSummary: (first: string, more: number) => (more > 0 ? `${first} and ${more} more` : first),
+  recentLabel: 'Recent alerts',
   // The message log keeps a few days (ALERT_MESSAGE_LOG_CONFIG), so say how
   // far back the list goes rather than implying it is the full history.
-  recentSubtitle: (days: number) => `Sent in the last ${days} ${days === 1 ? 'day' : 'days'}`,
-  recentEmpty: 'Nothing sent recently',
+  recentSummary: (count: number, days: number) =>
+    `${count} sent in the last ${days} ${days === 1 ? 'day' : 'days'}`,
+  recentEmpty: (days: number) => `Nothing sent in the last ${days} ${days === 1 ? 'day' : 'days'}`,
   urgent: 'Urgent',
   appSettingsLabel: 'App settings',
   appSettingsTitle: 'Settings',

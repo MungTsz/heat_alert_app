@@ -21,9 +21,12 @@ export const ALERT_UI = {
   // accent so Home's banner and the Alerts list set it apart from a
   // normal "Alert now".
   urgentColor: '#9B1C1C',
-  // Most messages the Alerts tab's "Recent alerts" list shows; the log
+  // Most messages the Alerts tab's "Recent alerts" sheet lists; the log
   // itself keeps up to ALERT_MESSAGE_LOG_CONFIG.maxEntries.
   recentAlertsMax: 10,
+  // The Alerts tab's list sheets scroll past this share of the screen
+  // height — the same cap as the detail sheet below.
+  listScrollMaxHeightRatio: 0.62,
   // The detail sheet's scroll area, as a share of the screen height — below
   // ForecastSheet's own 75% cap, leaving room for its title row.
   detailScrollMaxHeightRatio: 0.62,

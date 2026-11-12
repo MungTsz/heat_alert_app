@@ -26,19 +26,7 @@ const generateMockPoints = (center: Coordinates): AqhiPoint[] => {
 };
 
 const MOCK_DELAY_MS = 400;
-const HOUR_MS = 60 * 60 * 1000;
 const delay = () => new Promise<void>(resolve => setTimeout(() => resolve(), MOCK_DELAY_MS));
-
-const mockAqhiAt = (coords: Coordinates): number =>
-  idwInterpolate(
-    coords.latitude,
-    coords.longitude,
-    generateMockPoints(coords).map(p => ({
-      latitude: p.latitude,
-      longitude: p.longitude,
-      value: p.aqhi,
-    })),
-  );
 
 export const mockAqhiProvider: AqhiDataProvider = {
   getAqhiPoints: async center => {
@@ -48,17 +36,14 @@ export const mockAqhiProvider: AqhiDataProvider = {
   // IDW over the same mock ring, so a place reads like its map overlay.
   getAqhiAt: async coords => {
     await delay();
-    return mockAqhiAt(coords);
-  },
-  // The mock has no time dimension: every hour reads the same as now.
-  getAqhiHistoryAt: async (coords, fromMs, toMs) => {
-    await delay();
-    const value = mockAqhiAt(coords);
-    const firstHourMs = Math.floor(fromMs / HOUR_MS) * HOUR_MS;
-    const hours = Math.max(0, Math.floor((toMs - firstHourMs) / HOUR_MS) + 1);
-    return Array.from({ length: hours }, (_, i) => ({
-      timestampMs: firstHourMs + i * HOUR_MS,
-      value,
-    }));
+    return idwInterpolate(
+      coords.latitude,
+      coords.longitude,
+      generateMockPoints(coords).map(p => ({
+        latitude: p.latitude,
+        longitude: p.longitude,
+        value: p.aqhi,
+      })),
+    );
   },
 };

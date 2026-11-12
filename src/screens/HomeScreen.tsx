@@ -7,7 +7,6 @@ import {
   ActivityIndicator,
   useWindowDimensions,
   LayoutChangeEvent,
-  TouchableOpacity,
 } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -239,18 +238,15 @@ const HomeScreen = () => {
           />
 
           <View style={styles.mapContainer}>
-            {/* A preview: any tap opens the full-screen map, so controls
-                that couldn't be used here are left off. */}
+            {/* A preview: a tap opens the full-screen map, but the layer
+                picker works right here (same layer as full screen). The
+                opacity slider and locate button wait for full screen. */}
             <MapScreen
               layer={mapLayer}
-              showModeToggle={false}
+              onLayerChange={setChosenMapLayer}
               showLayerControls={false}
               places={placePins}
-            />
-            <TouchableOpacity
-              style={StyleSheet.absoluteFill}
-              activeOpacity={0.9}
-              onPress={() => setMapFullscreen(true)}
+              onPreviewPress={() => setMapFullscreen(true)}
             />
           </View>
         </Animated.ScrollView>

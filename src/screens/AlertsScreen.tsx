@@ -8,6 +8,7 @@ import SettingsToggleRow from '../components/SettingsToggleRow';
 import SegmentedControl from '../components/SegmentedControl';
 import TimeStepperRow from '../components/TimeStepperRow';
 import AlertProfileSheet from '../components/alerts/AlertProfileSheet';
+import AlertListSheet, { AlertListItem } from '../components/alerts/AlertListSheet';
 import AppSettingsScreen from './AppSettingsScreen';
 import { useNotificationSettings } from '../hooks/useNotificationSettings';
 import { ActiveAlertBadge, useActiveAlerts } from '../hooks/useActiveAlerts';
@@ -32,7 +33,6 @@ import {
 } from '../config/alertConfig';
 import { ALERT_UI } from '../config/alertUiConfig';
 import { sendSampleNotification } from '../services/alertCheckService';
-import { openAlertDetail } from '../services/alertCheckBus';
 import { summarizeAlertLevels } from '../utils/alertProfile';
 import { describeSentAt } from '../utils/alertMessages';
 
@@ -69,8 +69,9 @@ const badgeColor = (badge: ActiveAlertBadge): string =>
 
 type ActiveRow = { placeId: string; placeLabel: string; badge: ActiveAlertBadge };
 
-// The alert tab, top to bottom: what is happening now, what was sent, then
-// who you are and how alerts reach you. WHEN a saved place counts as
+// The alert tab, top to bottom: what is happening now and what was sent
+// (one summary row each, lists in a sheet), then who you are and how alerts
+// reach you. WHEN a saved place counts as
 // dangerous is set per place (Places → a card's alert line); app-wide
 // settings that are rarely changed sit behind the header's gear.
 const AlertsScreen = () => {
@@ -81,6 +82,7 @@ const AlertsScreen = () => {
 
   const [editingAboutYou, setEditingAboutYou] = React.useState(false);
   const [appSettingsOpen, setAppSettingsOpen] = React.useState(false);
+  const [openList, setOpenList] = React.useState<'active' | 'recent' | null>(null);
 
   // Your own location first, then places in the user's own Places order,
   // each place's hazards in the app's usual heat-then-AQHI order. An event
@@ -97,6 +99,30 @@ const AlertsScreen = () => {
   );
 
   const nowMs = Date.now();
+  const logDays = Math.round(ALERT_MESSAGE_LOG_CONFIG.retentionMs / DAY_MS);
+
+  const activeItems: AlertListItem[] = activeRows.map(({ placeId, placeLabel, badge }) => ({
+    key: `${placeId}|${badge.hazard}`,
+    title: `${HAZARD_COPY[badge.hazard].name} · ${placeLabel}`,
+    meta: badge.text,
+    urgent: badge.urgent,
+    color: badgeColor(badge),
+    messageId: badge.messageId,
+  }));
+  const recentItems: AlertListItem[] = recentMessages.map(message => ({
+    key: message.id,
+    title: message.title,
+    meta: describeSentAt(message.sentAtMs, nowMs),
+    urgent: message.urgent,
+    messageId: message.id,
+  }));
+  // The count takes the color of the most pressing active alert.
+  const leadBadge =
+    activeRows.find(row => row.badge.urgent)?.badge ??
+    activeRows.find(row => row.badge.kind === 'now')?.badge ??
+    activeRows[0]?.badge;
+  const activeCountColor = leadBadge ? badgeColor(leadBadge) : ALERT_UI.mutedTextColor;
+
   const { quietHours } = settings;
 
   return (
@@ -115,69 +141,32 @@ const AlertsScreen = () => {
           </TouchableOpacity>
         </View>
 
-        <SettingsSection title={ALERTS_SCREEN_COPY.activeTitle}>
-          {activeRows.length === 0 ? (
-            <Text style={styles.emptyText}>{ALERTS_SCREEN_COPY.activeEmpty}</Text>
-          ) : (
-            activeRows.map(({ placeId, placeLabel, badge }, index) => (
-              <View key={`${placeId}|${badge.hazard}`}>
-                {index > 0 && <View style={styles.divider} />}
-                <TouchableOpacity
-                  style={styles.listRow}
-                  onPress={badge.messageId ? () => openAlertDetail(badge.messageId!) : undefined}
-                  disabled={!badge.messageId}
-                  accessibilityRole="button"
-                >
-                  <View style={[styles.swatch, { backgroundColor: badgeColor(badge) }]} />
-                  <View style={styles.listText}>
-                    <Text style={styles.rowLabel} numberOfLines={1}>
-                      {HAZARD_COPY[badge.hazard].name} · {placeLabel}
-                    </Text>
-                    <View style={styles.metaRow}>
-                      <Text style={styles.rowDescription}>{badge.text}</Text>
-                      {badge.urgent && <UrgentTag />}
-                    </View>
-                  </View>
-                  {badge.messageId && <ChevronRight size={20} color="#BBB" />}
-                </TouchableOpacity>
-              </View>
-            ))
-          )}
-        </SettingsSection>
-
-        <SettingsSection
-          title={ALERTS_SCREEN_COPY.recentTitle}
-          subtitle={ALERTS_SCREEN_COPY.recentSubtitle(
-            Math.round(ALERT_MESSAGE_LOG_CONFIG.retentionMs / DAY_MS),
-          )}
-        >
-          {recentMessages.length === 0 ? (
-            <Text style={styles.emptyText}>{ALERTS_SCREEN_COPY.recentEmpty}</Text>
-          ) : (
-            recentMessages.map((message, index) => (
-              <View key={message.id}>
-                {index > 0 && <View style={styles.divider} />}
-                <TouchableOpacity
-                  style={styles.listRow}
-                  onPress={() => openAlertDetail(message.id)}
-                  accessibilityRole="button"
-                >
-                  <View style={styles.listText}>
-                    <Text style={styles.rowLabel} numberOfLines={2}>
-                      {message.title}
-                    </Text>
-                    <View style={styles.metaRow}>
-                      <Text style={styles.rowDescription}>
-                        {describeSentAt(message.sentAtMs, nowMs)}
-                      </Text>
-                      {message.urgent && <UrgentTag />}
-                    </View>
-                  </View>
-                  <ChevronRight size={20} color="#BBB" />
-                </TouchableOpacity>
-              </View>
-            ))
-          )}
+        {/* Two fixed-height rows, whatever is going on: the lists open in
+            a sheet, so the settings below never move down the page. */}
+        <SettingsSection title={ALERTS_SCREEN_COPY.sectionTitle}>
+          <SummaryRow
+            label={ALERTS_SCREEN_COPY.activeLabel}
+            description={
+              activeItems.length === 0
+                ? ALERTS_SCREEN_COPY.activeEmpty
+                : ALERTS_SCREEN_COPY.activeSummary(activeItems[0].title, activeItems.length - 1)
+            }
+            count={activeItems.length}
+            countColor={activeCountColor}
+            onPress={() => setOpenList('active')}
+          />
+          <View style={styles.divider} />
+          <SummaryRow
+            label={ALERTS_SCREEN_COPY.recentLabel}
+            description={
+              recentItems.length === 0
+                ? ALERTS_SCREEN_COPY.recentEmpty(logDays)
+                : ALERTS_SCREEN_COPY.recentSummary(recentItems.length, logDays)
+            }
+            count={recentItems.length}
+            countColor={ALERT_UI.mutedTextColor}
+            onPress={() => setOpenList('recent')}
+          />
         </SettingsSection>
 
         {/* One summary row: who the owner is rarely changes, so the full
@@ -317,15 +306,56 @@ const AlertsScreen = () => {
         />
       )}
 
+      <AlertListSheet
+        visible={openList === 'active'}
+        title={ALERTS_SCREEN_COPY.activeLabel}
+        items={activeItems}
+        onClose={() => setOpenList(null)}
+      />
+      <AlertListSheet
+        visible={openList === 'recent'}
+        title={ALERTS_SCREEN_COPY.recentLabel}
+        items={recentItems}
+        onClose={() => setOpenList(null)}
+      />
+
       <AppSettingsScreen visible={appSettingsOpen} onClose={() => setAppSettingsOpen(false)} />
     </SafeAreaView>
   );
 };
 
-const UrgentTag = () => (
-  <View style={styles.urgentTag}>
-    <Text style={styles.urgentText}>{ALERTS_SCREEN_COPY.urgent}</Text>
-  </View>
+type SummaryRowProps = {
+  label: string;
+  description: string;
+  count: number;
+  countColor: string;
+  onPress: () => void;
+};
+
+// One line per list: what is in it, and how many. Nothing to open when the
+// list is empty, so the row is then just a statement.
+const SummaryRow = ({ label, description, count, countColor, onPress }: SummaryRowProps) => (
+  <TouchableOpacity
+    style={styles.summaryRow}
+    onPress={onPress}
+    disabled={count === 0}
+    accessibilityRole="button"
+  >
+    <View style={styles.summaryText}>
+      <Text style={styles.rowLabel}>{label}</Text>
+      <Text style={styles.rowDescription} numberOfLines={1}>
+        {description}
+      </Text>
+    </View>
+    {count > 0 && (
+      <>
+        <View style={[styles.countPill, { backgroundColor: countColor }]}>
+          <Text style={styles.countText}>{count}</Text>
+        </View>
+        <ChevronRight size={20} color="#BBB" />
+      </>
+    )}
+  </TouchableOpacity>
 );
 
 const styles = StyleSheet.create({
@@ -350,18 +380,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  emptyText: { fontSize: 14, color: '#999', paddingVertical: 14 },
-  listRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, gap: 12 },
-  listText: { flex: 1 },
-  swatch: { width: 4, alignSelf: 'stretch', borderRadius: 2 },
-  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 },
-  urgentTag: {
-    backgroundColor: ALERT_UI.urgentColor,
-    borderRadius: 8,
-    paddingHorizontal: 6,
-    paddingVertical: 1,
+  countPill: {
+    minWidth: 24,
+    height: 24,
+    borderRadius: 12,
+    paddingHorizontal: 7,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  urgentText: { color: '#FFFFFF', fontSize: 10, fontWeight: '700' },
+  countText: { color: '#FFFFFF', fontSize: 12, fontWeight: '700' },
   summaryRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, gap: 12 },
   summaryText: { flex: 1 },
   block: { paddingVertical: 12 },

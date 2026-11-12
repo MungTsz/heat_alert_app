@@ -16,41 +16,11 @@ import { usePullToRefresh } from '../hooks/usePullToRefresh';
 import { usePlaceStays } from '../hooks/usePlaceStays';
 import { toHkDateKey } from '../utils/hkDate';
 import { formatDuration } from '../utils/exposureFormat';
-import { getHeatIndexInfo } from '../utils/heatIndexUtils';
-import { getAqhiInfo } from '../utils/aqhiUtils';
-import { formatHazardValue } from '../utils/hazardLevels';
 import { openPlace } from '../services/navigationBus';
 import { EXPOSURE_SCREEN_COPY } from '../config/exposureScreenConfig';
-import { HAZARD_KINDS } from '../config/alertConfig';
 import { ExposureDevice } from '../types/exposure';
-import { HazardKind } from '../types/alerts';
 
 const ACCENT = '#8B5CF6';
-
-// Each hazard's own level color — the same tables the cards, map and
-// legends read.
-const PEAK_COLOR: Record<HazardKind, (value: number) => string> = {
-  heat: value => getHeatIndexInfo(value).color,
-  aqhi: value => getAqhiInfo(value).color,
-};
-
-// "● Heat index up to 34°C" — the highest value during the stays, in its
-// level color; "Heat index --" (no dot) when unavailable.
-const StayPeak = ({ hazard, value }: { hazard: HazardKind; value: number | null }) => {
-  const name = EXPOSURE_SCREEN_COPY.hazardNames[hazard];
-  return (
-    <View style={styles.peak}>
-      {value !== null && (
-        <View style={[styles.peakDot, { backgroundColor: PEAK_COLOR[hazard](value) }]} />
-      )}
-      <Text style={styles.peakText}>
-        {value === null
-          ? EXPOSURE_SCREEN_COPY.stayPeakUnavailable(name)
-          : EXPOSURE_SCREEN_COPY.stayPeak(name, formatHazardValue(hazard, value))}
-      </Text>
-    </View>
-  );
-};
 
 const ExposureScreen = () => {
   const { enabled: trackingEnabled, setEnabled: setTrackingEnabled } =
@@ -127,8 +97,8 @@ const ExposureScreen = () => {
               <ChevronRight size={20} color="#8E8E93" />
             </TouchableOpacity>
 
-            {/* Where the day was spent, with both hazards in their level
-                colors — a place name leads to that place in Places. */}
+            {/* The saved places where today's exposure added up most — a
+                place name leads to that place in Places. */}
             {placeStays.length > 0 && (
               <View style={styles.placesBlock}>
                 <Text style={styles.placesHeading}>{EXPOSURE_SCREEN_COPY.placesHeading}</Text>
@@ -142,17 +112,12 @@ const ExposureScreen = () => {
                     <View style={styles.placeText}>
                       <Text style={styles.placeName} numberOfLines={1}>
                         {stay.label}
-                        <Text style={styles.placeDuration}>
-                          {'  '}
-                          {formatDuration(stay.durationMs)}
-                        </Text>
                       </Text>
-                      <View style={styles.peakRow}>
-                        {HAZARD_KINDS.map(hazard => (
-                          <StayPeak key={hazard} hazard={hazard} value={stay.peaks[hazard]} />
-                        ))}
-                      </View>
+                      <Text style={styles.placeDuration}>{formatDuration(stay.durationMs)}</Text>
                     </View>
+                    <Text style={styles.placeExposure}>
+                      {EXPOSURE_SCREEN_COPY.placeExposure(stay.exposure)}
+                    </Text>
                     <ChevronRight size={18} color="#BBB" />
                   </TouchableOpacity>
                 ))}
@@ -274,11 +239,8 @@ const styles = StyleSheet.create({
   placeRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, gap: 8 },
   placeText: { flex: 1 },
   placeName: { fontSize: 15, fontWeight: '600', color: '#1C1C1E' },
-  placeDuration: { fontSize: 13, fontWeight: '500', color: '#8E8E93' },
-  peakRow: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 14, rowGap: 2, marginTop: 2 },
-  peak: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  peakDot: { width: 8, height: 8, borderRadius: 4 },
-  peakText: { fontSize: 12, color: '#555' },
+  placeDuration: { fontSize: 12, color: '#8E8E93', marginTop: 2 },
+  placeExposure: { fontSize: 15, fontWeight: '700', color: '#1C1C1E' },
 });
 
 export default ExposureScreen;
