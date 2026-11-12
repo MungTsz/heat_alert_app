@@ -52,12 +52,42 @@ export const PROFILE_EDITOR_COPY = {
   familyHint: 'Alerts will suggest calling them.',
   hazardsTitle: 'Alert me about',
   advancedTitle: 'Advanced',
-  advancedHint: 'Change the alert level only if the default doesn’t suit you.',
-  followAudience: 'Default',
+  advancedHint: 'The level each alert starts at. Change it only if the suggested one doesn’t suit you.',
+  // Shown beside a hazard only once its level has been changed.
+  reset: 'Reset',
   privacyNote: 'This stays on your phone and is never uploaded.',
   sheetTitle: 'Alert settings',
+  save: 'Save',
+  cancel: 'Cancel',
   audienceResult: (heatLevel: string, aqhiLevel: string) =>
     `Alerts at heat index ${heatLevel} · air quality ${aqhiLevel}`,
+};
+
+// Settings' "About you" row and the sheet it opens.
+export const ABOUT_YOU_COPY = {
+  sectionTitle: 'ABOUT YOU',
+  sectionSubtitle: 'Sets when alerts for your current location reach you',
+  sheetTitle: 'About you',
+};
+
+// The one question asked on first launch. Who the phone's owner is rarely
+// changes, so it is asked once up front instead of sitting open in Settings.
+export const ONBOARDING_COPY = {
+  eyebrow: 'WELCOME',
+  title: 'Alerts that fit you',
+  intro:
+    'Heat and air quality affect people differently. Tell us who you are and we’ll alert you at the right level.',
+  laterHint: 'You can change this any time in Settings.',
+  continue: 'Continue',
+};
+
+// The one-line summary of a profile's levels, e.g. "Heat index Danger ·
+// Air quality Very High" (or "Heat index off" for a switched-off hazard).
+export const LEVEL_SUMMARY_COPY = {
+  level: (hazardName: string, level: string) => `${hazardName} ${level}`,
+  off: (hazardName: string) => `${hazardName} off`,
+  separator: ' · ',
+  allOff: 'Alerts off',
 };
 
 export const PLACE_ALERT_SUMMARY_COPY = {
@@ -102,14 +132,40 @@ const HEAT_GENERAL_ADVICE: Voiced = {
   family: 'Call to remind them to drink water and stay somewhere cool.',
 };
 
+// HKO singles out older adults, young children, pregnant women and people
+// with chronic illness: for them it's staying somewhere cool, not only
+// pacing outdoor activity.
+const HEAT_SENSITIVE_ADVICE: Voiced = {
+  self: 'Stay somewhere cool or air-conditioned, drink water, and avoid going out in the hottest hours.',
+  family: 'Call to remind them to stay somewhere cool, drink water and avoid the hottest hours.',
+};
+
 export const HEAT_ADVICE: Record<AudienceGroup, Voiced> = {
   general: HEAT_GENERAL_ADVICE,
-  sensitive: HEAT_GENERAL_ADVICE,
-  chronic: HEAT_GENERAL_ADVICE,
+  sensitive: HEAT_SENSITIVE_ADVICE,
+  chronic: HEAT_SENSITIVE_ADVICE,
   outdoor: {
     self: 'Rest in the shade, drink water often, and stop work at once if you feel unwell.',
     family: 'Call to remind them to rest in the shade and drink water often.',
   },
+};
+
+// Heat's peer of AQHI_URGENT_ADVICE, at Extreme Danger: past the point
+// where pacing yourself is enough, whoever the place is for.
+export const HEAT_URGENT_ADVICE: Voiced = {
+  self: 'Everyone should avoid outdoor activity, stay somewhere cool and drink water.',
+  family: 'Call to check on them now and make sure they are somewhere cool.',
+};
+
+// The closing line of a cancelled heads-up and an all clear. A carer has
+// to pass the news on, so their version says so.
+export const CANCELLED_CLOSING: Voiced = {
+  self: 'No special plans needed.',
+  family: 'No need to change their plans.',
+};
+export const CLEARED_CLOSING: Voiced = {
+  self: 'Normal activities can resume.',
+  family: 'Let them know they can go back to normal activities.',
 };
 
 // Poor air and heat together. Not simply both lists of advice: HKO's "open
@@ -117,7 +173,7 @@ export const HEAT_ADVICE: Record<AudienceGroup, Voiced> = {
 // is air-conditioning with windows shut. Risk of death is far higher when
 // the two coincide (Rahman et al., 2022). Needs a public-health review.
 export const DUAL_ADVICE: Voiced = {
-  self: 'Stay indoors with air conditioning and windows closed, or go to a public cooling centre. Drink water.',
+  self: 'Stay indoors with air conditioning and windows closed, or go to a cooling centre. Drink water.',
   family: 'Call to remind them to stay indoors with air conditioning and windows closed, and to drink water.',
 };
 
@@ -127,50 +183,66 @@ const joinHazardNames = (hazards: readonly HazardKind[], capitalised: boolean) =
   return capitalised ? text.charAt(0).toUpperCase() + text.slice(1) : text;
 };
 
-// Message templates. `places` is already formatted ("Home, Office and
-// School"); `level` texts look like "High (7)" or "Danger (41°C)"; `when`
-// looks like "from about 2 pm tomorrow".
+// Message templates. Each body here is the facts only (what, where, when);
+// the composer appends the one action sentence, so a digest merging
+// several parts still ends with a single action. `places` is already
+// formatted ("Home, Office and School"); `level` texts look like "High (7)"
+// or "Danger (41°C)"; `peak` texts like "up to Very High (10)"; `when` like
+// "from about 2 pm to 6 pm tomorrow".
 export const MESSAGE_COPY = {
   previewTitle: (hazard: HazardKind, level: string) =>
     `${HAZARD_COPY[hazard].name} heads-up: ${level}`,
   previewUpdateTitle: (hazard: HazardKind, level: string) =>
     `Updated heads-up: ${HAZARD_COPY[hazard].lower} ${level}`,
-  previewBody: (places: string, range: string, when: string, advice: string) =>
-    `${places}: expected ${range} ${when}. ${advice}`,
+  previewBody: (places: string, range: string, when: string) =>
+    `${places}: expected ${range} ${when}.`,
+  // An update says what changed, so it doesn't read as a repeat.
+  previewUpdateBody: (places: string, range: string, when: string, change: string) =>
+    `${places}: now expected ${range} ${when}, ${change}.`,
+  updateWorse: 'worse than the last heads-up',
+  updateEarlier: 'earlier than the last heads-up',
 
   dualPreviewTitle: 'Heads-up: poor air quality and heat',
   dualPreviewUpdateTitle: 'Updated heads-up: poor air quality and heat',
-  dualPreviewBody: (places: string, when: string, advice: string) =>
-    `${places}: poor air quality and a high heat index expected ${when}. ${advice}`,
+  dualPreviewBody: (places: string, aqhiPeak: string, heatPeak: string, when: string) =>
+    `${places}: air quality ${aqhiPeak} and heat index ${heatPeak} expected ${when}.`,
 
   breakingTitle: (hazard: HazardKind, level: string) =>
     `${HAZARD_COPY[hazard].name} now ${level}`,
-  breakingBody: (places: string, level: string, advice: string) =>
-    `${places}: ${level} now. ${advice}`,
+  breakingBody: (places: string, level: string) => `${places}: ${level} now.`,
   escalationTitle: (hazard: HazardKind, level: string) =>
     `${HAZARD_COPY[hazard].name} up to ${level}`,
-  escalationBody: (places: string, level: string, advice: string) =>
-    `${places}: now ${level}, worse than the earlier alert. ${advice}`,
+  escalationBody: (places: string, level: string) =>
+    `${places}: now ${level}, worse than the earlier alert.`,
 
   dualLiveTitle: 'Poor air quality and heat now',
-  dualLiveBody: (places: string, aqhiLevel: string, heatLevel: string, advice: string) =>
-    `${places}: air quality ${aqhiLevel}, heat index ${heatLevel}. ${advice}`,
+  dualLiveBody: (places: string, aqhiLevel: string, heatLevel: string) =>
+    `${places}: air quality ${aqhiLevel}, heat index ${heatLevel}.`,
 
   cancelledTitle: (hazards: readonly HazardKind[]) =>
     `Heads-up cancelled: ${joinHazardNames(hazards, false)}`,
-  cancelledBody: (places: string) =>
-    `The latest forecast for ${places} stays below your alert level. No special plans needed.`,
+  // Names the new outlook, so a cancellation is believable rather than a
+  // bare "never mind" (design doc: "回落至「中」").
+  cancelledBody: (places: string, hazard: HazardKind, day: string, peak: string) =>
+    `${places}: ${HAZARD_COPY[hazard].lower} ${day} now expected to peak at ${peak}, below your alert level.`,
+  cancelledGenericBody: (places: string) =>
+    `${places}: the latest forecast stays below your alert level.`,
 
   clearedTitle: (hazards: readonly HazardKind[]) =>
     `All clear: ${joinHazardNames(hazards, false)}`,
-  clearedBody: (places: string, level: string) =>
-    `${places}: back to ${level}. Normal activities can resume.`,
-  dualClearedBody: (places: string) =>
-    `${places}: air quality and heat index are back below your alert levels. Normal activities can resume.`,
+  clearedBody: (places: string, level: string) => `${places}: back to ${level}.`,
+  dualClearedBody: (places: string, aqhiLevel: string, heatLevel: string) =>
+    `${places}: air quality back to ${aqhiLevel}, heat index back to ${heatLevel}.`,
+  // Stands in for a level when the latest reading is unavailable.
+  belowAlertLevel: 'below your alert level',
+  // A forecast's worst point: "up to Very High (10)".
+  upTo: (level: string) => `up to ${level}`,
 
   // "Preview a notification" in Settings — clearly marked, and with no
   // numbers in it, so a sample can never be mistaken for a real reading.
   samplePrefix: 'Sample · ',
+  sampleBody: (place: string, when: string) =>
+    `${place}: poor air quality and a high heat index expected ${when}.`,
 };
 
 // The morning reminder about today (design doc: "今日提醒"), and the
@@ -178,12 +250,16 @@ export const MESSAGE_COPY = {
 export const REMINDER_COPY = {
   title: (hazard: HazardKind, level: string) => `Today: ${HAZARD_COPY[hazard].lower} ${level}`,
   dualTitle: 'Today: poor air quality and heat',
-  forecastBody: (places: string, range: string, when: string, advice: string) =>
-    `${places}: expected ${range} ${when}. ${advice}`,
-  ongoingBody: (places: string, level: string, day: number, advice: string) =>
-    day > 1 ? `${places}: ${level}, day ${day}. ${advice}` : `${places}: ${level} now. ${advice}`,
-  dualBody: (places: string, advice: string) =>
-    `${places}: poor air quality and a high heat index today. ${advice}`,
+  forecastBody: (places: string, range: string, when: string) =>
+    `${places}: expected ${range} ${when}.`,
+  // Design doc: "上午可正常外出，下午避免戶外運動" — say until when it is
+  // still fine, not only when it isn't, so the morning can be planned.
+  fineUntilBody: (places: string, startClock: string, range: string, endClock: string) =>
+    `${places}: fine until about ${startClock}, then ${range} until about ${endClock}.`,
+  ongoingBody: (places: string, level: string, day: number) =>
+    day > 1 ? `${places}: ${level}, day ${day}.` : `${places}: ${level} now.`,
+  dualBody: (places: string, aqhiLevel: string, heatLevel: string) =>
+    `${places}: air quality ${aqhiLevel} and heat index ${heatLevel} today.`,
   noEventsTitle: 'No alerts today',
   noEventsBody: 'No heat or air quality alerts are expected today at your places.',
 };
@@ -217,6 +293,7 @@ export const DETAIL_COPY = {
   itemNow: (level: string) => `${level} now`,
   itemExpected: (range: string, when: string) => `Expected ${range} ${when}`,
   itemCleared: (level: string) => `Back to ${level}`,
+  itemClearedUnknown: 'Back below your alert level',
   itemCancelled: 'Heads-up cancelled',
 };
 
@@ -245,7 +322,14 @@ export const TIME_COPY = {
   today: 'today',
   tomorrow: 'tomorrow',
   yesterday: 'yesterday',
+  midnight: 'midnight',
   from: (clock: string, day: string) => `from about ${clock} ${day}`,
+  // "from about 2 pm to 6 pm tomorrow"
+  window: (startClock: string, endClock: string, day: string) =>
+    `from about ${startClock} to ${endClock} ${day}`,
+  // "from about 10 pm today to 3 am tomorrow"
+  windowAcrossDays: (startClock: string, startDay: string, endClock: string, endDay: string) =>
+    `from about ${startClock} ${startDay} to ${endClock} ${endDay}`,
   onWeekday: (weekday: string) => `on ${weekday}`,
   weekdays: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
   am: 'am',

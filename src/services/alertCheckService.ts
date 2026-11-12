@@ -2,7 +2,11 @@
 import { AlertEvent, AlertMessage, AlertMessageRecord } from '../types/alerts';
 import { BookmarkEntry } from '../types/bookmark';
 import { NotificationSettings } from '../types/settings';
-import { CURRENT_LOCATION_PLACE_ID, HAZARD_KINDS } from '../config/alertConfig';
+import {
+  BACKGROUND_ALERT_CONFIG,
+  CURRENT_LOCATION_PLACE_ID,
+  HAZARD_KINDS,
+} from '../config/alertConfig';
 import { CURRENT_LOCATION_LABEL } from '../config/alertCopy';
 import { readBookmarks } from './bookmarkStorage';
 import { readNotificationSettings } from './notificationSettingsStorage';
@@ -12,6 +16,7 @@ import {
   readAlertEvents,
   readDeliveryLog,
   readDigestLog,
+  readLastKnownLocation,
   writeAlertEvents,
   writeDeliveryLog,
   writeDigestLog,
@@ -37,6 +42,7 @@ import {
   composeDigest,
   composeMessages,
 } from '../utils/alertMessages';
+import { buildSampleGallery } from '../utils/alertSamples';
 
 type Coordinates = { latitude: number; longitude: number };
 type CheckedPlace = AlertPlace & { coords: Coordinates };
@@ -212,4 +218,46 @@ export const sendSampleNotification = async (): Promise<void> => {
     [{ id: sample.id, title: sample.title, body: sample.body, sentAtMs: nowMs, urgent: false, items: [] }],
     nowMs,
   );
+};
+
+// Development builds: one of every message type, worded for the user's
+// first place (merged with "Your location" where a sample needs two), each
+// recorded so tapping it opens a filled-in detail sheet. Outside the event
+// machine, so nothing here touches real event state or the daily cap.
+export const sendSampleGallery = async (): Promise<void> => {
+  await ensureNotificationSetup();
+  const nowMs = Date.now();
+  const [settings, bookmarks, coords] = await Promise.all([
+    readNotificationSettings(),
+    readBookmarks(),
+    // The fix the engine last recorded — only for the detail sheet's chart.
+    readLastKnownLocation(nowMs, BACKGROUND_ALERT_CONFIG.lastLocationMaxAgeMs),
+  ]);
+  const firstPlace = bookmarks.find(b => !b.hidden);
+  const current: AlertPlace = {
+    id: CURRENT_LOCATION_PLACE_ID,
+    label: CURRENT_LOCATION_LABEL,
+    profile: settings.currentLocationProfile,
+    coords: coords ?? undefined,
+  };
+  const primary: AlertPlace = firstPlace
+    ? {
+        id: firstPlace.id,
+        label: firstPlace.label,
+        profile: resolveAlertProfile(firstPlace.alertProfile),
+        coords: { latitude: firstPlace.latitude, longitude: firstPlace.longitude },
+      }
+    : current;
+  const secondary: AlertPlace =
+    primary === current ? { ...current, id: 'sample-office', label: 'Office' } : current;
+  const placesById = { [primary.id]: primary, [secondary.id]: secondary };
+
+  const records: AlertMessageRecord[] = [];
+  for (const { message, events } of buildSampleGallery(primary, secondary, nowMs)) {
+    await displayAlertMessage(message);
+    records.push(
+      buildMessageRecord(message, new Map(events.map(ev => [ev.key, ev])), placesById, nowMs),
+    );
+  }
+  await appendMessageRecords(records, nowMs);
 };

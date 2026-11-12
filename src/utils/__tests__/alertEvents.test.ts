@@ -36,6 +36,7 @@ const signal = (over: Partial<HazardSignal> = {}): HazardSignal => ({
   currentRank: null,
   forecastAvailable: true,
   forecast: null,
+  forecastPeakValue: null,
   forecastBreachSoon: false,
   allClearWanted: true,
   ...over,
@@ -124,9 +125,11 @@ describe('heads-up updates and cancellations', () => {
   });
 
   it('cancels out loud when the forecast no longer reaches the level', () => {
-    const ev = advanceEvent(told, signal(reading(4)), T0 + HOUR);
+    const ev = advanceEvent(told, signal({ ...reading(4), forecastPeakValue: 5 }), T0 + HOUR);
     expect(ev?.stage).toBe('cancelled');
     expect(ev?.pending?.kind).toBe('cancelled');
+    // Kept so the message can say what it eased to.
+    expect(ev?.cancelledPeakValue).toBe(5);
     expect(markNoticeDelivered(ev!, T0 + HOUR)).toBeNull();
   });
 

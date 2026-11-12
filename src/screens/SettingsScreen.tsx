@@ -2,24 +2,27 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MapPin, CheckCircle2, XCircle } from 'lucide-react-native';
+import { MapPin, CheckCircle2, XCircle, ChevronRight } from 'lucide-react-native';
 import SettingsSection from '../components/SettingsSection';
 import SettingsToggleRow from '../components/SettingsToggleRow';
 import SegmentedControl from '../components/SegmentedControl';
 import TimeStepperRow from '../components/TimeStepperRow';
-import AlertProfileEditor from '../components/alerts/AlertProfileEditor';
+import AlertProfileSheet from '../components/alerts/AlertProfileSheet';
 import { useNotificationSettings } from '../hooks/useNotificationSettings';
 import { useLocationPermissionStatus } from '../hooks/useLocationPermissionStatus';
 import { useMapSettings } from '../hooks/useMapSettings';
 import { useExposureTrackingSettings } from '../hooks/useExposureTrackingSettings';
 import { AllClearMode, DigestSlot, NoEventDays } from '../types/settings';
 import {
+  ABOUT_YOU_COPY,
   ALL_CLEAR_COPY,
+  AUDIENCE_COPY,
   DELIVERY_SETTINGS_COPY,
   PROFILE_EDITOR_COPY,
 } from '../config/alertCopy';
 import { DIGEST_CONFIG } from '../config/alertConfig';
-import { sendSampleNotification } from '../services/alertCheckService';
+import { sendSampleGallery, sendSampleNotification } from '../services/alertCheckService';
+import { summarizeAlertLevels } from '../utils/alertProfile';
 import { runAlertCheckNow } from '../services/alertCheckBus';
 
 const ALL_CLEAR_OPTIONS: { value: AllClearMode; label: string }[] = (
@@ -55,6 +58,7 @@ const SettingsScreen = () => {
     useExposureTrackingSettings();
 
   const [checking, setChecking] = React.useState(false);
+  const [editingAboutYou, setEditingAboutYou] = React.useState(false);
 
   const handleRunCheckNow = async () => {
     setChecking(true);
@@ -78,18 +82,24 @@ const SettingsScreen = () => {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <Text style={styles.headerTitle}>Settings</Text>
 
-        <SettingsSection
-          title="ABOUT YOU"
-          subtitle="Sets when alerts for your current location reach you"
-        >
-          <View style={styles.editorPadding}>
-            <AlertProfileEditor
-              profile={settings.currentLocationProfile}
-              onChange={currentLocationProfile => update({ currentLocationProfile })}
-              question={PROFILE_EDITOR_COPY.selfQuestion}
-              showCaringFor={false}
-            />
-          </View>
+        {/* One summary row: who the owner is rarely changes, so the full
+            editor opens only when they mean to change it. */}
+        <SettingsSection title={ABOUT_YOU_COPY.sectionTitle} subtitle={ABOUT_YOU_COPY.sectionSubtitle}>
+          <TouchableOpacity
+            style={styles.summaryRow}
+            onPress={() => setEditingAboutYou(true)}
+            accessibilityRole="button"
+          >
+            <View style={styles.summaryText}>
+              <Text style={styles.rowLabel}>
+                {AUDIENCE_COPY[settings.currentLocationProfile.audience].label}
+              </Text>
+              <Text style={styles.rowDescription}>
+                {summarizeAlertLevels(settings.currentLocationProfile)}
+              </Text>
+            </View>
+            <ChevronRight size={20} color="#BBB" />
+          </TouchableOpacity>
         </SettingsSection>
 
         <SettingsSection
@@ -267,9 +277,37 @@ const SettingsScreen = () => {
                 {checking ? 'Checking...' : 'Run Real Alert Check Now'}
               </Text>
             </TouchableOpacity>
+            <View style={styles.divider} />
+            {/* Every message type through the real composers, worded for
+                your first place — check wording and the detail sheet. */}
+            <TouchableOpacity style={styles.testButton} onPress={() => sendSampleGallery()}>
+              <Text style={styles.testButtonText}>Send Every Message Type</Text>
+            </TouchableOpacity>
+            <View style={styles.divider} />
+            <TouchableOpacity
+              style={styles.testButton}
+              onPress={() => update({ aboutYouConfirmed: false })}
+            >
+              <Text style={styles.testButtonText}>Show First-Launch Question Again</Text>
+            </TouchableOpacity>
           </SettingsSection>
         )}
       </ScrollView>
+
+      {editingAboutYou && (
+        <AlertProfileSheet
+          title={ABOUT_YOU_COPY.sheetTitle}
+          question={PROFILE_EDITOR_COPY.selfQuestion}
+          showCaringFor={false}
+          initialProfile={settings.currentLocationProfile}
+          onSave={currentLocationProfile => {
+            // Saving here answers the first-launch question too.
+            update({ currentLocationProfile, aboutYouConfirmed: true });
+            setEditingAboutYou(false);
+          }}
+          onCancel={() => setEditingAboutYou(false)}
+        />
+      )}
     </SafeAreaView>
   );
 };
@@ -283,7 +321,8 @@ const styles = StyleSheet.create({
     color: '#333',
     marginBottom: 20,
   },
-  editorPadding: { paddingBottom: 6 },
+  summaryRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, gap: 12 },
+  summaryText: { flex: 1 },
   block: { paddingVertical: 12 },
   rowLabel: { fontSize: 15, fontWeight: '600', color: '#333' },
   rowDescription: { fontSize: 12, color: '#999', marginTop: 2 },

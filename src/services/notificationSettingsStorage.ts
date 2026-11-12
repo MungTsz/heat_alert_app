@@ -20,6 +20,9 @@ export const normalizeNotificationSettings = (stored: unknown): NotificationSett
       // Your own location is always for yourself.
       caringFor: 'self',
     },
+    // Existing users are asked once too: until now the question sat in
+    // Settings and most never answered it.
+    aboutYouConfirmed: s.aboutYouConfirmed ?? d.aboutYouConfirmed,
     notifyCurrentLocation: s.notifyCurrentLocation ?? d.notifyCurrentLocation,
     notifyBookmarkedLocations: s.notifyBookmarkedLocations ?? d.notifyBookmarkedLocations,
     allClear: s.allClear ?? d.allClear,

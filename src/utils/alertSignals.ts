@@ -32,8 +32,19 @@ export type HazardSignal = {
   // "no breach".
   forecastAvailable: boolean;
   forecast: ForecastWindow | null;
+  // Highest forecast value within the preview horizon, breaching or not —
+  // what a cancelled heads-up says it now peaks at. null without a forecast.
+  forecastPeakValue: number | null;
   forecastBreachSoon: boolean;
   allClearWanted: boolean;
+};
+
+const isWithinHorizon = (p: HourlyValue, nowMs: number): boolean =>
+  p.timestampMs > nowMs && p.timestampMs <= nowMs + ALERT_EVENT_CONFIG.previewHorizonMs;
+
+const forecastPeak = (points: readonly HourlyValue[], nowMs: number): number | null => {
+  const values = points.filter(p => isWithinHorizon(p, nowMs)).map(p => p.value);
+  return values.length > 0 ? Math.max(...values) : null;
 };
 
 // The first run of consecutive future hours at or above the threshold,
@@ -44,9 +55,8 @@ export const findForecastWindow = (
   thresholdRank: number,
   nowMs: number,
 ): ForecastWindow | null => {
-  const horizonEnd = nowMs + ALERT_EVENT_CONFIG.previewHorizonMs;
   const future = points
-    .filter(p => p.timestampMs > nowMs && p.timestampMs <= horizonEnd)
+    .filter(p => isWithinHorizon(p, nowMs))
     .sort((a, b) => a.timestampMs - b.timestampMs);
 
   const firstIndex = future.findIndex(p => rankOf(hazard, p.value) >= thresholdRank);
@@ -102,6 +112,7 @@ export const buildHazardSignal = (params: {
     currentRank: reading.current === null ? null : rankOf(hazard, reading.current),
     forecastAvailable: forecastPoints !== null,
     forecast,
+    forecastPeakValue: forecastPoints === null ? null : forecastPeak(forecastPoints, nowMs),
     forecastBreachSoon:
       forecast !== null &&
       forecast.startMs <= nowMs + ALERT_EVENT_CONFIG.clearForecastLookaheadMs,

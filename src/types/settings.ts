@@ -61,6 +61,9 @@ export type NotificationSettings = {
   // "About you" — the profile for the phone's live location. caringFor is
   // always 'self' here.
   currentLocationProfile: PlaceAlertProfile;
+  // Whether the owner has answered "About you" (asked once, on first
+  // launch). Until then the General adult default applies silently.
+  aboutYouConfirmed: boolean;
   notifyCurrentLocation: boolean;
   notifyBookmarkedLocations: boolean;
   allClear: AllClearMode;

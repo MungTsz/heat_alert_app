@@ -6,6 +6,10 @@ export const ALERT_UI = {
   accentColor: '#D9534F',
   mutedTextColor: '#888',
   trackColor: '#F0F0F0',
+  // Selected option cards and level chips: accent outline on a light tint.
+  selectedTint: '#FDECEC',
+  optionBorderColor: '#E4E4E4',
+  optionRadius: 12,
   // The audience editor scrolls inside bottom sheets past this share of the
   // screen height, so Save stays on screen on small phones.
   sheetScrollMaxHeightRatio: 0.62,

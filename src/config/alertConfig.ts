@@ -99,6 +99,20 @@ export const ALERT_DELIVERY_CONFIG = {
   logRetentionMs: 48 * HOUR_MS,
 };
 
+export const ALERT_MESSAGE_CONFIG = {
+  // The morning reminder says "fine until about 2 pm" only when that is at
+  // least this far off — "fine until 8 am" at 7:30 is no use for planning.
+  fineUntilMinLeadMs: 2 * HOUR_MS,
+  // Push body budget, held by tests against the worst case the templates
+  // can produce (three places plus "N more", both hazards, a window across
+  // midnight, the longest advice). The design doc's ~60 Chinese characters
+  // is roughly three times that in English. A lock screen shows the first
+  // few lines, which is why every body leads with where / what / when; the
+  // rest is in Android's expanded view and iOS's long-press. Long custom
+  // place names can still exceed it.
+  pushBodyMaxChars: 280,
+};
+
 // Lower = more important. Urgent beats everything; then the design doc's
 // order: escalation, breaking, heads-up, cancellation, all clear.
 export const ALERT_MESSAGE_PRIORITY = {
@@ -126,8 +140,10 @@ export const DEFAULT_PLACE_ALERT_PROFILE: PlaceAlertProfile = {
 };
 
 // "Preview a notification" shows a heads-up starting at this HK hour
-// tomorrow — a typical afternoon pollution/heat peak.
+// tomorrow and lasting this many hours — a typical afternoon
+// pollution/heat peak.
 export const SAMPLE_PREVIEW_HK_HOUR = 14;
+export const SAMPLE_PREVIEW_HOURS = 4;
 
 // Quiet-hours and digest time pickers step by this much.
 export const QUIET_HOURS_STEP_MINUTES = 30;
@@ -171,6 +187,7 @@ export const ACTIVE_ALERTS_REFRESH_MS = MINUTE_MS;
 
 export const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
   currentLocationProfile: DEFAULT_PLACE_ALERT_PROFILE,
+  aboutYouConfirmed: false,
   notifyCurrentLocation: true,
   notifyBookmarkedLocations: true,
   allClear: 'auto',

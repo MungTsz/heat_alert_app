@@ -1,0 +1,26 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`buildSampleGallery matches the reviewed wording 1`] = `
+[
+  "Sample · Air quality heads-up: Very High
+Mum's home: expected High to Very High (7-9) from about 2 pm to 6 pm tomorrow. Call to remind them to stay indoors and cut down outdoor exertion.",
+  "Sample · Updated heads-up: air quality Very High
+Mum's home: now expected Very High (8-10) from about 2 pm to 6 pm tomorrow, worse than the last heads-up. Call to remind them to stay indoors and cut down outdoor exertion.",
+  "Sample · Air quality now Very High (8)
+Mum's home: Very High (8) now. Call to remind them to stay indoors and cut down outdoor exertion.",
+  "Sample · Air quality up to Serious (10+)
+Mum's home: now Serious (10+), worse than the earlier alert. Call to remind them to stay indoors and avoid exertion.",
+  "Sample · Heat index now Danger (41°C)
+Mum's home: Danger (41°C) now. Call to remind them to stay somewhere cool, drink water and avoid the hottest hours.",
+  "Sample · Poor air quality and heat now
+Mum's home and Your location: air quality Very High (8), heat index Danger (41°C). Stay indoors with air conditioning and windows closed, or go to a cooling centre. Drink water.",
+  "Sample · Heads-up cancelled: air quality
+Mum's home: air quality tomorrow now expected to peak at Moderate (5), below your alert level. No need to change their plans.",
+  "Sample · All clear: air quality
+Mum's home: back to Moderate (5). Let them know they can go back to normal activities.",
+  "Sample · Today: air quality Very High
+Mum's home: Very High (8), day 2.
+Your location: expected Extreme Caution to Danger (up to 41°C) from about 12 pm to 5 pm tomorrow.
+Stay indoors where you can and cut down outdoor exertion.",
+]
+`;

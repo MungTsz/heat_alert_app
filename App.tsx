@@ -9,6 +9,7 @@ import FloatingNavBar, { TabName } from './src/components/FloatingNavBar';
 import SettingsScreen from './src/screens/SettingsScreen';
 import AlertEngine from './src/components/AlertEngine';
 import AlertDetailSheet from './src/components/alerts/AlertDetailSheet';
+import AboutYouOnboarding from './src/components/alerts/AboutYouOnboarding';
 import { useAlertDetailOpen } from './src/hooks/useAlertDetailOpen';
 import { resumeTrackingIfEnabled } from './src/services/deviceTrackingService';
 
@@ -45,6 +46,8 @@ const App = () => {
         <FloatingNavBar activeTab={activeTab} onTabChange={setActiveTab} />
       </View>
       <AlertDetailSheet messageId={alertDetailId} onClose={closeAlertDetail} />
+      {/* First launch only: asks who the owner is, once. */}
+      <AboutYouOnboarding />
     </SafeAreaProvider>
   );
 };

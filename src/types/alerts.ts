@@ -84,6 +84,9 @@ export type AlertEvent = {
   openedAtMs: number;
   latestValue: number | null;
   forecast: ForecastWindow | null;
+  // Set on cancellation: the new forecast's peak, so the message can say
+  // what it eased to. Optional — events stored before it existed lack it.
+  cancelledPeakValue?: number | null;
   // Highest level rank the user has actually been told about (-1 = never
   // told). Escalations compare against this, not against the last reading,
   // so a reading that bobs around one level never re-notifies.

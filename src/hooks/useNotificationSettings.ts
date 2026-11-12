@@ -7,6 +7,11 @@ import {
 } from '../services/notificationSettingsStorage';
 import { scheduleNextDigestTask } from '../services/backgroundAlertService';
 
+// Every mounted instance hears about a change made through any other one —
+// e.g. the first-launch question (mounted at the root) and Settings' About
+// you row must never disagree about who the owner is.
+const listeners = new Set<(settings: NotificationSettings) => void>();
+
 export const useNotificationSettings = () => {
   const [settings, setSettings] = useState<NotificationSettings>(DEFAULT_NOTIFICATION_SETTINGS);
   const [loading, setLoading] = useState(true);
@@ -20,8 +25,10 @@ export const useNotificationSettings = () => {
       .finally(() => {
         if (isMounted) setLoading(false);
       });
+    listeners.add(setSettings);
     return () => {
       isMounted = false;
+      listeners.delete(setSettings);
     };
   }, []);
 
@@ -30,7 +37,7 @@ export const useNotificationSettings = () => {
   const update = useCallback(
     async (patch: Partial<NotificationSettings>) => {
       const updated = { ...settings, ...patch };
-      setSettings(updated);
+      listeners.forEach(listener => listener(updated));
       await writeNotificationSettings(updated);
       // A changed digest time must move the scheduled background task now,
       // not at the next check.

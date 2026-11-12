@@ -27,10 +27,11 @@ import { levelAtRank } from '../../utils/hazardLevels';
 import { urgentRankFor } from '../../utils/alertProfile';
 import {
   adviceFor,
+  adviceProfileFor,
   describeRange,
   describeSentAt,
-  describeStart,
   describeValue,
+  describeWindow,
 } from '../../utils/alertMessages';
 import { getHeatZoneByClassification } from '../../utils/heatIndexUtils';
 import { getAqhiInfo } from '../../utils/aqhiUtils';
@@ -62,15 +63,15 @@ const itemLine = (item: AlertDetailItem, nowMs: number): string => {
       return item.forecast
         ? DETAIL_COPY.itemExpected(
             describeRange(item.hazard, item.forecast.minValue, item.forecast.maxValue),
-            describeStart(item.forecast.startMs, nowMs),
+            describeWindow(item.forecast.startMs, item.forecast.endMs, nowMs),
           )
         : levelAtRank(item.hazard, item.rank);
     case 'cancelled':
       return DETAIL_COPY.itemCancelled;
     case 'cleared':
-      return DETAIL_COPY.itemCleared(
-        item.value === null ? levelAtRank(item.hazard, 0) : describeValue(item.hazard, item.value),
-      );
+      return item.value === null
+        ? DETAIL_COPY.itemClearedUnknown
+        : DETAIL_COPY.itemCleared(describeValue(item.hazard, item.value));
     default:
       return DETAIL_COPY.itemNow(
         item.value === null ? levelAtRank(item.hazard, item.rank) : describeValue(item.hazard, item.value),
@@ -189,7 +190,11 @@ const AlertDetailSheet = ({ messageId, onClose }: Props) => {
               <>
                 <Text style={styles.heading}>{DETAIL_COPY.adviceHeading}</Text>
                 <Text style={styles.body}>
-                  {adviceFor(hazards, lead, lead.rank >= urgentRankFor(lead.hazard))}
+                  {adviceFor(
+                    hazards,
+                    adviceProfileFor(items),
+                    lead.rank >= urgentRankFor(lead.hazard),
+                  )}
                 </Text>
               </>
             )}

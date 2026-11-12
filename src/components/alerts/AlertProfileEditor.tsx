@@ -2,23 +2,15 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { ChevronDown, ChevronUp } from 'lucide-react-native';
-import { AudienceGroup, CaringFor, HazardKind, PlaceAlertProfile } from '../../types/alerts';
-import {
-  ADVANCED_LEVEL_CHOICES,
-  AUDIENCE_ALERT_LEVELS,
-  AUDIENCE_GROUPS,
-  HAZARD_KINDS,
-} from '../../config/alertConfig';
-import {
-  AUDIENCE_COPY,
-  CARING_FOR_COPY,
-  HAZARD_COPY,
-  PROFILE_EDITOR_COPY,
-} from '../../config/alertCopy';
+import { CaringFor, HazardKind, PlaceAlertProfile } from '../../types/alerts';
+import { ADVANCED_LEVEL_CHOICES, HAZARD_KINDS } from '../../config/alertConfig';
+import { CARING_FOR_COPY, HAZARD_COPY, PROFILE_EDITOR_COPY } from '../../config/alertCopy';
 import { ALERT_UI } from '../../config/alertUiConfig';
 import { formatLevelWithRange } from '../../utils/hazardLevels';
+import { alertLevelFor, hasLevelOverride, withAlertLevel } from '../../utils/alertProfile';
 import SettingsToggleRow from '../SettingsToggleRow';
 import SegmentedControl from '../SegmentedControl';
+import AudiencePicker from './AudiencePicker';
 
 type Props = {
   profile: PlaceAlertProfile;
@@ -33,73 +25,25 @@ const CARING_FOR_OPTIONS: { value: CaringFor; label: string }[] = [
   { value: 'family', label: CARING_FOR_COPY.family },
 ];
 
-// The one editor for "who is here and what to alert on" — used by Settings
-// (About you), the Community alert sheet and the Add place flow, so the
+// The one editor for "who is here and what to alert on" — used by the
+// About you sheet, the Community alert sheet and the Add place flow, so the
 // question reads the same everywhere. Heat and air quality appear in the
 // same order with the same controls, as peer hazards.
 const AlertProfileEditor = ({ profile, onChange, question, showCaringFor }: Props) => {
-  // Collapsed by default, and opened automatically if an override is
-  // already set so it is never hidden from the person who chose it.
-  const [advancedOpen, setAdvancedOpen] = useState(
-    profile.levelOverride !== undefined && Object.keys(profile.levelOverride).length > 0,
-  );
-
-  const setAudience = (audience: AudienceGroup) => onChange({ ...profile, audience });
+  const anyOverride = HAZARD_KINDS.some(h => hasLevelOverride(profile, h));
+  // Collapsed by default, and opened if a level was already changed so the
+  // change is never hidden from the person who made it.
+  const [advancedOpen, setAdvancedOpen] = useState(anyOverride);
 
   const setHazard = (hazard: HazardKind, enabled: boolean) =>
     onChange({ ...profile, hazards: { ...profile.hazards, [hazard]: enabled } });
-
-  // Chips only ever offer ADVANCED_LEVEL_CHOICES[hazard], so the level is a
-  // valid one for that hazard. Clearing the last override drops the field,
-  // keeping "follows the audience" a single representation.
-  const setOverride = (hazard: HazardKind, level: string | null) => {
-    const levelOverride: Record<string, string> = { ...profile.levelOverride };
-    if (level === null) delete levelOverride[hazard];
-    else levelOverride[hazard] = level;
-    onChange({
-      ...profile,
-      levelOverride:
-        Object.keys(levelOverride).length > 0
-          ? (levelOverride as PlaceAlertProfile['levelOverride'])
-          : undefined,
-    });
-  };
 
   return (
     <View>
       <Text style={styles.question}>{question}</Text>
       {showCaringFor && <Text style={styles.hint}>{PROFILE_EDITOR_COPY.pickMostCare}</Text>}
 
-      {AUDIENCE_GROUPS.map(audience => {
-        const selected = profile.audience === audience;
-        const levels = AUDIENCE_ALERT_LEVELS[audience];
-        return (
-          <TouchableOpacity
-            key={audience}
-            style={styles.option}
-            onPress={() => setAudience(audience)}
-            accessibilityRole="radio"
-            accessibilityState={{ selected }}
-          >
-            <View style={[styles.radio, selected && styles.radioSelected]}>
-              {selected && <View style={styles.radioDot} />}
-            </View>
-            <View style={styles.optionText}>
-              <Text style={[styles.optionLabel, selected && styles.optionLabelSelected]}>
-                {AUDIENCE_COPY[audience].label}
-              </Text>
-              {/* Shows the result of the choice as it's made — the user
-                  starts learning the levels before any alert arrives. */}
-              <Text style={styles.optionResult}>
-                {PROFILE_EDITOR_COPY.audienceResult(
-                  formatLevelWithRange('heat', levels.heat),
-                  formatLevelWithRange('aqhi', levels.aqhi),
-                )}
-              </Text>
-            </View>
-          </TouchableOpacity>
-        );
-      })}
+      <AudiencePicker value={profile.audience} onChange={audience => onChange({ ...profile, audience })} />
 
       {showCaringFor && (
         <View style={styles.block}>
@@ -142,33 +86,40 @@ const AlertProfileEditor = ({ profile, onChange, question, showCaringFor }: Prop
         <View>
           <Text style={styles.hint}>{PROFILE_EDITOR_COPY.advancedHint}</Text>
           {HAZARD_KINDS.map(hazard => {
-            const override = profile.levelOverride?.[hazard];
             const enabled = profile.hazards[hazard];
-            const audienceLevel = AUDIENCE_ALERT_LEVELS[profile.audience][hazard];
-            const chips: { level: string | null; label: string }[] = [
-              { level: null, label: `${PROFILE_EDITOR_COPY.followAudience}: ${audienceLevel}` },
-              ...ADVANCED_LEVEL_CHOICES[hazard].map(level => ({
-                level,
-                label: formatLevelWithRange(hazard, level),
-              })),
-            ];
+            // The chip shown selected is simply the level in effect — the
+            // audience's until someone picks another. No separate "Default"
+            // chip repeating the same level.
+            const current = alertLevelFor(profile, hazard);
+            const overridden = hasLevelOverride(profile, hazard);
             return (
               <View key={hazard} style={[styles.levelBlock, !enabled && styles.disabled]}>
-                <Text style={styles.levelHazard}>{HAZARD_COPY[hazard].name}</Text>
+                <View style={styles.levelHeader}>
+                  <Text style={styles.levelHazard}>{HAZARD_COPY[hazard].name}</Text>
+                  {overridden && enabled && (
+                    <TouchableOpacity
+                      onPress={() => onChange(withAlertLevel(profile, hazard, null))}
+                      hitSlop={8}
+                      accessibilityRole="button"
+                    >
+                      <Text style={styles.reset}>{PROFILE_EDITOR_COPY.reset}</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
                 <View style={styles.chipRow}>
-                  {chips.map(chip => {
-                    const selected = (override ?? null) === chip.level;
+                  {ADVANCED_LEVEL_CHOICES[hazard].map(level => {
+                    const selected = current === level;
                     return (
                       <TouchableOpacity
-                        key={chip.label}
+                        key={level}
                         style={[styles.chip, selected && styles.chipSelected]}
-                        onPress={() => setOverride(hazard, chip.level)}
+                        onPress={() => onChange(withAlertLevel(profile, hazard, level))}
                         disabled={!enabled}
                         accessibilityRole="radio"
                         accessibilityState={{ selected, disabled: !enabled }}
                       >
                         <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
-                          {chip.label}
+                          {formatLevelWithRange(hazard, level)}
                         </Text>
                       </TouchableOpacity>
                     );
@@ -186,45 +137,43 @@ const AlertProfileEditor = ({ profile, onChange, question, showCaringFor }: Prop
 const styles = StyleSheet.create({
   question: { fontSize: 17, fontWeight: '700', color: '#222', marginTop: 12 },
   hint: { fontSize: 12, lineHeight: 17, color: ALERT_UI.mutedTextColor, marginTop: 6 },
-  block: { marginTop: 16 },
-  option: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 10, gap: 12 },
-  radio: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: '#C4C4C4',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 1,
+  block: { marginTop: 18 },
+  subheading: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#777',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
-  radioSelected: { borderColor: ALERT_UI.accentColor },
-  radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: ALERT_UI.accentColor },
-  optionText: { flex: 1 },
-  optionLabel: { fontSize: 15, color: '#333', fontWeight: '500' },
-  optionLabelSelected: { fontWeight: '700', color: '#222' },
-  optionResult: { fontSize: 12, lineHeight: 16, color: ALERT_UI.mutedTextColor, marginTop: 2 },
-  subheading: { fontSize: 13, fontWeight: '700', color: '#555' },
   advancedHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: 12,
     marginTop: 4,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: ALERT_UI.optionBorderColor,
   },
-  levelBlock: { marginTop: 10, marginBottom: 6 },
+  levelBlock: { marginTop: 12, marginBottom: 4 },
   disabled: { opacity: 0.4 },
-  levelHazard: { fontSize: 13, fontWeight: '600', color: '#333', marginBottom: 6 },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  levelHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  levelHazard: { fontSize: 14, fontWeight: '600', color: '#333' },
+  reset: { fontSize: 13, fontWeight: '600', color: ALERT_UI.accentColor },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {
     borderWidth: 1,
-    borderColor: '#D6D6D6',
-    borderRadius: 14,
-    paddingVertical: 5,
-    paddingHorizontal: 10,
+    borderColor: ALERT_UI.optionBorderColor,
+    borderRadius: 16,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
   },
-  chipSelected: { borderColor: ALERT_UI.accentColor, backgroundColor: '#FDECEC' },
-  chipText: { fontSize: 12, color: '#555' },
+  chipSelected: { borderColor: ALERT_UI.accentColor, backgroundColor: ALERT_UI.selectedTint },
+  chipText: { fontSize: 13, color: '#555' },
   chipTextSelected: { color: ALERT_UI.accentColor, fontWeight: '700' },
 });
 

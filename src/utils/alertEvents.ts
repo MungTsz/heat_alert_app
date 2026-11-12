@@ -124,7 +124,7 @@ const advanceForecast = (ev: AlertEvent, s: HazardSignal, nowMs: number): AlertE
   if (ev.toldRank < 0) return null; // never told — drop quietly
   if (ev.stage === 'cancelled') return ev;
   return owe(
-    { ...ev, stage: 'cancelled', forecast: null, pending: null },
+    { ...ev, stage: 'cancelled', forecast: null, cancelledPeakValue: s.forecastPeakValue, pending: null },
     'cancelled',
     ev.toldRank,
     false,

@@ -157,7 +157,7 @@ describe('evening digest', () => {
     expect(mockDisplay).toHaveBeenCalledTimes(1);
     const shown = mockDisplay.mock.calls[0][0];
     expect(shown.title).toBe('Air quality heads-up: Very High');
-    expect(shown.body).toContain('from about 2 pm tomorrow');
+    expect(shown.body).toContain('from about 2 pm to 5 pm tomorrow');
     expect(shown.data?.alertMessageId).toBe(`digest:evening:${evening}`);
 
     const records = JSON.parse(mockStore.get('alert_message_log')!);

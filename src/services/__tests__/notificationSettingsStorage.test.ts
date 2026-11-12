@@ -27,6 +27,13 @@ describe('normalizeNotificationSettings', () => {
     expect(settings.currentLocationProfile.audience).toBe('general');
   });
 
+  it('asks "About you" once — until it is answered, and never again after', () => {
+    expect(normalizeNotificationSettings(null).aboutYouConfirmed).toBe(false);
+    // Saves from before the first-launch question existed get asked once.
+    expect(normalizeNotificationSettings({ notifyCurrentLocation: true }).aboutYouConfirmed).toBe(false);
+    expect(normalizeNotificationSettings({ aboutYouConfirmed: true }).aboutYouConfirmed).toBe(true);
+  });
+
   it('always treats your own location as for yourself', () => {
     const settings = normalizeNotificationSettings({
       currentLocationProfile: { audience: 'chronic', caringFor: 'family', hazards: { heat: false } },

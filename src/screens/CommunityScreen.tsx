@@ -19,7 +19,8 @@ import { distanceMiles } from '../utils/distance';
 import { resolveAlertProfile, summarizeAlertProfile } from '../utils/alertProfile';
 import { HAZARD_KINDS } from '../config/alertConfig';
 import BookmarkCard from '../components/BookmarkCard';
-import PlaceAlertSettingsModal from '../components/PlaceAlertSettingsModal';
+import AlertProfileSheet from '../components/alerts/AlertProfileSheet';
+import { PROFILE_EDITOR_COPY } from '../config/alertCopy';
 import PlaceEditRow from '../components/PlaceEditRow';
 import DraggableList from '../components/DraggableList';
 import AddBookmarkModal from '../components/AddBookmarkModal';
@@ -252,9 +253,13 @@ const CommunityScreen = () => {
       )}
 
       {alertingBookmark && (
-        <PlaceAlertSettingsModal
+        <AlertProfileSheet
           key={alertingBookmark.id}
-          place={alertingBookmark}
+          title={PROFILE_EDITOR_COPY.sheetTitle}
+          subtitle={alertingBookmark.label}
+          question={PROFILE_EDITOR_COPY.placeQuestion}
+          showCaringFor
+          initialProfile={resolveAlertProfile(alertingBookmark.alertProfile)}
           onSave={profile => {
             setBookmarkAlertProfile(alertingBookmark.id, profile);
             setAlertingBookmark(null);

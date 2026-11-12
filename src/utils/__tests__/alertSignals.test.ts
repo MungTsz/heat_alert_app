@@ -68,6 +68,15 @@ describe('buildHazardSignal', () => {
     expect(family.allClearWanted).toBe(true);
   });
 
+  it('keeps the forecast peak even when it stays below the level', () => {
+    const s = buildHazardSignal({ ...base, reading: { current: 5, forecast: hourly([10, 4, 6, 5]) } });
+    expect(s.forecast).toBeNull();
+    // The past hour's 10 doesn't count — only what is still to come.
+    expect(s.forecastPeakValue).toBe(6);
+    const none = buildHazardSignal({ ...base, reading: { current: 5, forecast: null } });
+    expect(none.forecastPeakValue).toBeNull();
+  });
+
   it('flags a breach starting within the clear lookahead', () => {
     const s = buildHazardSignal({
       ...base,
