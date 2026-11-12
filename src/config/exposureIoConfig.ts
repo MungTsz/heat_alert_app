@@ -10,7 +10,7 @@ import { PlaceCategory } from '../types/bookmark';
 type ExposureIoPresentation = { color: string; label: string };
 
 // Per-io colors shared by the trajectory map, both stacked-bar
-// charts, the stay/trip sheets and the Community tab's place categories
+// charts, the stay/trip sheets and the Places tab's place categories
 // (placeCategoryConfig.ts reuses the indoor entries), so one io reads the
 // same everywhere. Icons live in exposureIoIconConfig.ts.
 //

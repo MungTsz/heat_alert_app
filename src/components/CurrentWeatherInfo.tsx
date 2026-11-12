@@ -1,10 +1,18 @@
 // src/components/CurrentWeatherInfo.tsx
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { Thermometer, Droplets, CircleQuestionMark } from 'lucide-react-native';
+import { Thermometer, Droplets, CircleQuestionMark, ChevronRight } from 'lucide-react-native';
 import { glassCardStyle, glassLabelText } from '../styles/glassCard';
 import { describeFeelsLikeGap } from '../utils/heatIndexUtils';
 import { HEAT_DISPLAY_CONFIG } from '../config/heatDisplayConfig';
+import { DETAIL_COPY } from '../config/alertCopy';
+
+// What to do about an alert at your location — the same sentence the
+// notification ended with.
+export type HomeAdvice = {
+  text: string;
+  onPress: () => void;
+};
 
 // null = not loaded / unavailable, shown as "--" rather than a fake 0.
 interface Props {
@@ -12,19 +20,24 @@ interface Props {
   humidity: number | null;
   heatIndex: number | null;
   onPressInfo: () => void;
+  advice?: HomeAdvice | null;
 }
 
 const INFO_HIT_SLOP = { top: 8, bottom: 8, left: 8, right: 8 };
 
 // Air temperature and humidity are the supporting context under the
-// heat index card, not a headline of their own: the footer line puts the
-// gap between "air" and "feels like" into words, which is what makes the
-// difference between the two numbers click for people new to heat index.
+// heat index card, not a headline of their own. The footer is ONE line,
+// in priority order:
+// 1. on alert days, what to do — more useful then than any explanation;
+// 2. otherwise, the gap between "air" and "feels like" put into words,
+//    which is what makes the two numbers click for people new to heat index;
+// 3. nothing, when there is neither.
 const CurrentWeatherInfo: React.FC<Props> = ({
   temperature,
   humidity,
   heatIndex,
   onPressInfo,
+  advice = null,
 }) => {
   const gapMessage =
     temperature !== null && heatIndex !== null
@@ -49,19 +62,32 @@ const CurrentWeatherInfo: React.FC<Props> = ({
         </View>
       </View>
 
-      {/* Only when there's an actual gap to explain. A standing "what is
-          the heat index?" link would single out heat over AQHI, which has no
-          such link; this line appears only in the case that needs it. */}
-      {gapMessage !== null && (
+      {advice ? (
         <TouchableOpacity
           style={styles.footer}
-          onPress={onPressInfo}
+          onPress={advice.onPress}
           hitSlop={INFO_HIT_SLOP}
-          accessibilityLabel="What is the heat index?"
+          accessibilityRole="button"
+          accessibilityLabel={`${DETAIL_COPY.adviceHeading}: ${advice.text}`}
         >
-          <Text style={styles.footerText}>{gapMessage}</Text>
-          <CircleQuestionMark size={15} color="#FFFFFF" />
+          <Text style={[styles.footerText, styles.adviceText]}>{advice.text}</Text>
+          <ChevronRight size={15} color="#FFFFFF" />
         </TouchableOpacity>
+      ) : (
+        /* Only when there's an actual gap to explain. A standing "what is
+           the heat index?" link would single out heat over AQHI, which has
+           no such link; this line appears only in the case that needs it. */
+        gapMessage !== null && (
+          <TouchableOpacity
+            style={styles.footer}
+            onPress={onPressInfo}
+            hitSlop={INFO_HIT_SLOP}
+            accessibilityLabel="What is the heat index?"
+          >
+            <Text style={styles.footerText}>{gapMessage}</Text>
+            <CircleQuestionMark size={15} color="#FFFFFF" />
+          </TouchableOpacity>
+        )
       )}
     </View>
   );
@@ -109,6 +135,11 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     ...glassLabelText,
+  },
+  // Advice can run to two or three lines; let it wrap beside the chevron.
+  adviceText: {
+    flexShrink: 1,
+    textAlign: 'center',
   },
 });
 

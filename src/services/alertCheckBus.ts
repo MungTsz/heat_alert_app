@@ -1,9 +1,9 @@
 // src/services/alertCheckBus.ts
 // Module-level registries (not React context), so screens, the root and
 // headless background tasks can talk without prop drilling:
-// - the check trigger: AlertEngine registers its check, Settings' dev
+// - the check trigger: AlertEngine registers its check, App settings' dev
 //   button runs it (the engine owns the live position)
-// - "check finished": Home / Community badges refresh their active alerts
+// - "check finished": Home / Places / Alerts refresh their active alerts
 // - "open alert detail": a tapped notification or card badge asks the root
 //   to show that message's detail sheet
 type TriggerFn = () => Promise<void>;

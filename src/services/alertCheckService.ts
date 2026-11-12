@@ -77,7 +77,7 @@ const buildPlaces = (
     });
   }
   if (settings.notifyBookmarkedLocations) {
-    // Hidden places still alert: hiding only tidies the Community list.
+    // Hidden places still alert: hiding only tidies the Places list.
     for (const b of bookmarks) {
       places.push({
         id: b.id,

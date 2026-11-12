@@ -31,6 +31,24 @@ export const apiAqhiProvider: AqhiDataProvider = {
   getAqhiAt: async (coords: Coordinates): Promise<number> =>
     fetchAqhiAt(coords.latitude, coords.longitude, toHkTimestamp()),
 
+  // One get_data call for the whole range, read the same way as the AQHI
+  // forecast provider (isots + values, index-aligned).
+  getAqhiHistoryAt: async ({ latitude, longitude }, fromMs, toMs) => {
+    const data = await fetchPraisePointData(
+      latitude,
+      longitude,
+      toHkTimestamp(new Date(fromMs)),
+      toHkTimestamp(new Date(toMs)),
+      ['AQHIBN2024'],
+    );
+    const isots: string[] = data.isots ?? [];
+    const values: unknown[] = data.AQHIBN2024 ?? [];
+    return isots.flatMap((iso, i) => {
+      const value = values[i];
+      return typeof value === 'number' ? [{ timestampMs: new Date(iso).getTime(), value }] : [];
+    });
+  },
+
   getAqhiPoints: async (center: Coordinates): Promise<AqhiPoint[]> => {
     const ts = toHkTimestamp();
 

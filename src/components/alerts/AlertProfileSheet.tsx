@@ -29,9 +29,9 @@ type Props = {
 };
 
 // "When is it dangerous here" as a bottom sheet with Save / Cancel — for a
-// Community place (opened from its card) and for "About you" (opened from
-// its Settings row). Settings stays a list of short rows; the full editor
-// only appears when someone actually means to change it.
+// saved place (opened from its Places card) and for "About you" (opened from
+// its row on the Alerts tab). That tab stays a list of short rows; the full
+// editor only appears when someone actually means to change it.
 const AlertProfileSheet = ({
   title,
   subtitle,

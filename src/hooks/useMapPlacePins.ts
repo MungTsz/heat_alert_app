@@ -1,0 +1,40 @@
+// src/hooks/useMapPlacePins.ts
+import { useMemo } from 'react';
+import { useBookmarkList } from './useBookmarkList';
+import { usePlacesHeatIndex } from './useHeatData';
+import { usePlacesAqhi } from './useAqhiData';
+
+// A saved place as a map pin, with both hazards at its own coordinates.
+export type MapPlacePin = {
+  id: string;
+  label: string;
+  latitude: number;
+  longitude: number;
+  heatIndex: number | null; // null = loading / unavailable → "--"
+  aqhi: number | null;
+};
+
+// The user's saved places for a map — the same lookups (and the same
+// "hidden places are left out" rule) as the Places tab's cards, so a pin
+// always agrees with its card. Called once by the screen and handed to
+// every map it shows, so the preview and the full-screen map share one
+// set of requests.
+export const useMapPlacePins = (): MapPlacePin[] => {
+  const { bookmarks } = useBookmarkList();
+  const visible = useMemo(() => bookmarks.filter(b => !b.hidden), [bookmarks]);
+  const { heatIndexById } = usePlacesHeatIndex(visible);
+  const { aqhiById } = usePlacesAqhi(visible);
+
+  return useMemo(
+    () =>
+      visible.map(b => ({
+        id: b.id,
+        label: b.label,
+        latitude: b.latitude,
+        longitude: b.longitude,
+        heatIndex: b.id in heatIndexById ? Math.round(heatIndexById[b.id]) : null,
+        aqhi: b.id in aqhiById ? Math.round(aqhiById[b.id]) : null,
+      })),
+    [visible, heatIndexById, aqhiById],
+  );
+};

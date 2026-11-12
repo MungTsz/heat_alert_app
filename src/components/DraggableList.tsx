@@ -134,7 +134,7 @@ const DraggableRow: React.FC<RowProps> = ({ itemKey, callbacks, children }) => {
 
 // A plain (non-virtualized) list whose rows can be held by their handle
 // and dragged to any position. Meant for short lists inside a ScrollView,
-// e.g. the Community tab's places in Edit mode.
+// e.g. the Places tab's places in Edit mode.
 function DraggableList<T>({
   items,
   keyExtractor,

@@ -1,5 +1,5 @@
-// src/screens/CommunityScreen.tsx
-import React, { useMemo, useState } from 'react';
+// src/screens/PlacesScreen.tsx
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -15,6 +15,7 @@ import { usePlacesHeatIndex } from '../hooks/useHeatData';
 import { usePlacesAqhi } from '../hooks/useAqhiData';
 import { useActiveAlerts } from '../hooks/useActiveAlerts';
 import { useBookmarkList } from '../hooks/useBookmarkList';
+import { useDefaultMapLayer } from '../hooks/useDefaultMapLayer';
 import { distanceMiles } from '../utils/distance';
 import { useNotificationSettings } from '../hooks/useNotificationSettings';
 import { resolvePlaceAlertProfile, summarizeAlertProfile } from '../utils/alertProfile';
@@ -32,10 +33,21 @@ import { BookmarkEntry } from '../types/bookmark';
 
 const SKY_BLUE = '#BEE7FB';
 
-const CommunityScreen = () => {
+type Props = {
+  // A place another tab asked to open (a map pin, an Exposure stay) —
+  // opened once the list has loaded, then reported back as handled so it
+  // doesn't reopen on the next render.
+  focusPlaceId?: string | null;
+  onFocusHandled?: () => void;
+};
+
+// The places the user watches: the alert watch list, one card per place
+// with both hazards and who the place is for.
+const PlacesScreen = ({ focusPlaceId = null, onFocusHandled }: Props) => {
   const { coords } = useLocation();
   const {
     bookmarks,
+    loading: bookmarksLoading,
     addBookmark,
     removeBookmark,
     renameBookmark,
@@ -55,6 +67,16 @@ const CommunityScreen = () => {
   const [editing, setEditing] = useState(false);
   const [hiddenExpanded, setHiddenExpanded] = useState(false);
   const [dragging, setDragging] = useState(false);
+
+  useEffect(() => {
+    // Bookmarks load asynchronously: wait for the list rather than giving
+    // up on the first (empty) render. A place deleted since the request
+    // was made is simply dropped.
+    if (!focusPlaceId || bookmarksLoading) return;
+    const target = bookmarks.find(b => b.id === focusPlaceId);
+    if (target) setSelectedBookmark(target);
+    onFocusHandled?.();
+  }, [focusPlaceId, bookmarksLoading, bookmarks, onFocusHandled]);
 
   // Both hazards are looked up at each place's own coordinates — not
   // estimated from samples around the user — so a card matches the map and
@@ -93,6 +115,14 @@ const CommunityScreen = () => {
   );
   const visibleRows = bookmarkRows.filter(row => !row.hidden);
   const hiddenRows = bookmarkRows.filter(row => row.hidden);
+
+  // The opened place's map starts on the hazard that has reached THIS
+  // place's alert level, judged with its own values and profile.
+  const selectedRow = bookmarkRows.find(row => row.id === selectedBookmark?.id);
+  const selectedMapLayer = useDefaultMapLayer(
+    { heat: selectedRow?.temperature ?? null, aqhi: selectedRow?.aqhi ?? null },
+    selectedRow?.alertProfile,
+  );
 
   const renameOtherNames = useMemo(
     () => bookmarks.filter(b => b.id !== renamingBookmark?.id).map(b => b.label),
@@ -140,7 +170,7 @@ const CommunityScreen = () => {
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.header}>
-        <Text style={styles.title}>Community</Text>
+        <Text style={styles.title}>Places</Text>
         <View style={styles.headerActions}>
           {bookmarks.length > 0 && (
             <TouchableOpacity
@@ -273,6 +303,7 @@ const CommunityScreen = () => {
       <BookmarkMapModal
         visible={selectedBookmark !== null}
         bookmark={selectedBookmark}
+        layer={selectedMapLayer}
         onClose={() => setSelectedBookmark(null)}
       />
     </SafeAreaView>
@@ -354,4 +385,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default CommunityScreen;
+export default PlacesScreen;

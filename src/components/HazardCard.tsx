@@ -2,6 +2,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { glassCardStyle, glassLabelText } from '../styles/glassCard';
+import { HOME_LAYOUT_CONFIG } from '../config/homeLayoutConfig';
 
 type Props = {
   icon: React.ReactNode;
@@ -40,7 +41,7 @@ const styles = StyleSheet.create({
   card: {
     flex: 1,
     ...glassCardStyle,
-    paddingVertical: 18,
+    paddingVertical: HOME_LAYOUT_CONFIG.hazardCardPaddingVertical,
     paddingHorizontal: 14,
     alignItems: 'center',
   },

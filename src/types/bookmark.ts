@@ -21,7 +21,7 @@ export type BookmarkEntry = {
   // Bumped only when a field the place-labels API receives changes
   // (category / position / radius) — drives placeLabelSyncService's diff.
   updatedAt: number;
-  // Taken out of the Community watch list (kept in a collapsed "Hidden
+  // Taken out of the Places watch list (kept in a collapsed "Hidden
   // places" section) — e.g. a place saved from the exposure map only so the
   // backend can classify stays there. Purely a local display preference:
   // the place still syncs as a label and still triggers community alerts,

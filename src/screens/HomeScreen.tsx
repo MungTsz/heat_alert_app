@@ -19,7 +19,7 @@ import {
 } from 'react-native-safe-area-context';
 import { MapPin, User, Wind } from 'lucide-react-native';
 import TextTicker from 'react-native-text-ticker';
-import CurrentWeatherInfo from '../components/CurrentWeatherInfo';
+import CurrentWeatherInfo, { HomeAdvice } from '../components/CurrentWeatherInfo';
 import HeatHourlyForecastChart from '../components/HeatHourlyForecastChart';
 import AqhiHourlyForecastChart from '../components/AqhiHourlyForecastChart';
 import HazardCard from '../components/HazardCard';
@@ -38,9 +38,19 @@ import { useAqhiForecastData } from '../hooks/useAqhiForecastData';
 import { useAqhiData } from '../hooks/useAqhiData';
 import { useHeatConditions } from '../hooks/useHeatData';
 import { useActiveAlerts } from '../hooks/useActiveAlerts';
+import { useNotificationSettings } from '../hooks/useNotificationSettings';
+import { useDefaultMapLayer } from '../hooks/useDefaultMapLayer';
+import { useMapPlacePins } from '../hooks/useMapPlacePins';
 import AlertBadge from '../components/alerts/AlertBadge';
+import HomeAlertBanner from '../components/alerts/HomeAlertBanner';
 import { CURRENT_LOCATION_PLACE_ID } from '../config/alertConfig';
+import { HOME_LAYOUT_CONFIG } from '../config/homeLayoutConfig';
 import { HazardKind } from '../types/alerts';
+import { MapLayer } from '../types/mapSettings';
+import { adviceFor, adviceProfileFor } from '../utils/alertMessages';
+import { openAlertDetail } from '../services/alertCheckBus';
+import { openPlace } from '../services/navigationBus';
+
 const LOCATION_BOX_WIDTH = 160;
 const MIN_GAP_BELOW_CHARACTER = 24;
 // Plain white like the cards' labels, so a "--" never reads as a level color.
@@ -90,6 +100,37 @@ const HomeScreen = () => {
   const heatInfo = heatIndexTemp === null ? null : getHeatIndexInfo(heatIndexTemp);
   const aqhiInfo = currentAqhi === null ? null : getAqhiInfo(currentAqhi);
   const layout = computeSceneLayout(width, height);
+
+  // On alert days the footer under Temp · Humidity says what to do, so the
+  // user doesn't have to wait for a push. Only for alerts measured NOW (a
+  // heads-up is about later, and has its banner), voiced for the owner's
+  // About you answer — built by the same adviceFor the notification and the
+  // detail sheet use, so the three can never word it differently.
+  const aboutYou = useNotificationSettings().settings.currentLocationProfile;
+  const liveAlerts = locationAlerts.filter(b => b.kind === 'now');
+  const liveMessageId = liveAlerts.find(b => b.messageId)?.messageId ?? null;
+  const advice: HomeAdvice | null =
+    liveAlerts.length > 0
+      ? {
+          text: adviceFor(
+            liveAlerts.map(b => b.hazard),
+            adviceProfileFor([aboutYou]),
+            liveAlerts.some(b => b.urgent),
+          ),
+          onPress: () => {
+            if (liveMessageId) openAlertDetail(liveMessageId);
+          },
+        }
+      : null;
+
+  // One layer for the preview and the full-screen map (lifted here so
+  // closing full screen keeps the user's pick). Until the user picks one it
+  // follows the data: whichever hazard has reached their alert level.
+  const [chosenMapLayer, setChosenMapLayer] = useState<MapLayer | null>(null);
+  const defaultMapLayer = useDefaultMapLayer({ heat: heatIndexTemp, aqhi: currentAqhi });
+  const mapLayer = chosenMapLayer ?? defaultMapLayer;
+  // Saved places on the map — fetched once here for both maps.
+  const placePins = useMapPlacePins();
 
   const [contentAboveHeight, setContentAboveHeight] = useState(0);
   const onContentAboveLayout = useCallback((e: LayoutChangeEvent) => {
@@ -152,6 +193,9 @@ const HomeScreen = () => {
                 </View>
               </View>
             </View>
+            {/* Inside the measured block, so the spacer below shrinks by its
+                height and the cards stay where they are. */}
+            <HomeAlertBanner badges={locationAlerts} />
           </View>
 
           <View style={{ height: spacerHeight }} />
@@ -191,10 +235,18 @@ const HomeScreen = () => {
             humidity={currentHumidity}
             heatIndex={heatIndexTemp}
             onPressInfo={() => setHeatExplainerOpen(true)}
+            advice={advice}
           />
 
           <View style={styles.mapContainer}>
-            <MapScreen />
+            {/* A preview: any tap opens the full-screen map, so controls
+                that couldn't be used here are left off. */}
+            <MapScreen
+              layer={mapLayer}
+              showModeToggle={false}
+              showLayerControls={false}
+              places={placePins}
+            />
             <TouchableOpacity
               style={StyleSheet.absoluteFill}
               activeOpacity={0.9}
@@ -209,6 +261,15 @@ const HomeScreen = () => {
         // Camera only (no values are read off it), so the fallback is fine
         // here while locating.
         center={dataCenter ?? FALLBACK_CENTER}
+        layer={mapLayer}
+        onLayerChange={setChosenMapLayer}
+        places={placePins}
+        // A place pin leads to that place in Places — the link between
+        // "conditions around me" and "the places I care about".
+        onPlacePress={placeId => {
+          setMapFullscreen(false);
+          openPlace(placeId);
+        }}
         onClose={() => setMapFullscreen(false)}
       />
 
@@ -283,7 +344,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   mapContainer: {
-    height: 380,
+    height: HOME_LAYOUT_CONFIG.mapPreviewHeight,
     borderRadius: 16,
     overflow: 'hidden',
     marginTop: 16,

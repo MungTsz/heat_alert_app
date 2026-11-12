@@ -42,7 +42,7 @@ export const isNameTaken = (name: string, existingNames: readonly string[]): boo
 
 // Shared by every place-rename input so they all enforce the same rules —
 // returns a user-facing error, or null when the name is fine. Duplicate names
-// are refused because the Community list would show two identical cards.
+// are refused because the Places list would show two identical cards.
 export const validatePlaceName = (
   name: string,
   existingNames: readonly string[],

@@ -3,7 +3,7 @@ import { BookmarkEntry } from '../types/bookmark';
 
 const isHidden = (bookmark: BookmarkEntry): boolean => bookmark.hidden === true;
 
-// The Community list's manual order IS the stored array order. Shown and
+// The Places list's manual order IS the stored array order. Shown and
 // hidden places are listed in separate sections, so a drag only reorders
 // the place's OWN section: toIndex is a position within that section, and
 // places of the other section keep their absolute slots — so dragging a

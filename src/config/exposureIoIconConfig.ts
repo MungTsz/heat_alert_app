@@ -16,7 +16,7 @@ import { ExposureIo } from '../types/exposure';
 // shouldn't pull in icon components with it (same split as
 // placeLabelConfig.ts vs placeCategoryConfig.ts). Shown on the map's indoor
 // stay dots, the sheet chips and the day timeline; the indoor ones are also
-// the Community tab's place-category icons.
+// the Places tab's place-category icons.
 //
 // Office and School show what you do there (briefcase, graduation cap)
 // rather than a building, so the three non-home indoor kinds don't all read

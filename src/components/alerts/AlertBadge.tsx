@@ -8,7 +8,7 @@ import { openAlertDetail } from '../../services/alertCheckBus';
 
 type Props = {
   badge: ActiveAlertBadge;
-  // Overrides badge.text — Community cards prefix the hazard name.
+  // Overrides badge.text — place cards prefix the hazard name.
   label?: string;
 };
 

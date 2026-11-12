@@ -8,7 +8,7 @@ import {
 import { scheduleNextDigestTask } from '../services/backgroundAlertService';
 
 // Every mounted instance hears about a change made through any other one —
-// e.g. the first-launch question (mounted at the root) and Settings' About
+// e.g. the first-launch question (mounted at the root) and the Alerts tab's About
 // you row must never disagree about who the owner is.
 const listeners = new Set<(settings: NotificationSettings) => void>();
 

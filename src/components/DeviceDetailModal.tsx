@@ -24,7 +24,7 @@ import ExposureDateScopedView from './ExposureDateScopedView';
 import ExposureDatePickerModal from './ExposureDatePickerModal';
 import ImportTrackModal from './ImportTrackModal';
 
-// Same red as the Community tab's + button — the app's destructive accent.
+// Same red as the Places tab's + button — the app's destructive accent.
 const DELETE_DAY_COLOR = '#D9534F';
 
 type Props = {
@@ -78,13 +78,13 @@ const DeviceDetailModal: React.FC<Props> = ({ visible, device, onClose, onDelete
   const deletableDay =
     selectedDate && history.some(entry => entry.date === selectedDate) ? selectedDate : null;
 
-  // Places saved to Community from this device's stays live in their own
+  // Places saved from this device's stays live in their own
   // store (bookmarkStorage.ts) and are never touched here — said explicitly
   // because the user may have built them from this very device's map.
   const handleDelete = () => {
     Alert.alert(
       'Delete Device',
-      `Delete "${device.name}" and all of its imported history? This can't be undone.\n\nPlaces you saved to Community are kept.`,
+      `Delete "${device.name}" and all of its imported history? This can't be undone.\n\nYour saved places are kept.`,
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Delete', style: 'destructive', onPress: () => onDelete(device.id) },

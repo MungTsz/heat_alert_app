@@ -26,8 +26,10 @@ import { useIdwOverlayImage } from '../hooks/useIdwOverlayImage';
 import { useAqhiForecastTiles } from '../hooks/useAqhiForecastTiles';
 import { estimateAqhiAt, valueToAqhiColor } from '../utils/aqhiUtils';
 import { FALLBACK_CENTER, resolveDataCenter } from '../config/locationConfig';
-import MapLayerPicker, { MapLayer } from '../components/MapLayerPicker';
+import MapLayerPicker from '../components/MapLayerPicker';
 import DualStatPin from '../components/DualStatPin';
+import { MapLayer } from '../types/mapSettings';
+import { MapPlacePin } from '../hooks/useMapPlacePins';
 import { usePraiseAqhiTile } from '../hooks/usePraiseAqhiTile';
 import { isPraiseConfigured } from '../config/praiseConfig';
 import AqhiLegend from '../components/AqhiLegend';
@@ -56,29 +58,45 @@ type Coordinates = {
 };
 
 type Props = {
+  // Always a hazard layer — chosen by the screen that owns the map (see
+  // useDefaultMapLayer), so a preview and its full-screen map stay on the
+  // same one.
+  layer: MapLayer;
+  // Without it the layer is fixed and the picker is hidden.
+  onLayerChange?: (layer: MapLayer) => void;
   overrideCenter?: Coordinates;
   showModeToggle?: boolean;
+  // The opacity slider and locate button. Off for a preview that only
+  // opens the full-screen map when tapped, where they couldn't be used.
+  showLayerControls?: boolean;
   enableForecastPlayback?: boolean;
   fullscreen?: boolean;
+  // Saved places to pin on the map.
+  places?: MapPlacePin[];
+  onPlacePress?: (placeId: string) => void;
 };
 
 const MapScreen = ({
+  layer: mapLayer,
+  onLayerChange,
   overrideCenter,
   showModeToggle = true,
+  showLayerControls = true,
   enableForecastPlayback = false,
   fullscreen = false,
+  places = [],
+  onPlacePress,
 }: Props) => {
   const { coords, loading: locating } = useLocation();
-  const { settings: mapSettings } = useMapSettings();
+  const { settings: mapSettings, update: updateMapSettings } = useMapSettings();
   const insets = useSafeAreaInsets();
-  const [mapLayer, setMapLayer] = useState<MapLayer>('default');
   const [forecastPlaying, setForecastPlaying] = useState(false);
   const [frameIndex, setFrameIndex] = useState(0);
 
   // Heat index and AQHI are peer hazard layers: everything below (current
   // tile, opacity slider, legend, Play Forecast, locate button) is shared
   // so the two always look and behave the same — only the data differs.
-  const isHazardLayer = mapLayer === 'heat' || mapLayer === 'aqhi';
+  const showPicker = showModeToggle && onLayerChange !== undefined;
 
   // 1. SPLIT STATES: One for the slider UI, one for the actual map overlay
   const [sliderOpacity, setSliderOpacity] = useState(
@@ -239,6 +257,9 @@ const MapScreen = ({
   };
 
   const handleMapPress = (event: MapPressEvent) => {
+    // Android also reports a tap on a marker (e.g. a place pin) as a map
+    // press — that must not move the tapped-point pin underneath it.
+    if (event.nativeEvent.action === 'marker-press') return;
     const { latitude, longitude } = event.nativeEvent.coordinate;
     placeMarkerAt(latitude, longitude);
     fetchExactAqhiForPoint(latitude, longitude);
@@ -326,7 +347,7 @@ const MapScreen = ({
           />
         )}
 
-        {isHazardLayer && activeFrame && (
+        {activeFrame && (
           <Overlay
             key={`${mapLayer}-forecast-${activeFrame.ts}`}
             image={{ uri: activeFrame.uri }}
@@ -334,6 +355,28 @@ const MapScreen = ({
             opacity={mapOpacity}
           />
         )}
+
+        {places.map(place => (
+          <Marker
+            // Same remount-on-values trick as the tapped-point marker below,
+            // so Android re-measures the pin once its values arrive.
+            key={`place-${place.id}-${place.heatIndex}-${place.aqhi}-${mapLayer}`}
+            coordinate={{ latitude: place.latitude, longitude: place.longitude }}
+            anchor={{ x: 0.5, y: 1 }}
+            zIndex={2}
+            tracksViewChanges={true}
+            onPress={onPlacePress ? () => onPlacePress(place.id) : undefined}
+          >
+            <DualStatPin
+              title={place.label}
+              temperature={place.heatIndex}
+              aqhi={place.aqhi}
+              // The small preview shows only the layer on screen; the
+              // full-screen map has room for both.
+              only={fullscreen ? undefined : mapLayer}
+            />
+          </Marker>
+        ))}
 
         {selectedPoint && (
           <Marker
@@ -362,134 +405,118 @@ const MapScreen = ({
         )}
       </MapView>
 
-      {isHazardLayer && (
-        <>
-          <View
-            style={[
-              styles.legendContainerRight,
-              fullscreen && {
-                top: insets.top + 16 + 54 + 12,
-                bottom: insets.bottom + 16 + BOTTOM_ROW_HEIGHT + 16,
-              },
-            ]}
-          >
-            {mapLayer === 'aqhi' ? <AqhiLegend /> : <HeatLegend />}
+      <View
+        style={[
+          styles.legendContainerRight,
+          // Nothing above or below it to clear (no picker / no control
+          // row), so the legend can use the map's full height.
+          !showPicker && styles.legendNoPicker,
+          !showLayerControls && styles.legendNoControls,
+          fullscreen && {
+            top: insets.top + 16 + 54 + 12,
+            bottom: insets.bottom + 16 + BOTTOM_ROW_HEIGHT + 16,
+          },
+        ]}
+      >
+        {mapLayer === 'aqhi' ? <AqhiLegend /> : <HeatLegend />}
+      </View>
+
+      {showLayerControls && (
+        <View
+          style={[
+            styles.bottomRow,
+            fullscreen
+              ? {
+                  bottom: insets.bottom + 16,
+                  left: 16,
+                  right: 16,
+                }
+              : { bottom: 8, left: 8, right: 8 },
+          ]}
+        >
+          <View style={styles.opacityControl}>
+            <Text style={styles.opacityLabel}>
+              Layer opacity: {Math.round(sliderOpacity * 100)}%
+            </Text>
+            <Slider
+              style={styles.opacitySlider}
+              minimumValue={0.1}
+              maximumValue={0.9}
+              step={0.1} // 3. ADD STEP: Prevents erratic micro-updates
+              value={sliderOpacity}
+              onValueChange={setSliderOpacity} // Updates UI smoothly while dragging
+              onSlidingComplete={setMapOpacity} // Updates the actual map overlay when user lets go
+              minimumTrackTintColor="#D9534F"
+              maximumTrackTintColor="#ccc"
+            />
           </View>
 
-          <View
+          <TouchableOpacity
             style={[
-              styles.bottomRow,
-              fullscreen
-                ? {
-                    bottom: insets.bottom + 16,
-                    left: 16,
-                    right: 16,
-                  }
-                : { bottom: 8, left: 8, right: 8 },
+              styles.locateButton,
+              fullscreen && styles.locateButtonLarge,
             ]}
+            onPress={recenter}
           >
-            <View style={styles.opacityControl}>
-              <Text style={styles.opacityLabel}>
-                Layer opacity: {Math.round(sliderOpacity * 100)}%
-              </Text>
-              <Slider
-                style={styles.opacitySlider}
-                minimumValue={0.1}
-                maximumValue={0.9}
-                step={0.1} // 3. ADD STEP: Prevents erratic micro-updates
-                value={sliderOpacity}
-                onValueChange={setSliderOpacity} // Updates UI smoothly while dragging
-                onSlidingComplete={setMapOpacity} // Updates the actual map overlay when user lets go
-                minimumTrackTintColor="#D9534F"
-                maximumTrackTintColor="#ccc"
-              />
-            </View>
-
-            <TouchableOpacity
-              style={[
-                styles.locateButton,
-                styles.locateButtonInRow,
-                fullscreen && styles.locateButtonLarge,
-              ]}
-              onPress={recenter}
-            >
-              <Navigation
-                size={fullscreen ? 24 : 20}
-                color="#FFFFFF"
-                fill="#FFFFFF"
-              />
-            </TouchableOpacity>
-          </View>
-
-          {forecastAvailable && (
-            <TouchableOpacity
-              style={[
-                styles.playForecastButton,
-                !forecastReady && styles.playForecastButtonDisabled,
-                fullscreen
-                  ? {
-                      bottom: insets.bottom + 16 + BOTTOM_ROW_HEIGHT + 16,
-                      paddingVertical: 14,
-                      paddingHorizontal: 22,
-                    }
-                  : { bottom: 64 },
-              ]}
-              onPress={toggleForecastPlayback}
-              disabled={!forecastReady}
-            >
-              {!forecastReady ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : forecastPlaying ? (
-                <Square size={16} color="#FFFFFF" fill="#FFFFFF" />
-              ) : (
-                <Play size={16} color="#FFFFFF" fill="#FFFFFF" />
-              )}
-              <Text
-                style={[
-                  styles.playForecastText,
-                  fullscreen && { fontSize: 15 },
-                ]}
-              >
-                {!forecastReady
-                  ? 'Loading forecast…'
-                  : forecastPlaying
-                  ? activeFrame
-                    ? formatHkTimestampLabel(activeFrame.ts)
-                    : 'Stop'
-                  : 'Play Forecast'}
-              </Text>
-            </TouchableOpacity>
-          )}
-        </>
-      )}
-
-      {showModeToggle && (
-        <View style={[styles.topBar, fullscreen && { top: insets.top + 16 }]}>
-          <MapLayerPicker
-            layer={mapLayer}
-            onChange={setMapLayer}
-            large={fullscreen}
-          />
+            <Navigation
+              size={fullscreen ? 24 : 20}
+              color="#FFFFFF"
+              fill="#FFFFFF"
+            />
+          </TouchableOpacity>
         </View>
       )}
 
-      {!isHazardLayer && (
+      {forecastAvailable && (
         <TouchableOpacity
           style={[
-            styles.locateButton,
-            fullscreen && [
-              styles.locateButtonLarge,
-              { bottom: insets.bottom + 16 },
-            ],
+            styles.playForecastButton,
+            !forecastReady && styles.playForecastButtonDisabled,
+            fullscreen
+              ? {
+                  bottom: insets.bottom + 16 + BOTTOM_ROW_HEIGHT + 16,
+                  paddingVertical: 14,
+                  paddingHorizontal: 22,
+                }
+              : { bottom: 64 },
           ]}
-          onPress={recenter}
+          onPress={toggleForecastPlayback}
+          disabled={!forecastReady}
         >
-          <Navigation
-            size={fullscreen ? 24 : 20}
-            color="#FFFFFF"
-            fill="#FFFFFF"
-          />
+          {!forecastReady ? (
+            <ActivityIndicator size="small" color="#FFFFFF" />
+          ) : forecastPlaying ? (
+            <Square size={16} color="#FFFFFF" fill="#FFFFFF" />
+          ) : (
+            <Play size={16} color="#FFFFFF" fill="#FFFFFF" />
+          )}
+          <Text
+            style={[
+              styles.playForecastText,
+              fullscreen && { fontSize: 15 },
+            ]}
+          >
+            {!forecastReady
+              ? 'Loading forecast…'
+              : forecastPlaying
+              ? activeFrame
+                ? formatHkTimestampLabel(activeFrame.ts)
+                : 'Stop'
+              : 'Play Forecast'}
+          </Text>
         </TouchableOpacity>
+      )}
+
+      {showPicker && (
+        <View style={[styles.topBar, fullscreen && { top: insets.top + 16 }]}>
+          <MapLayerPicker
+            layer={mapLayer}
+            onChange={onLayerChange}
+            mapType={mapSettings.mapType}
+            onMapTypeChange={mapType => updateMapSettings({ ...mapSettings, mapType })}
+            large={fullscreen}
+          />
+        </View>
       )}
     </View>
   );
@@ -498,10 +525,8 @@ const MapScreen = ({
 const styles = StyleSheet.create({
   container: { flex: 1, borderRadius: 16, overflow: 'hidden' },
   topBar: { position: 'absolute', top: 16, right: 16 },
+  // Sits at the end of the bottom row, beside the opacity slider.
   locateButton: {
-    position: 'absolute',
-    bottom: 16,
-    right: 16,
     width: 48,
     height: 48,
     borderRadius: 24,
@@ -509,11 +534,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     elevation: 5,
-  },
-  locateButtonInRow: {
-    position: 'relative',
-    bottom: 0,
-    right: 0,
   },
   locateButtonLarge: {
     width: 56,
@@ -526,6 +546,8 @@ const styles = StyleSheet.create({
     right: 8,
     bottom: 70,
   },
+  legendNoPicker: { top: 8 },
+  legendNoControls: { bottom: 8 },
   bottomRow: {
     position: 'absolute',
     flexDirection: 'row',

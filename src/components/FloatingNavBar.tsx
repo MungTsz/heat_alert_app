@@ -9,28 +9,27 @@ import {
   Platform,
   LayoutChangeEvent,
 } from 'react-native';
-import { Flame, Footprints, Users, Settings } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
-export type TabName = 'Environment' | 'Exposure' | 'Community' | 'Settings';
+import { NAV_BAR_CONFIG, NAV_TABS, TabName } from '../config/navConfig';
 
 interface Props {
   activeTab: TabName;
   onTabChange: (tab: TabName) => void;
+  // Tabs showing a small dot on their icon (e.g. Alerts while an alert is
+  // active), so it is noticed from any tab.
+  dottedTabs?: readonly TabName[];
 }
 
-const TABS: TabName[] = ['Environment', 'Exposure', 'Community', 'Settings'];
+const { bubbleWidth, bubbleHeight } = NAV_BAR_CONFIG;
 
-const FloatingNavBar: React.FC<Props> = ({ activeTab, onTabChange }) => {
+const FloatingNavBar: React.FC<Props> = ({ activeTab, onTabChange, dottedTabs = [] }) => {
   const insets = useSafeAreaInsets();
   const [containerWidth, setContainerWidth] = useState<number>(0);
   const bubbleAnim = useRef(new Animated.Value(0)).current;
 
-  const activeIndex = TABS.indexOf(activeTab);
+  const activeIndex = NAV_TABS.findIndex(tab => tab.key === activeTab);
 
-  const tabWidth = containerWidth / TABS.length;
-  const bubbleWidth = 72;
-  const bubbleHeight = 52;
+  const tabWidth = containerWidth / NAV_TABS.length;
 
   useEffect(() => {
     if (containerWidth > 0 && activeIndex !== -1) {
@@ -73,40 +72,28 @@ const FloatingNavBar: React.FC<Props> = ({ activeTab, onTabChange }) => {
       )}
 
       {/* Tabs */}
-      {TABS.map(tab => {
-        const isActive = activeTab === tab;
+      {NAV_TABS.map(({ key, label, icon: Icon, fillWhenActive }) => {
+        const isActive = activeTab === key;
+        const color = isActive ? NAV_BAR_CONFIG.activeColor : NAV_BAR_CONFIG.inactiveColor;
         return (
           <TouchableOpacity
-            key={tab}
+            key={key}
             style={styles.tab}
-            onPress={() => onTabChange(tab)}
+            onPress={() => onTabChange(key)}
             activeOpacity={0.8}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: isActive }}
           >
-            {tab === 'Environment' && (
-              <Flame
-                size={22}
-                color={isActive ? '#000000' : '#8E8E93'}
-                fill={isActive ? '#000000' : 'none'}
+            <View>
+              <Icon
+                size={NAV_BAR_CONFIG.iconSize}
+                color={color}
+                fill={isActive && fillWhenActive ? color : 'none'}
               />
-            )}
-            {tab === 'Exposure' && (
-              <Footprints
-                size={22}
-                color={isActive ? '#000000' : '#8E8E93'}
-              />
-            )}
-            {tab === 'Community' && (
-              <Users
-                size={22}
-                color={isActive ? '#000000' : '#8E8E93'}
-                fill={isActive ? '#000000' : 'none'}
-              />
-            )}
-            {tab === 'Settings' && (
-              <Settings size={22} color={isActive ? '#000000' : '#8E8E93'} />
-            )}
+              {dottedTabs.includes(key) && <View style={styles.dot} />}
+            </View>
             <Text style={[styles.label, isActive && styles.activeLabel]}>
-              {tab}
+              {label}
             </Text>
           </TouchableOpacity>
         );
@@ -146,13 +133,24 @@ const styles = StyleSheet.create({
     zIndex: 1,
     gap: 3,
   },
+  dot: {
+    position: 'absolute',
+    top: -1,
+    right: -3,
+    width: NAV_BAR_CONFIG.dotSize,
+    height: NAV_BAR_CONFIG.dotSize,
+    borderRadius: NAV_BAR_CONFIG.dotSize / 2,
+    backgroundColor: NAV_BAR_CONFIG.dotColor,
+    borderWidth: 1,
+    borderColor: '#FFFFFF',
+  },
   label: {
     fontSize: 10,
     fontWeight: '500',
-    color: '#8E8E93',
+    color: NAV_BAR_CONFIG.inactiveColor,
   },
   activeLabel: {
-    color: '#000000',
+    color: NAV_BAR_CONFIG.activeColor,
     fontWeight: '700',
   },
 });

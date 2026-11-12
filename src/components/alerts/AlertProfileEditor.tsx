@@ -22,7 +22,7 @@ type Props = {
 };
 
 // The one editor for "who is here and what to alert on" — used by the
-// About you sheet, the Community alert sheet and the Add place flow, so the
+// About you sheet, the Places alert sheet and the Add place flow, so the
 // question reads the same everywhere. Heat and air quality appear in the
 // same order with the same controls, as peer hazards.
 const AlertProfileEditor = ({ profile, onChange, forPlace }: Props) => {

@@ -67,7 +67,39 @@ export const PROFILE_EDITOR_COPY = {
     `Alerts at heat index ${heatLevel} · air quality ${aqhiLevel}`,
 };
 
-// Settings' "About you" row and the sheet it opens.
+// The Alerts tab: what is happening now and what was sent come first, then
+// how alerts reach you. Real app settings sit behind the header's gear.
+export const ALERTS_SCREEN_COPY = {
+  title: 'Alerts',
+  activeTitle: 'ACTIVE NOW',
+  activeEmpty: 'No active alerts',
+  recentTitle: 'RECENT ALERTS',
+  // The message log keeps a few days (ALERT_MESSAGE_LOG_CONFIG), so say how
+  // far back the list goes rather than implying it is the full history.
+  recentSubtitle: (days: number) => `Sent in the last ${days} ${days === 1 ? 'day' : 'days'}`,
+  recentEmpty: 'Nothing sent recently',
+  urgent: 'Urgent',
+  appSettingsLabel: 'App settings',
+  appSettingsTitle: 'Settings',
+};
+
+export const NOTIFICATION_SOURCES_COPY = {
+  title: 'NOTIFICATION SOURCES',
+  subtitle: 'Choose where alerts are triggered from',
+  currentLabel: 'Current Location',
+  currentDescription: 'Alert me based on my live location',
+  placesLabel: 'My Places',
+  placesDescription: 'Alert me about my places, using who is there',
+};
+
+// Home's banner over the sky, for alerts at your own location. Each hazard
+// reads like its card badge ("Heat index: Alert now"), joined into one line.
+export const HOME_ALERT_COPY = {
+  separator: ' · ',
+  accessibilityHint: 'Opens the alert details',
+};
+
+// The Alerts tab's "About you" row and the sheet it opens.
 export const ABOUT_YOU_COPY = {
   sectionTitle: 'ABOUT YOU',
   sectionSubtitle: 'Sets when alerts for your current location reach you',
@@ -75,13 +107,13 @@ export const ABOUT_YOU_COPY = {
 };
 
 // The one question asked on first launch. Who the phone's owner is rarely
-// changes, so it is asked once up front instead of sitting open in Settings.
+// changes, so it is asked once up front instead of sitting open in the Alerts tab.
 export const ONBOARDING_COPY = {
   eyebrow: 'WELCOME',
   title: 'Alerts that fit you',
   intro:
     'Heat and air quality affect people differently. Tell us who you are and we’ll alert you at the right level.',
-  laterHint: 'You can change this any time in Settings.',
+  laterHint: 'You can change this any time in Alerts.',
   continue: 'Continue',
 };
 
@@ -242,7 +274,7 @@ export const MESSAGE_COPY = {
   // A forecast's worst point: "up to Very High (10)".
   upTo: (level: string) => `up to ${level}`,
 
-  // "Preview a notification" in Settings — clearly marked, and with no
+  // "Preview a notification" in the Alerts tab — clearly marked, and with no
   // numbers in it, so a sample can never be mistaken for a real reading.
   samplePrefix: 'Sample · ',
   sampleBody: (place: string, when: string) =>
@@ -268,11 +300,12 @@ export const REMINDER_COPY = {
   noEventsBody: 'No heat or air quality alerts are expected today at your places.',
 };
 
-// Small badges on Home's hazard cards and Community's place cards.
+// Small badges on Home's hazard cards and Places' place cards (also the
+// wording of Home's alert banner and the Alerts tab's active list).
 export const ACTIVE_ALERT_BADGE_COPY = {
   now: 'Alert now',
   headsUp: (when: string) => `Heads-up ${when}`,
-  // Community cards name the hazard, since one card shows both.
+  // Place cards name the hazard, since one card shows both.
   withHazard: (hazard: HazardKind, text: string) => `${HAZARD_COPY[hazard].name}: ${text}`,
 };
 

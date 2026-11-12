@@ -188,7 +188,7 @@ export const ALERT_MESSAGE_LOG_CONFIG = {
   retentionMs: 72 * HOUR_MS,
 };
 
-// How often Home / Community re-read active alerts while open (they also
+// How often Home / Places / Alerts re-read active alerts while open (they also
 // refresh whenever a check finishes).
 export const ACTIVE_ALERTS_REFRESH_MS = MINUTE_MS;
 

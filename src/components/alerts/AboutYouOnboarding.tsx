@@ -11,9 +11,9 @@ import InfoNote from '../addPlace/InfoNote';
 
 // Asked once, on first launch: who the phone's owner is decides when alerts
 // for their own location arrive, and it rarely changes — so it is a
-// one-time question here rather than an always-open form in Settings.
+// one-time question here rather than an always-open form in the Alerts tab.
 // Only the audience is asked; hazards and Advanced levels keep their
-// defaults and live behind Settings → About you.
+// defaults and live behind Alerts → About you.
 const AboutYouOnboarding = () => {
   const { settings, loading, update } = useNotificationSettings();
   // Local until Continue, so nothing is saved half-answered.

@@ -9,22 +9,59 @@ import {
   Pressable,
 } from 'react-native';
 import { Layers, Check } from 'lucide-react-native';
-
-export type MapLayer = 'default' | 'heat' | 'aqhi';
+import { GoogleMapType, MapLayer } from '../types/mapSettings';
 
 type Props = {
   layer: MapLayer;
   onChange: (layer: MapLayer) => void;
+  mapType: GoogleMapType;
+  onMapTypeChange: (mapType: GoogleMapType) => void;
   large?: boolean;
 };
 
-const OPTIONS: { key: MapLayer; label: string }[] = [
-  { key: 'default', label: 'Default' },
-  { key: 'heat', label: 'Heat layer' },
-  { key: 'aqhi', label: 'AQHI layer' },
+// Heat index first, as everywhere else the two hazards appear together.
+const LAYER_OPTIONS: { key: MapLayer; label: string }[] = [
+  { key: 'heat', label: 'Heat index' },
+  { key: 'aqhi', label: 'AQHI' },
 ];
 
-const MapLayerPicker: React.FC<Props> = ({ layer, onChange, large = false }) => {
+// The base map style sits here rather than in a settings page: it is
+// wanted while looking at the map, not before.
+const MAP_TYPE_OPTIONS: { key: GoogleMapType; label: string }[] = [
+  { key: 'standard', label: 'Default' },
+  { key: 'hybrid', label: 'Satellite' },
+];
+
+type OptionProps = {
+  label: string;
+  selected: boolean;
+  large: boolean;
+  onPress: () => void;
+};
+
+const Option = ({ label, selected, large, onPress }: OptionProps) => (
+  <TouchableOpacity
+    style={[styles.option, large && styles.optionLarge, selected && styles.optionSelected]}
+    onPress={onPress}
+    accessibilityRole="button"
+    accessibilityState={{ selected }}
+  >
+    {selected ? (
+      <Check size={large ? 18 : 14} color="#D9534F" />
+    ) : (
+      <View style={styles.checkSpacer} />
+    )}
+    <Text style={[styles.optionText, large && styles.optionTextLarge]}>{label}</Text>
+  </TouchableOpacity>
+);
+
+const MapLayerPicker: React.FC<Props> = ({
+  layer,
+  onChange,
+  mapType,
+  onMapTypeChange,
+  large = false,
+}) => {
   const [open, setOpen] = useState(false);
   const [anchor, setAnchor] = useState({ top: 0, right: 0 });
   const buttonRef = useRef<View>(null);
@@ -38,6 +75,11 @@ const MapLayerPicker: React.FC<Props> = ({ layer, onChange, large = false }) => 
       setAnchor({ top: y + h + 6, right: 16 });
       setOpen(true);
     });
+  };
+
+  const choose = (apply: () => void) => {
+    apply();
+    setOpen(false);
   };
 
   return (
@@ -72,32 +114,27 @@ const MapLayerPicker: React.FC<Props> = ({ layer, onChange, large = false }) => 
               { top: anchor.top, right: anchor.right },
             ]}
           >
-            {OPTIONS.map(option => {
-              const isSelected = option.key === layer;
-              return (
-                <TouchableOpacity
-                  key={option.key}
-                  style={[
-                    styles.option,
-                    large && styles.optionLarge,
-                    isSelected && styles.optionSelected,
-                  ]}
-                  onPress={() => {
-                    onChange(option.key);
-                    setOpen(false);
-                  }}
-                >
-                  {isSelected ? (
-                    <Check size={large ? 18 : 14} color="#D9534F" />
-                  ) : (
-                    <View style={styles.checkSpacer} />
-                  )}
-                  <Text style={[styles.optionText, large && styles.optionTextLarge]}>
-                    {option.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
+            <Text style={[styles.groupTitle, large && styles.groupTitleLarge]}>Layer</Text>
+            {LAYER_OPTIONS.map(option => (
+              <Option
+                key={option.key}
+                label={option.label}
+                selected={option.key === layer}
+                large={large}
+                onPress={() => choose(() => onChange(option.key))}
+              />
+            ))}
+            <View style={styles.groupDivider} />
+            <Text style={[styles.groupTitle, large && styles.groupTitleLarge]}>Map style</Text>
+            {MAP_TYPE_OPTIONS.map(option => (
+              <Option
+                key={option.key}
+                label={option.label}
+                selected={option.key === mapType}
+                large={large}
+                onPress={() => choose(() => onMapTypeChange(option.key))}
+              />
+            ))}
           </View>
         </Pressable>
       </Modal>
@@ -123,10 +160,29 @@ const styles = StyleSheet.create({
     borderWidth: 0.5,
     borderColor: '#E2E2E2',
     overflow: 'hidden',
+    paddingVertical: 4,
   },
   dropdownLarge: {
     width: 190,
     borderRadius: 14,
+  },
+  groupTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#999',
+    paddingHorizontal: 12,
+    paddingTop: 6,
+    paddingBottom: 2,
+  },
+  groupTitleLarge: {
+    fontSize: 13,
+    paddingHorizontal: 16,
+    paddingTop: 10,
+  },
+  groupDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: '#E2E2E2',
+    marginTop: 4,
   },
   option: {
     flexDirection: 'row',

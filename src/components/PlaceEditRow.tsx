@@ -25,7 +25,7 @@ type Props = {
   onPress?: () => void;
 };
 
-// A compact one-line place row for the Community tab's Edit mode and its
+// A compact one-line place row for the Places tab's Edit mode and its
 // Hidden places section. No heat/AQHI badges or rename/type/delete actions:
 // while reordering, a short row fits more places on screen and the
 // destructive actions are out of reach of a mis-tap. Single-line on

@@ -1,7 +1,13 @@
-// GoogleMapType is intentionally narrowed to what the Settings UI exposes —
-// 'standard' (Google's default light map) and 'hybrid' (satellite imagery
-// with street/building labels layered on top), see SettingsScreen "MAP DISPLAY".
+import type { HazardKind } from './alerts';
+
+// GoogleMapType is intentionally narrowed to what the map's layer picker
+// exposes — 'standard' (Google's default light map) and 'hybrid' (satellite
+// imagery with street/building labels layered on top).
 export type GoogleMapType = 'standard' | 'hybrid';
+
+// A map always shows one of the two peer hazards — there is no plain
+// "default" layer (see DEFAULT_MAP_LAYER_CONFIG).
+export type MapLayer = HazardKind;
 
 export type MapSettings = {
   mapType: GoogleMapType;

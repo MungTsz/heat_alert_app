@@ -4,14 +4,18 @@ import { Modal, View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { X } from 'lucide-react-native';
 import MapScreen from '../screens/MapScreen';
 import { BookmarkEntry } from '../types/bookmark';
+import { MapLayer } from '../types/mapSettings';
 
 type Props = {
   visible: boolean;
   bookmark: BookmarkEntry | null;
+  // Picked by the caller from this place's own values and alert profile
+  // (useDefaultMapLayer), like every other map.
+  layer: MapLayer;
   onClose: () => void;
 };
 
-const BookmarkMapModal: React.FC<Props> = ({ visible, bookmark, onClose }) => {
+const BookmarkMapModal: React.FC<Props> = ({ visible, bookmark, layer, onClose }) => {
   if (!bookmark) return null;
 
   return (
@@ -40,6 +44,7 @@ const BookmarkMapModal: React.FC<Props> = ({ visible, bookmark, onClose }) => {
 
           <View style={styles.mapContainer}>
             <MapScreen
+              layer={layer}
               overrideCenter={{
                 latitude: bookmark.latitude,
                 longitude: bookmark.longitude,

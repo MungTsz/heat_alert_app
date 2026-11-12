@@ -1,28 +1,42 @@
-// src/screens/SettingsScreen.tsx
+// src/screens/AlertsScreen.tsx
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MapPin, CheckCircle2, XCircle, ChevronRight } from 'lucide-react-native';
+import { ChevronRight, Settings } from 'lucide-react-native';
 import SettingsSection from '../components/SettingsSection';
 import SettingsToggleRow from '../components/SettingsToggleRow';
 import SegmentedControl from '../components/SegmentedControl';
 import TimeStepperRow from '../components/TimeStepperRow';
 import AlertProfileSheet from '../components/alerts/AlertProfileSheet';
+import AppSettingsScreen from './AppSettingsScreen';
 import { useNotificationSettings } from '../hooks/useNotificationSettings';
-import { useLocationPermissionStatus } from '../hooks/useLocationPermissionStatus';
-import { useMapSettings } from '../hooks/useMapSettings';
-import { useExposureTrackingSettings } from '../hooks/useExposureTrackingSettings';
+import { ActiveAlertBadge, useActiveAlerts } from '../hooks/useActiveAlerts';
+import { useAlertMessageLog } from '../hooks/useAlertMessageLog';
+import { useBookmarkList } from '../hooks/useBookmarkList';
 import { AllClearMode, DigestSlot, NoEventDays } from '../types/settings';
 import {
   ABOUT_YOU_COPY,
+  ALERTS_SCREEN_COPY,
   ALL_CLEAR_COPY,
   AUDIENCE_COPY,
+  CURRENT_LOCATION_LABEL,
   DELIVERY_SETTINGS_COPY,
+  HAZARD_COPY,
+  NOTIFICATION_SOURCES_COPY,
 } from '../config/alertCopy';
-import { DIGEST_CONFIG } from '../config/alertConfig';
-import { sendSampleGallery, sendSampleNotification } from '../services/alertCheckService';
+import {
+  ALERT_MESSAGE_LOG_CONFIG,
+  CURRENT_LOCATION_PLACE_ID,
+  DIGEST_CONFIG,
+  HAZARD_KINDS,
+} from '../config/alertConfig';
+import { ALERT_UI } from '../config/alertUiConfig';
+import { sendSampleNotification } from '../services/alertCheckService';
+import { openAlertDetail } from '../services/alertCheckBus';
 import { summarizeAlertLevels } from '../utils/alertProfile';
-import { runAlertCheckNow } from '../services/alertCheckBus';
+import { describeSentAt } from '../utils/alertMessages';
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 const ALL_CLEAR_OPTIONS: { value: AllClearMode; label: string }[] = (
   ['auto', 'always', 'off'] as const
@@ -46,40 +60,125 @@ const DIGEST_ROWS: { slot: DigestSlot; label: string; description: string }[] = 
   },
 ];
 
-// Settings decide HOW alerts arrive. WHEN a place counts as dangerous is set
-// per place (Community → a card's alert line), apart from your own live
-// location, which is "About you" here.
-const SettingsScreen = () => {
+const badgeColor = (badge: ActiveAlertBadge): string =>
+  badge.urgent
+    ? ALERT_UI.urgentColor
+    : badge.kind === 'now'
+      ? ALERT_UI.badgeNowColor
+      : ALERT_UI.badgeHeadsUpColor;
+
+type ActiveRow = { placeId: string; placeLabel: string; badge: ActiveAlertBadge };
+
+// The alert tab, top to bottom: what is happening now, what was sent, then
+// who you are and how alerts reach you. WHEN a saved place counts as
+// dangerous is set per place (Places → a card's alert line); app-wide
+// settings that are rarely changed sit behind the header's gear.
+const AlertsScreen = () => {
   const { settings, update } = useNotificationSettings();
-  const { granted, requestPermission, openAppSettings } = useLocationPermissionStatus();
-  const { settings: mapSettings, update: updateMapSettings } = useMapSettings();
-  const { enabled: exposureTrackingEnabled, setEnabled: setExposureTrackingEnabled } =
-    useExposureTrackingSettings();
+  const activeAlerts = useActiveAlerts();
+  const recentMessages = useAlertMessageLog();
+  const { bookmarks } = useBookmarkList();
 
-  const [checking, setChecking] = React.useState(false);
   const [editingAboutYou, setEditingAboutYou] = React.useState(false);
+  const [appSettingsOpen, setAppSettingsOpen] = React.useState(false);
 
-  const handleRunCheckNow = async () => {
-    setChecking(true);
-    const ran = await runAlertCheckNow();
-    setChecking(false);
-    if (!ran) console.log('Engine not ready yet — try again in a moment.');
-  };
+  // Your own location first, then places in the user's own Places order,
+  // each place's hazards in the app's usual heat-then-AQHI order. An event
+  // for a place deleted since has no name to show, so it is left out.
+  const activeRows: ActiveRow[] = [
+    { id: CURRENT_LOCATION_PLACE_ID, label: CURRENT_LOCATION_LABEL },
+    ...bookmarks,
+  ].flatMap(place =>
+    HAZARD_KINDS.flatMap(hazard =>
+      (activeAlerts[place.id] ?? [])
+        .filter(badge => badge.hazard === hazard)
+        .map(badge => ({ placeId: place.id, placeLabel: place.label, badge })),
+    ),
+  );
 
-  const handleLocationToggle = async (value: boolean) => {
-    if (value) {
-      await requestPermission();
-    } else {
-      openAppSettings();
-    }
-  };
-
+  const nowMs = Date.now();
   const { quietHours } = settings;
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        <Text style={styles.headerTitle}>Settings</Text>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>{ALERTS_SCREEN_COPY.title}</Text>
+          <TouchableOpacity
+            style={styles.gearButton}
+            onPress={() => setAppSettingsOpen(true)}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={ALERTS_SCREEN_COPY.appSettingsLabel}
+          >
+            <Settings size={22} color="#333" />
+          </TouchableOpacity>
+        </View>
+
+        <SettingsSection title={ALERTS_SCREEN_COPY.activeTitle}>
+          {activeRows.length === 0 ? (
+            <Text style={styles.emptyText}>{ALERTS_SCREEN_COPY.activeEmpty}</Text>
+          ) : (
+            activeRows.map(({ placeId, placeLabel, badge }, index) => (
+              <View key={`${placeId}|${badge.hazard}`}>
+                {index > 0 && <View style={styles.divider} />}
+                <TouchableOpacity
+                  style={styles.listRow}
+                  onPress={badge.messageId ? () => openAlertDetail(badge.messageId!) : undefined}
+                  disabled={!badge.messageId}
+                  accessibilityRole="button"
+                >
+                  <View style={[styles.swatch, { backgroundColor: badgeColor(badge) }]} />
+                  <View style={styles.listText}>
+                    <Text style={styles.rowLabel} numberOfLines={1}>
+                      {HAZARD_COPY[badge.hazard].name} · {placeLabel}
+                    </Text>
+                    <View style={styles.metaRow}>
+                      <Text style={styles.rowDescription}>{badge.text}</Text>
+                      {badge.urgent && <UrgentTag />}
+                    </View>
+                  </View>
+                  {badge.messageId && <ChevronRight size={20} color="#BBB" />}
+                </TouchableOpacity>
+              </View>
+            ))
+          )}
+        </SettingsSection>
+
+        <SettingsSection
+          title={ALERTS_SCREEN_COPY.recentTitle}
+          subtitle={ALERTS_SCREEN_COPY.recentSubtitle(
+            Math.round(ALERT_MESSAGE_LOG_CONFIG.retentionMs / DAY_MS),
+          )}
+        >
+          {recentMessages.length === 0 ? (
+            <Text style={styles.emptyText}>{ALERTS_SCREEN_COPY.recentEmpty}</Text>
+          ) : (
+            recentMessages.map((message, index) => (
+              <View key={message.id}>
+                {index > 0 && <View style={styles.divider} />}
+                <TouchableOpacity
+                  style={styles.listRow}
+                  onPress={() => openAlertDetail(message.id)}
+                  accessibilityRole="button"
+                >
+                  <View style={styles.listText}>
+                    <Text style={styles.rowLabel} numberOfLines={2}>
+                      {message.title}
+                    </Text>
+                    <View style={styles.metaRow}>
+                      <Text style={styles.rowDescription}>
+                        {describeSentAt(message.sentAtMs, nowMs)}
+                      </Text>
+                      {message.urgent && <UrgentTag />}
+                    </View>
+                  </View>
+                  <ChevronRight size={20} color="#BBB" />
+                </TouchableOpacity>
+              </View>
+            ))
+          )}
+        </SettingsSection>
 
         {/* One summary row: who the owner is rarely changes, so the full
             editor opens only when they mean to change it. */}
@@ -102,19 +201,19 @@ const SettingsScreen = () => {
         </SettingsSection>
 
         <SettingsSection
-          title="NOTIFICATION SOURCES"
-          subtitle="Choose where alerts are triggered from"
+          title={NOTIFICATION_SOURCES_COPY.title}
+          subtitle={NOTIFICATION_SOURCES_COPY.subtitle}
         >
           <SettingsToggleRow
-            label="Current Location"
-            description="Alert me based on my live location"
+            label={NOTIFICATION_SOURCES_COPY.currentLabel}
+            description={NOTIFICATION_SOURCES_COPY.currentDescription}
             value={settings.notifyCurrentLocation}
             onValueChange={notifyCurrentLocation => update({ notifyCurrentLocation })}
           />
           <View style={styles.divider} />
           <SettingsToggleRow
-            label="Community Places"
-            description="Alert me about my places, using who is there"
+            label={NOTIFICATION_SOURCES_COPY.placesLabel}
+            description={NOTIFICATION_SOURCES_COPY.placesDescription}
             value={settings.notifyBookmarkedLocations}
             onValueChange={notifyBookmarkedLocations => update({ notifyBookmarkedLocations })}
           />
@@ -203,94 +302,6 @@ const SettingsScreen = () => {
             <Text style={styles.testButtonText}>Preview a notification</Text>
           </TouchableOpacity>
         </SettingsSection>
-
-        <SettingsSection title="MAP DISPLAY">
-          {(['standard', 'hybrid'] as const).map(type => (
-            <TouchableOpacity
-              key={type}
-              style={styles.mapTypeRow}
-              onPress={() => updateMapSettings({ ...mapSettings, mapType: type })}
-            >
-              <Text style={styles.mapTypeLabel}>{type === 'standard' ? 'Default' : 'Satellite'}</Text>
-              {mapSettings.mapType === type && <Text style={styles.mapTypeCheck}>✓</Text>}
-            </TouchableOpacity>
-          ))}
-        </SettingsSection>
-
-        <SettingsSection
-          title="EXPOSURE TRACKING"
-          subtitle="Track my location in the background to show today's spatial-temporal exposure on the Exposure tab"
-        >
-          <SettingsToggleRow
-            label="Background Exposure Tracking"
-            description="Uses your location even when the app is closed"
-            value={exposureTrackingEnabled}
-            onValueChange={setExposureTrackingEnabled}
-          />
-        </SettingsSection>
-
-        <SettingsSection title="LOCATION ACCESS">
-          <View style={styles.permissionRow}>
-            <MapPin size={20} color="#D9534F" />
-            <View style={styles.permissionTextContainer}>
-              <Text style={styles.permissionLabel}>GPS Location</Text>
-              <View style={styles.permissionStatusRow}>
-                {granted === true ? (
-                  <>
-                    <CheckCircle2 size={14} color="#4CAF50" />
-                    <Text style={[styles.permissionStatusText, { color: '#4CAF50' }]}>Allowed</Text>
-                  </>
-                ) : granted === false ? (
-                  <>
-                    <XCircle size={14} color="#D9534F" />
-                    <Text style={[styles.permissionStatusText, { color: '#D9534F' }]}>
-                      Not allowed
-                    </Text>
-                  </>
-                ) : (
-                  <Text style={styles.permissionStatusText}>Checking...</Text>
-                )}
-              </View>
-            </View>
-            <TouchableOpacity
-              style={styles.permissionButton}
-              onPress={() => handleLocationToggle(granted !== true)}
-            >
-              <Text style={styles.permissionButtonText}>
-                {granted === true ? 'Manage' : 'Enable'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </SettingsSection>
-
-        {/* Development builds only: runs the real check at once, skipping
-            the batching wait (quiet hours and the daily cap still apply). */}
-        {__DEV__ && (
-          <SettingsSection title="NOTIFICATION TESTING" subtitle="Development builds only">
-            <TouchableOpacity
-              style={styles.testButton}
-              onPress={handleRunCheckNow}
-              disabled={checking}
-            >
-              <Text style={styles.testButtonText}>
-                {checking ? 'Checking...' : 'Run Real Alert Check Now'}
-              </Text>
-            </TouchableOpacity>
-            <View style={styles.divider} />
-            {/* Every message type through the real composers, worded for
-                your first place — check wording and the detail sheet. */}
-            <TouchableOpacity style={styles.testButton} onPress={() => sendSampleGallery()}>
-              <Text style={styles.testButtonText}>Send Every Message Type</Text>
-            </TouchableOpacity>
-            <View style={styles.divider} />
-            <TouchableOpacity
-              style={styles.testButton}
-              onPress={() => update({ aboutYouConfirmed: false })}
-            >
-              <Text style={styles.testButtonText}>Show First-Launch Question Again</Text>
-            </TouchableOpacity>
-          </SettingsSection>
-        )}
       </ScrollView>
 
       {editingAboutYou && (
@@ -305,19 +316,52 @@ const SettingsScreen = () => {
           onCancel={() => setEditingAboutYou(false)}
         />
       )}
+
+      <AppSettingsScreen visible={appSettingsOpen} onClose={() => setAppSettingsOpen(false)} />
     </SafeAreaView>
   );
 };
 
+const UrgentTag = () => (
+  <View style={styles.urgentTag}>
+    <Text style={styles.urgentText}>{ALERTS_SCREEN_COPY.urgent}</Text>
+  </View>
+);
+
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#F5F5F5' },
-  scrollContent: { padding: 20, paddingBottom: 80 },
+  scrollContent: { padding: 20, paddingBottom: 140 },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
   headerTitle: {
     fontSize: 26,
     fontWeight: 'bold',
     color: '#333',
-    marginBottom: 20,
   },
+  gearButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyText: { fontSize: 14, color: '#999', paddingVertical: 14 },
+  listRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, gap: 12 },
+  listText: { flex: 1 },
+  swatch: { width: 4, alignSelf: 'stretch', borderRadius: 2 },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 },
+  urgentTag: {
+    backgroundColor: ALERT_UI.urgentColor,
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+  },
+  urgentText: { color: '#FFFFFF', fontSize: 10, fontWeight: '700' },
   summaryRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, gap: 12 },
   summaryText: { flex: 1 },
   block: { paddingVertical: 12 },
@@ -325,37 +369,8 @@ const styles = StyleSheet.create({
   rowDescription: { fontSize: 12, color: '#999', marginTop: 2 },
   segmentSpacing: { marginTop: 10 },
   divider: { height: 1, backgroundColor: '#EEE' },
-  mapTypeRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
-  },
-  mapTypeLabel: { fontSize: 15, color: '#333' },
-  mapTypeCheck: { color: '#D9534F', fontWeight: '700' },
-  permissionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-    gap: 12,
-  },
-  permissionTextContainer: { flex: 1 },
-  permissionLabel: { fontSize: 15, fontWeight: '600', color: '#333' },
-  permissionStatusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 2,
-  },
-  permissionStatusText: { fontSize: 12, color: '#999' },
-  permissionButton: {
-    backgroundColor: '#D9534F',
-    borderRadius: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-  },
-  permissionButtonText: { color: '#fff', fontSize: 13, fontWeight: '600' },
   testButton: { paddingVertical: 14 },
   testButtonText: { fontSize: 15, fontWeight: '600', color: '#D9534F' },
 });
 
-export default SettingsScreen;
+export default AlertsScreen;

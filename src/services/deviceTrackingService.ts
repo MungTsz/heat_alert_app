@@ -88,7 +88,7 @@ export const stopTracking = async (): Promise<void> => {
 
 // Called once at app launch: the plugin keeps tracking natively across
 // restarts, but this JS context still needs configure() for its heartbeat
-// listener — otherwise a session spent outside the Exposure/Settings tabs
+// listener — otherwise a session spent outside the Exposure tab or App settings
 // would drop every stationary ping (headless only runs once the app is closed).
 export const resumeTrackingIfEnabled = async (): Promise<void> => {
   try {

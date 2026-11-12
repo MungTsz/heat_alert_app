@@ -6,10 +6,16 @@ import { ACTIVE_ALERT_BADGE_COPY } from '../config/alertCopy';
 import { readAlertEvents, readMessageLog } from '../services/alertStateStorage';
 import { onAlertCheckDone } from '../services/alertCheckBus';
 import { describeStart } from '../utils/alertMessages';
+import { rankOf } from '../utils/hazardLevels';
+import { urgentRankFor } from '../utils/alertProfile';
 
 export type ActiveAlertBadge = {
   hazard: HazardKind;
   kind: 'now' | 'headsUp';
+  // A live alert at an urgent level — the same test the detail sheet uses
+  // to pick the stronger advice. Heads-ups are never urgent: urgency is
+  // about what is measured now.
+  urgent: boolean;
   text: string;
   // The latest message about this event — what tapping the badge opens.
   // null if that message has aged out of the log.
@@ -27,12 +33,19 @@ const toBadge = (
   if (ev.toldRank < 0) return null;
   const messageId = latestMessageByEvent.get(ev.key) ?? null;
   if (ev.stage === 'active') {
-    return { hazard: ev.hazard, kind: 'now', text: ACTIVE_ALERT_BADGE_COPY.now, messageId };
+    return {
+      hazard: ev.hazard,
+      kind: 'now',
+      urgent: ev.latestValue !== null && rankOf(ev.hazard, ev.latestValue) >= urgentRankFor(ev.hazard),
+      text: ACTIVE_ALERT_BADGE_COPY.now,
+      messageId,
+    };
   }
   if (ev.stage === 'forecast' && ev.forecast) {
     return {
       hazard: ev.hazard,
       kind: 'headsUp',
+      urgent: false,
       text: ACTIVE_ALERT_BADGE_COPY.headsUp(describeStart(ev.forecast.startMs, nowMs)),
       messageId,
     };
@@ -52,9 +65,9 @@ const latestMessageIds = (records: readonly AlertMessageRecord[]): Map<string, s
 };
 
 // Told, still-relevant alerts keyed by place id (bookmark id, or the
-// current-location id) — for Home's hazard cards and Community's place
-// cards. Re-read after every check and on a short timer, since checks also
-// run in the background.
+// current-location id) — for Home's banner and hazard cards, Places' cards,
+// the Alerts tab's active list and its nav dot. Re-read after every check
+// and on a short timer, since checks also run in the background.
 export const useActiveAlerts = () => {
   const [badgesByPlace, setBadgesByPlace] = useState<Record<string, ActiveAlertBadge[]>>({});
 

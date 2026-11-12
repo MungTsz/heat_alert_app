@@ -42,7 +42,7 @@ const ExposureStaySheet: React.FC<Props> = ({ cluster, onClose, onBookmark }) =>
           : 'Outside Hong Kong — exposure not calculated'}
       </Text>
 
-      {/* Outside HK there's no heat/AQHI data for a Community card and the
+      {/* Outside HK there's no heat/AQHI data for a Places card and the
           backend never scores stays there, so a place label would do
           nothing. */}
       {cluster.inHk && (
