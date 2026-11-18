@@ -3,7 +3,10 @@
 // so every reaction is decided (and tested) in one place and the Skia
 // components only draw what they're told.
 import {
+  DogEyes,
+  DogMouth,
   DogPose,
+  DogReaction,
   DogTongue,
   SCENE_AIR_LEVELS,
   SCENE_HEAT_LEVELS,
@@ -27,13 +30,14 @@ export type PersonMood = {
   mask: boolean;
 };
 
-export type DogMood = {
-  pose: DogPose;
-  tongue: DogTongue;
+export type DogMood = DogReaction & {
+  // From heat.
   droolDrops: number;
   puddle: number;
-  tailWagMs: number | null;
-  pantMs: number | null;
+  // From air.
+  redEyes: boolean;
+  teary: boolean;
+  runnyNose: boolean;
 };
 
 export type EnvironmentMood = {
@@ -65,15 +69,54 @@ const worse = <T>(order: T[], a: T, b: T): T =>
 const asLevel = (level: number | null): Level | null =>
   level === null ? null : (Math.max(1, Math.min(5, level)) as Level);
 
-// A dog with no heat reading just sits there: no tongue, no drool, tail still.
+const DOG_POSE_SEVERITY: DogPose[] = ['sit', 'lie'];
+const DOG_TONGUE_SEVERITY: DogTongue[] = ['none', 'short', 'long'];
+const DOG_MOUTH_SEVERITY: DogMouth[] = ['smile', 'closed', 'pant'];
+const DOG_EYES_SEVERITY: DogEyes[] = ['open', 'tired', 'closed'];
+
+// With no reading at all the dog just sits there: mouth closed (no grin),
+// tail still, no symptoms.
 const CALM_DOG: DogMood = {
   pose: 'sit',
   tongue: 'none',
-  droolDrops: 0,
-  puddle: 0,
+  mouth: 'closed',
+  eyes: 'open',
   tailWagMs: null,
   pantMs: null,
+  heavyBreath: false,
+  droolDrops: 0,
+  puddle: 0,
+  redEyes: false,
+  teary: false,
+  runnyNose: false,
 };
+
+// Both hazards act on the same dog: each part takes the worse of the two
+// (lying beats sitting, a still tail beats a wag, the faster breathing
+// wins), so a hot, smoggy day never looks better than either alone.
+const mergeDog = (a: DogReaction, b: DogReaction): DogReaction => {
+  const pants = [a.pantMs, b.pantMs].filter((ms): ms is number => ms !== null);
+  return {
+    pose: worse(DOG_POSE_SEVERITY, a.pose, b.pose),
+    tongue: worse(DOG_TONGUE_SEVERITY, a.tongue, b.tongue),
+    mouth: worse(DOG_MOUTH_SEVERITY, a.mouth, b.mouth),
+    eyes: worse(DOG_EYES_SEVERITY, a.eyes, b.eyes),
+    tailWagMs:
+      a.tailWagMs === null || b.tailWagMs === null ? null : Math.max(a.tailWagMs, b.tailWagMs),
+    pantMs: pants.length === 0 ? null : Math.min(...pants),
+    heavyBreath: a.heavyBreath || b.heavyBreath,
+  };
+};
+
+const reactionOf = (dog: DogReaction): DogReaction => ({
+  pose: dog.pose,
+  tongue: dog.tongue,
+  mouth: dog.mouth,
+  eyes: dog.eyes,
+  tailWagMs: dog.tailWagMs,
+  pantMs: dog.pantMs,
+  heavyBreath: dog.heavyBreath,
+});
 
 export const isNightHour = (hour: number): boolean =>
   hour < SCENE_TIME_CONFIG.dayStartHour || hour >= SCENE_TIME_CONFIG.dayEndHour;
@@ -121,12 +164,20 @@ export const sceneMoodFor = ({
     mask,
   };
 
-  const dog: DogMood = heat
-    ? {
-        ...heat.dog,
-        droolDrops: Math.min(heat.dog.droolDrops, SCENE_LIMITS.maxDroolDrops),
-      }
-    : CALM_DOG;
+  const reactions = [heat?.dog, air?.dog]
+    .filter((d): d is NonNullable<typeof d> => d !== undefined)
+    .map(reactionOf);
+  const dog: DogMood =
+    reactions.length === 0
+      ? CALM_DOG
+      : {
+          ...reactions.reduce(mergeDog),
+          droolDrops: Math.min(heat?.dog.droolDrops ?? 0, SCENE_LIMITS.maxDroolDrops),
+          puddle: heat?.dog.puddle ?? 0,
+          redEyes: air?.dog.redEyes ?? false,
+          teary: air?.dog.teary ?? false,
+          runnyNose: air?.dog.runnyNose ?? false,
+        };
 
   const environment: EnvironmentMood = {
     isNight,

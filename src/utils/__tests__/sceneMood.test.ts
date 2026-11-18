@@ -6,14 +6,23 @@ import {
   SCENE_TIME_CONFIG,
 } from '../../config/sceneConfig';
 
+import { SCENE_SAMPLE_READINGS } from '../sceneSamples';
+import { hazardLevelOf } from '../enviUtils';
+
 const NOON = 12;
 const MIDNIGHT = 0;
-// One heat index (°C) inside each of the five HEAT_INDEX_ZONES, mildest first.
-const HEAT_BY_LEVEL = [24, 29, 36, 45, 54];
-// One AQHI inside each of the five AQHI bands, Low first.
-const AQHI_BY_LEVEL = [2, 5, 7, 9, 11];
+// One reading inside each level, mildest first (the preview's samples).
+const HEAT_BY_LEVEL = SCENE_SAMPLE_READINGS.heat;
+const AQHI_BY_LEVEL = SCENE_SAMPLE_READINGS.aqhi;
 
 const LEVELS = [1, 2, 3, 4, 5] as const;
+
+describe('SCENE_SAMPLE_READINGS', () => {
+  it('has one reading inside each level, in order', () => {
+    expect(HEAT_BY_LEVEL.map(v => hazardLevelOf('heat', v))).toEqual([...LEVELS]);
+    expect(AQHI_BY_LEVEL.map(v => hazardLevelOf('aqhi', v))).toEqual([...LEVELS]);
+  });
+});
 
 describe('sceneMoodFor', () => {
   it('shows no reaction at all without readings', () => {
@@ -28,7 +37,18 @@ describe('sceneMoodFor', () => {
       cough: false,
       mask: false,
     });
-    expect(mood.dog).toMatchObject({ pose: 'sit', tongue: 'none', droolDrops: 0, puddle: 0 });
+    expect(mood.dog).toMatchObject({
+      pose: 'sit',
+      tongue: 'none',
+      mouth: 'closed',
+      tailWagMs: null,
+      pantMs: null,
+      droolDrops: 0,
+      puddle: 0,
+      redEyes: false,
+      teary: false,
+      runnyNose: false,
+    });
     expect(mood.environment).toMatchObject({ haze: 0, sparkles: false, shimmer: 0, lawnLevel: null });
   });
 
@@ -46,10 +66,58 @@ describe('sceneMoodFor', () => {
     dogs.slice(firstLie).forEach(d => expect(d.pose).toBe('lie'));
   });
 
+  it('the dog pants harder as heat rises, mouth open whenever it pants', () => {
+    const dogs = HEAT_BY_LEVEL.map(h => sceneMoodFor({ heatIndexC: h, aqhi: null, hour: NOON }).dog);
+    expect(dogs[0].pantMs).toBeNull();
+    for (let i = 2; i < dogs.length; i++) {
+      // Faster breathing (shorter breath) at every hotter level.
+      expect(dogs[i].pantMs!).toBeLessThan(dogs[i - 1].pantMs!);
+    }
+    expect(dogs[4]).toMatchObject({ tongue: 'long', heavyBreath: true });
+  });
+
+  it('every table keeps the dog\'s mouth open exactly when it pants', () => {
+    LEVELS.forEach(level => {
+      [SCENE_HEAT_LEVELS[level].dog, SCENE_AIR_LEVELS[level].dog].forEach(dog => {
+        expect(dog.mouth === 'pant').toBe(dog.pantMs !== null);
+      });
+    });
+  });
+
+  it('the dog reacts to dirty air: no grin, sore eyes, runny nose, then lies down', () => {
+    const dogs = AQHI_BY_LEVEL.map(a => sceneMoodFor({ heatIndexC: null, aqhi: a, hour: NOON }).dog);
+    expect(dogs[0].mouth).toBe('smile');
+    dogs.slice(1).forEach(d => expect(d.mouth).not.toBe('smile'));
+    // High and up: watery eyes and a runny nose, no tail wagging.
+    dogs.slice(2).forEach(d => {
+      expect(d).toMatchObject({ teary: true, runnyNose: true, tailWagMs: null });
+    });
+    // Very High and up: red eyes, fast breathing at rest, lying down.
+    dogs.slice(3).forEach(d => {
+      expect(d.redEyes).toBe(true);
+      expect(d.pantMs).not.toBeNull();
+      expect(d.pose).toBe('lie');
+    });
+    // Clean air alone gives no symptoms and no drool.
+    expect(dogs[0]).toMatchObject({ redEyes: false, teary: false, runnyNose: false, droolDrops: 0 });
+  });
+
+  it('a hot, smoggy day is never easier on the dog than either hazard alone', () => {
+    const hot = sceneMoodFor({ heatIndexC: HEAT_BY_LEVEL[2], aqhi: null, hour: NOON }).dog;
+    const smog = sceneMoodFor({ heatIndexC: null, aqhi: AQHI_BY_LEVEL[3], hour: NOON }).dog;
+    const both = sceneMoodFor({ heatIndexC: HEAT_BY_LEVEL[2], aqhi: AQHI_BY_LEVEL[3], hour: NOON }).dog;
+    expect(both.pose).toBe('lie'); // from the air
+    expect(both.tongue).toBe(hot.tongue); // long, from the heat
+    expect(both.pantMs).toBe(Math.min(hot.pantMs!, smog.pantMs!));
+    expect(both.droolDrops).toBe(hot.droolDrops);
+    expect(both).toMatchObject({ redEyes: true, runnyNose: true, tailWagMs: null });
+  });
+
   it('never gives the dog sweat', () => {
     // Dogs don't sweat: the dog's mood has no sweat field, at any level.
     LEVELS.forEach(level => {
       expect(Object.keys(SCENE_HEAT_LEVELS[level].dog)).not.toContain('sweatDrops');
+      expect(Object.keys(SCENE_AIR_LEVELS[level].dog)).not.toContain('sweatDrops');
     });
   });
 

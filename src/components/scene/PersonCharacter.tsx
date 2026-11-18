@@ -15,74 +15,86 @@ type Props = {
 
 const C = SCENE_PALETTE.person;
 
-// Drawn around (0, 0) = the ground between the feet, y up is negative.
-// The feet never leave the ground: only the upper body rises and falls
-// with each breath, so the person stands rather than floats.
-const B = {
-  legX: 6.5,
-  legTop: -21,
-  legBottom: -5,
-  legWidth: 7,
-  shoeW: 12,
-  shoeH: 6,
-  shortsTop: -33,
-  shortsBottom: -18,
-  torsoW: 30,
-  torsoTop: -66,
-  torsoBottom: -27,
-  shoulderY: -59,
-  headR: 21,
-  headCy: -84,
-};
-const HY = B.headCy;
+// A young adult in a T-shirt, shorts and trainers, front view. Drawn around
+// (0, 0) = the ground between the feet, y up is negative. Everyday
+// proportions (head about a sixth of the height, a neck, ears, hands), so
+// it reads as a person rather than a mascot. The feet never leave the
+// ground: only the upper body rises and falls with each breath.
+const HX = 13.5; // head half-width
+const HYR = 15; // head half-height
+const HY = -103; // head centre
+const LEG_X = 5.5;
 
-// Where each sweat drop starts (on the forehead / temples) and how far it
-// runs down the face before it's gone.
+// Where each sweat drop starts (temples / forehead, below the hairline) and
+// how far it runs down the face.
 const SWEAT_START: [number, number][] = [
-  [-17, HY - 3],
-  [16, HY - 6],
-  [-11, HY - 10],
-  [18, HY + 2],
+  [-11.5, HY - 3],
+  [11, HY - 6],
+  [-6.5, HY - 8],
+  [12.5, HY + 2],
 ];
-const SWEAT_RUN = 15;
+const SWEAT_RUN = 12;
 const TEARDROP = 'M 0 -3.6 Q 2.6 0.6 0 2.7 Q -2.6 0.6 0 -3.6 Z';
 
+// Short hair with a side part and a fringe swept to the left: the uneven
+// hairline is what makes it read as hair rather than a cap.
+const HAIR =
+  `M -14 ${HY - 1} Q -16.5 ${HY - 9} -14 ${HY - 14} Q -9 ${HY - 19.5} -1 ${HY - 18.5} ` +
+  `Q 9 ${HY - 19} 13.5 ${HY - 13} Q 16 ${HY - 8} 14 ${HY - 1} ` +
+  `Q 13.6 ${HY - 6} 11 ${HY - 8.5} L 8.5 ${HY - 9.5} Q 5 ${HY - 7} 2 ${HY - 9.6} ` +
+  `Q -2 ${HY - 5.5} -7.5 ${HY - 5.8} Q -11.5 ${HY - 5.5} -13 ${HY - 3} Z`;
+const HAIR_SHINE = `M -6 ${HY - 15.5} Q 1 ${HY - 17.5} 7 ${HY - 14.5}`;
+
 const MOUTH: Record<PersonMood['mouth'], string | null> = {
-  flat: `M -5 ${HY + 10} L 5 ${HY + 10}`,
-  smile: `M -6.5 ${HY + 8} Q 0 ${HY + 14.5} 6.5 ${HY + 8}`,
-  neutral: `M -5 ${HY + 10.5} Q 0 ${HY + 12} 5 ${HY + 10.5}`,
+  flat: `M -3.5 ${HY + 8.5} L 3.5 ${HY + 8.5}`,
+  smile: `M -4.5 ${HY + 7} Q 0 ${HY + 11} 4.5 ${HY + 7}`,
+  neutral: `M -3.5 ${HY + 8.5} Q 0 ${HY + 9.4} 3.5 ${HY + 8.5}`,
   pant: null, // an open mouth, drawn as a shape below
-  frown: `M -6 ${HY + 12.5} Q 0 ${HY + 7} 6 ${HY + 12.5}`,
+  frown: `M -4.5 ${HY + 10} Q 0 ${HY + 6.2} 4.5 ${HY + 10}`,
+};
+
+const Brows: React.FC<{ worried: boolean }> = ({ worried }) => {
+  const y = HY - 6.5;
+  // Worried: inner ends raised. Otherwise a relaxed arch.
+  const left = worried ? `M -8.5 ${y + 0.6} L -2.8 ${y - 2}` : `M -8.3 ${y + 0.4} Q -5.6 ${y - 1.4} -2.8 ${y - 0.2}`;
+  const right = worried ? `M 8.5 ${y + 0.6} L 2.8 ${y - 2}` : `M 8.3 ${y + 0.4} Q 5.6 ${y - 1.4} 2.8 ${y - 0.2}`;
+  return (
+    <>
+      <Path path={left} color={C.hair} style="stroke" strokeWidth={1.6} strokeCap="round" />
+      <Path path={right} color={C.hair} style="stroke" strokeWidth={1.6} strokeCap="round" />
+    </>
+  );
 };
 
 const Eyes: React.FC<{ eyes: PersonMood['eyes'] }> = ({ eyes }) => {
-  const ey = HY - 2;
+  const ey = HY - 1.5;
   if (eyes === 'squint') {
     // Screwed-up "> <" eyes: overwhelmed.
     return (
       <>
-        <Path path={`M -10.5 ${ey - 2.6} L -5.5 ${ey} L -10.5 ${ey + 2.6}`} color={C.ink} style="stroke" strokeWidth={1.8} strokeCap="round" strokeJoin="round" />
-        <Path path={`M 10.5 ${ey - 2.6} L 5.5 ${ey} L 10.5 ${ey + 2.6}`} color={C.ink} style="stroke" strokeWidth={1.8} strokeCap="round" strokeJoin="round" />
-      </>
-    );
-  }
-  if (eyes === 'tired') {
-    // Heavy lids: only the lower half of each eye shows.
-    return (
-      <>
-        {[-7.5, 7.5].map(ex => (
-          <Group key={`eye-${ex}`}>
-            <Path path={`M ${ex - 2.8} ${ey} Q ${ex} ${ey + 3.6} ${ex + 2.8} ${ey} Z`} color={C.ink} />
-            <Path path={`M ${ex - 3.4} ${ey - 0.2} L ${ex + 3.4} ${ey + 0.4}`} color={C.ink} style="stroke" strokeWidth={1.4} strokeCap="round" />
-          </Group>
-        ))}
+        <Path path={`M -7.5 ${ey - 2} L -3.5 ${ey} L -7.5 ${ey + 2}`} color={C.ink} style="stroke" strokeWidth={1.5} strokeCap="round" strokeJoin="round" />
+        <Path path={`M 7.5 ${ey - 2} L 3.5 ${ey} L 7.5 ${ey + 2}`} color={C.ink} style="stroke" strokeWidth={1.5} strokeCap="round" strokeJoin="round" />
       </>
     );
   }
   return (
     <>
-      <Circle cx={-7.5} cy={ey} r={2.3} color={C.ink} />
-      <Circle cx={7.5} cy={ey} r={2.3} color={C.ink} />
+      {[-5, 5].map(ex => (
+        <Group key={`eye-${ex}`}>
+          {eyes === 'tired' ? (
+            // Heavy lids: only the lower half of each eye shows.
+            <>
+              <Path path={`M ${ex - 1.9} ${ey} Q ${ex} ${ey + 2.8} ${ex + 1.9} ${ey} Z`} color={C.ink} />
+              <Path path={`M ${ex - 2.4} ${ey - 0.1} L ${ex + 2.4} ${ey + 0.3}`} color={C.ink} style="stroke" strokeWidth={1.2} strokeCap="round" />
+            </>
+          ) : (
+            <>
+              <Oval rect={{ x: ex - 1.6, y: ey - 2, width: 3.2, height: 4 }} color={C.ink} />
+              <Circle cx={ex + 0.5} cy={ey - 0.8} r={0.6} color="rgba(255,255,255,0.9)" />
+            </>
+          )}
+        </Group>
+      ))}
     </>
   );
 };
@@ -94,7 +106,7 @@ const SweatDrop: React.FC<{ index: number; loop: SharedValue<number> }> = ({ ind
     const p = (loop.value + phase) % 1;
     // Clings for a moment, then runs down faster and faster.
     const run = p < 0.25 ? 0 : ((p - 0.25) / 0.75) ** 1.6 * SWEAT_RUN;
-    return [{ translateX: sx }, { translateY: sy + run }, { scale: 0.75 + Math.min(p * 2, 1) * 0.35 }];
+    return [{ translateX: sx }, { translateY: sy + run }, { scale: 0.6 + Math.min(p * 2, 1) * 0.3 }];
   });
   const opacity = useDerivedValue(() => {
     const p = (loop.value + phase) % 1;
@@ -110,9 +122,9 @@ const SweatDrop: React.FC<{ index: number; loop: SharedValue<number> }> = ({ ind
   );
 };
 
-// A folding fan held up by the right hand, flapping.
-const FAN_PIVOT = { x: 29, y: -76 };
-const FAN_R = 15;
+// A folding fan held up beside the face by the right hand, flapping.
+const FAN_PIVOT = { x: 23.5, y: -91 };
+const FAN_R = 12.5;
 const fanPath = (() => {
   const a0 = (-125 * Math.PI) / 180;
   const a1 = (-35 * Math.PI) / 180;
@@ -124,6 +136,12 @@ const fanRibs = [-110, -95, -80, -65, -50].map(deg => {
   return `M ${FAN_PIVOT.x} ${FAN_PIVOT.y} L ${FAN_PIVOT.x + Math.cos(a) * FAN_R} ${FAN_PIVOT.y + Math.sin(a) * FAN_R}`;
 });
 
+// T-shirt body, and a short sleeve for each side (mirrored).
+const TORSO = 'M -9 -84 Q -15.5 -83.5 -16 -77 L -14 -46 Q 0 -44 14 -46 L 16 -77 Q 15.5 -83.5 9 -84 Z';
+const sleeve = (s: 1 | -1) =>
+  `M ${s * 11} -84 Q ${s * 19} -83 ${s * 21.5} -71 L ${s * 15.5} -68 L ${s * 14.5} -76 Z`;
+const SHORTS = 'M -14 -50 L 14 -50 L 14.5 -33 L 1.5 -33 L 0 -39 L -1.5 -33 L -14.5 -33 Z';
+
 const PersonCharacter: React.FC<Props> = ({ x, groundY, scale, mood }) => {
   const breath = useSceneLoop(SCENE_TIMING.breathMs, { reverse: true });
   const fan = useSceneLoop(mood.fanning ? SCENE_TIMING.fanMs : null, { reverse: true });
@@ -131,11 +149,11 @@ const PersonCharacter: React.FC<Props> = ({ x, groundY, scale, mood }) => {
   const cough = useSceneLoop(mood.cough ? SCENE_TIMING.coughMs : null);
 
   const placement = [{ translateX: x }, { translateY: groundY }, { scale }];
-  const upperBody = useDerivedValue(() => [{ translateY: -breath.value * 1.6 }]);
+  const upperBody = useDerivedValue(() => [{ translateY: -breath.value * 1.4 }]);
   const fanSwing = useDerivedValue(() => [{ rotate: (fan.value - 0.5) * 0.7 }]);
   const coughTransform = useDerivedValue(() => [
-    { translateX: cough.value * 12 },
-    { translateY: cough.value * -6 },
+    { translateX: cough.value * 10 },
+    { translateY: cough.value * -5 },
     { scale: 0.6 + cough.value * 0.8 },
   ]);
   const coughOpacity = useDerivedValue(() => {
@@ -145,57 +163,66 @@ const PersonCharacter: React.FC<Props> = ({ x, groundY, scale, mood }) => {
     return 0;
   });
 
-  const shoulderL = { x: -B.torsoW / 2 + 1, y: B.shoulderY };
-  const shoulderR = { x: B.torsoW / 2 - 1, y: B.shoulderY };
-  // Arm out of the way of the face when fanning: elbow out, hand up by the
-  // cheek holding the fan.
+  // Hanging arms come out of the sleeves; fanning, the right arm bends up to
+  // hold the fan beside the face (never across it).
+  const leftArm = 'M -18.5 -69 L -20 -50';
   const rightArm = mood.fanning
-    ? `M ${shoulderR.x} ${shoulderR.y} L 25 -62 L ${FAN_PIVOT.x - 1} ${FAN_PIVOT.y + 2}`
-    : `M ${shoulderR.x} ${shoulderR.y} L 21 -38`;
+    ? `M 18.5 -69 L 27 -73 L ${FAN_PIVOT.x} ${FAN_PIVOT.y + 2}`
+    : 'M 18.5 -69 L 20 -50';
 
   return (
     <Group transform={placement}>
-      <Oval rect={{ x: -22, y: -3, width: 44, height: 8 }} color={SCENE_PALETTE.shadow} />
+      <Oval rect={{ x: -20, y: -3, width: 40, height: 7 }} color={SCENE_PALETTE.shadow} />
 
-      {/* Legs and shoes: fixed to the ground. */}
-      <Path path={`M ${-B.legX} ${B.legTop} L ${-B.legX} ${B.legBottom}`} color={C.skin} style="stroke" strokeWidth={B.legWidth} strokeCap="round" />
-      <Path path={`M ${B.legX} ${B.legTop} L ${B.legX} ${B.legBottom}`} color={C.skin} style="stroke" strokeWidth={B.legWidth} strokeCap="round" />
-      <RoundedRect x={-B.legX - 7} y={-B.shoeH} width={B.shoeW} height={B.shoeH} r={3} color={C.shoes} />
-      <RoundedRect x={B.legX - 5} y={-B.shoeH} width={B.shoeW} height={B.shoeH} r={3} color={C.shoes} />
-      <RoundedRect x={-B.torsoW / 2} y={B.shortsTop} width={B.torsoW} height={B.shortsBottom - B.shortsTop} r={5} color={C.shorts} />
+      {/* Legs and trainers: fixed to the ground. */}
+      {[-LEG_X, LEG_X].map(lx => (
+        <Group key={`leg-${lx}`}>
+          <Path path={`M ${lx} -36 L ${lx} -6`} color={C.skin} style="stroke" strokeWidth={6.5} strokeCap="round" />
+          <RoundedRect x={lx - 5.5} y={-7} width={11} height={7} r={3} color={C.shoes} />
+          <RoundedRect x={lx - 5.5} y={-2.2} width={11} height={2.2} r={1} color={C.soles} />
+        </Group>
+      ))}
+      <Path path={SHORTS} color={C.shorts} />
 
       <Group transform={upperBody}>
-        <Path path={`M ${shoulderL.x} ${shoulderL.y} L -21 -38`} color={C.skin} style="stroke" strokeWidth={7} strokeCap="round" strokeJoin="round" />
-        <RoundedRect x={-B.torsoW / 2} y={B.torsoTop} width={B.torsoW} height={B.torsoBottom - B.torsoTop} r={12} color={C.shirt} />
+        <Path path={sleeve(-1)} color={C.shirtShade} />
+        <Path path={sleeve(1)} color={C.shirtShade} />
+        <Path path={leftArm} color={C.skin} style="stroke" strokeWidth={6} strokeCap="round" strokeJoin="round" />
+        <Circle cx={-20} cy={-48.5} r={3.3} color={C.skin} />
+        <Path path={TORSO} color={C.shirt} />
 
-        <Circle cx={0} cy={HY} r={B.headR} color={C.skin} />
-        <Path
-          path={`M ${-B.headR} ${HY - 4} Q ${-B.headR - 2} ${HY - B.headR - 4} ${-B.headR * 0.4} ${HY - B.headR - 6} Q 0 ${HY - B.headR - 10} ${B.headR * 0.4} ${HY - B.headR - 6} Q ${B.headR + 2} ${HY - B.headR - 4} ${B.headR} ${HY - 4} Q 0 ${HY - B.headR - 2} ${-B.headR} ${HY - 4} Z`}
-          color={C.hair}
-        />
+        {/* Neck, with the chin's shadow, and the crew-neck collar. */}
+        <RoundedRect x={-3.6} y={-92} width={7.2} height={10} r={2} color={C.skin} />
+        <RoundedRect x={-3.6} y={-89} width={7.2} height={2.2} r={1} color={C.skinShade} />
+        <Path path="M -5.5 -84 Q 0 -79.5 5.5 -84" color={C.shirtShade} style="stroke" strokeWidth={2} strokeCap="round" />
 
-        {mood.sadBrows && (
-          <>
-            {/* Worried brows: inner ends raised. */}
-            <Path path={`M -11.5 ${HY - 7.5} L -4 ${HY - 10.5}`} color={C.ink} style="stroke" strokeWidth={1.9} strokeCap="round" />
-            <Path path={`M 11.5 ${HY - 7.5} L 4 ${HY - 10.5}`} color={C.ink} style="stroke" strokeWidth={1.9} strokeCap="round" />
-          </>
-        )}
+        {/* Head: ears, face, hair. */}
+        {[-1, 1].map(s => (
+          <Group key={`ear-${s}`}>
+            <Oval rect={{ x: s * 14.5 - 2.6, y: HY - 4.5, width: 5.2, height: 8 }} color={C.skin} />
+            <Oval rect={{ x: s * 14.5 - 1.2, y: HY - 2.5, width: 2.4, height: 4 }} color={C.skinShade} />
+          </Group>
+        ))}
+        <Oval rect={{ x: -HX, y: HY - HYR, width: HX * 2, height: HYR * 2 }} color={C.skin} />
+        <Path path={HAIR} color={C.hair} />
+        <Path path={HAIR_SHINE} color={C.hairShine} style="stroke" strokeWidth={1.6} strokeCap="round" />
 
+        <Brows worried={mood.sadBrows} />
         <Eyes eyes={mood.eyes} />
+        <Path path={`M -0.4 ${HY + 1} Q 1.9 ${HY + 3.6} -0.6 ${HY + 4.4}`} color={C.skinShade} style="stroke" strokeWidth={1.3} strokeCap="round" />
 
         {mood.flush > 0 && (
           <>
-            <Oval rect={{ x: -15, y: HY + 3, width: 8, height: 4.5 }} color={C.blush} opacity={mood.flush} />
-            <Oval rect={{ x: 7, y: HY + 3, width: 8, height: 4.5 }} color={C.blush} opacity={mood.flush} />
+            <Oval rect={{ x: -10.8, y: HY + 2.6, width: 5.6, height: 3 }} color={C.blush} opacity={mood.flush} />
+            <Oval rect={{ x: 5.2, y: HY + 2.6, width: 5.6, height: 3 }} color={C.blush} opacity={mood.flush} />
           </>
         )}
 
         {!mood.mask &&
           (mood.mouth === 'pant' ? (
-            <Oval rect={{ x: -3.5, y: HY + 7.5, width: 7, height: 6 }} color={C.ink} />
+            <Oval rect={{ x: -2.4, y: HY + 6, width: 4.8, height: 4.6 }} color={C.ink} />
           ) : (
-            <Path path={MOUTH[mood.mouth]!} color={C.ink} style="stroke" strokeWidth={2.2} strokeCap="round" />
+            <Path path={MOUTH[mood.mouth]!} color={C.ink} style="stroke" strokeWidth={1.6} strokeCap="round" />
           ))}
 
         {Array.from({ length: SCENE_LIMITS.maxSweatDrops }).map((_, i) =>
@@ -204,30 +231,32 @@ const PersonCharacter: React.FC<Props> = ({ x, groundY, scale, mood }) => {
 
         {mood.mask && (
           <Group>
-            <RoundedRect x={-B.headR * 0.75} y={HY + 1} width={B.headR * 1.5} height={B.headR * 0.85} r={B.headR * 0.35} color={C.mask} />
-            <Path path={`M ${-B.headR * 0.55} ${HY + 7} Q 0 ${HY + 10} ${B.headR * 0.55} ${HY + 7}`} color={C.maskLine} style="stroke" strokeWidth={1.2} />
-            <Path path={`M ${-B.headR * 0.75} ${HY + 4} L ${-B.headR + 0.5} ${HY - 4}`} color={C.maskLine} style="stroke" strokeWidth={1.5} />
-            <Path path={`M ${B.headR * 0.75} ${HY + 4} L ${B.headR - 0.5} ${HY - 4}`} color={C.maskLine} style="stroke" strokeWidth={1.5} />
+            <Path path={`M -9.5 ${HY + 3} L -14 ${HY - 2}`} color={C.maskLine} style="stroke" strokeWidth={1.2} />
+            <Path path={`M 9.5 ${HY + 3} L 14 ${HY - 2}`} color={C.maskLine} style="stroke" strokeWidth={1.2} />
+            <RoundedRect x={-9.5} y={HY + 1.5} width={19} height={11.5} r={4} color={C.mask} />
+            <Path path={`M -7 ${HY + 5.5} L 7 ${HY + 5.5} M -7 ${HY + 8.5} L 7 ${HY + 8.5}`} color={C.maskLine} style="stroke" strokeWidth={0.9} />
           </Group>
         )}
 
         {mood.cough && (
-          <Group transform={coughTransform} opacity={coughOpacity} origin={vec(10, HY + 9)}>
-            <Circle cx={12} cy={HY + 9} r={3.5} color={C.cough} />
-            <Circle cx={17} cy={HY + 6} r={2.4} color={C.cough} />
-            <Circle cx={15} cy={HY + 12} r={2} color={C.cough} />
+          <Group transform={coughTransform} opacity={coughOpacity} origin={vec(7, HY + 8)}>
+            <Circle cx={9} cy={HY + 8} r={2.8} color={C.cough} />
+            <Circle cx={13} cy={HY + 5.5} r={2} color={C.cough} />
+            <Circle cx={11.5} cy={HY + 10.5} r={1.6} color={C.cough} />
           </Group>
         )}
 
-        <Path path={rightArm} color={C.skin} style="stroke" strokeWidth={7} strokeCap="round" strokeJoin="round" />
-        {mood.fanning && (
+        <Path path={rightArm} color={C.skin} style="stroke" strokeWidth={6} strokeCap="round" strokeJoin="round" />
+        {mood.fanning ? (
           <Group origin={vec(FAN_PIVOT.x, FAN_PIVOT.y)} transform={fanSwing}>
             <Path path={fanPath} color={C.fan} />
             {fanRibs.map((d, i) => (
               <Path key={`rib-${i}`} path={d} color={C.fanRibs} style="stroke" strokeWidth={0.9} />
             ))}
-            <Circle cx={FAN_PIVOT.x} cy={FAN_PIVOT.y} r={3.6} color={C.skin} />
+            <Circle cx={FAN_PIVOT.x} cy={FAN_PIVOT.y} r={3.3} color={C.skin} />
           </Group>
+        ) : (
+          <Circle cx={20} cy={-48.5} r={3.3} color={C.skin} />
         )}
       </Group>
     </Group>

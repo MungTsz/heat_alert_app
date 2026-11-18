@@ -14,6 +14,7 @@ import { ALERTS_SCREEN_COPY } from '../config/alertCopy';
 import { sendSampleGallery } from '../services/alertCheckService';
 import { runAlertCheckNow } from '../services/alertCheckBus';
 import EnviPreviewScreen from './EnviPreviewScreen';
+import ScenePreviewScreen from './ScenePreviewScreen';
 
 type Props = {
   visible: boolean;
@@ -34,6 +35,7 @@ const AppSettingsScreen = ({ visible, onClose }: Props) => {
 
   const [checking, setChecking] = React.useState(false);
   const [enviPreviewOpen, setEnviPreviewOpen] = React.useState(false);
+  const [scenePreviewOpen, setScenePreviewOpen] = React.useState(false);
 
   const handleRunCheckNow = async () => {
     setChecking(true);
@@ -164,6 +166,12 @@ const AppSettingsScreen = ({ visible, onClose }: Props) => {
               <TouchableOpacity style={styles.testButton} onPress={() => setEnviPreviewOpen(true)}>
                 <Text style={styles.testButtonText}>Preview Environmental Index</Text>
               </TouchableOpacity>
+              <View style={styles.divider} />
+              {/* Home's cartoon scene at every heat / AQHI level, day and
+                  night, from sample readings — with a Play tour. */}
+              <TouchableOpacity style={styles.testButton} onPress={() => setScenePreviewOpen(true)}>
+                <Text style={styles.testButtonText}>Preview Cartoon Scene</Text>
+              </TouchableOpacity>
             </SettingsSection>
           )}
         </ScrollView>
@@ -171,6 +179,9 @@ const AppSettingsScreen = ({ visible, onClose }: Props) => {
 
       {__DEV__ && (
         <EnviPreviewScreen visible={enviPreviewOpen} onClose={() => setEnviPreviewOpen(false)} />
+      )}
+      {__DEV__ && (
+        <ScenePreviewScreen visible={scenePreviewOpen} onClose={() => setScenePreviewOpen(false)} />
       )}
     </Modal>
   );

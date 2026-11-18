@@ -26,13 +26,15 @@ type Props = {
   heatIndexC: number | null;
   aqhi: number | null;
   scrollY?: SharedValue<number>;
+  // Phone hour for day / night; only the dev scene preview passes it.
+  hour?: number;
 };
 
 // Home's mood picture, back to front: the harbour view (sky, sun, hills,
 // towers, water, lawn), the air (haze or clean-air glints), heat shimmer
 // over the ground, then the dog and the person. What each element does at
 // each level is decided by sceneMoodFor; this file only stacks the layers.
-const HeatScene: React.FC<Props> = ({ width, height, heatIndexC, aqhi, scrollY }) => {
+const HeatScene: React.FC<Props> = ({ width, height, heatIndexC, aqhi, scrollY, hour }) => {
   // The characters soften as the cards scroll up over them.
   const blurAmount = useDerivedValue(() => {
     if (!scrollY) return 0;
@@ -40,7 +42,7 @@ const HeatScene: React.FC<Props> = ({ width, height, heatIndexC, aqhi, scrollY }
   });
 
   const layout = computeSceneLayout(width, height);
-  const mood = sceneMoodFor({ heatIndexC, aqhi, hour: new Date().getHours() });
+  const mood = sceneMoodFor({ heatIndexC, aqhi, hour: hour ?? new Date().getHours() });
   const env = mood.environment;
 
   return (
