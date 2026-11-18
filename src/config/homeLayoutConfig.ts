@@ -55,8 +55,10 @@ export const HOME_INFO_BAR_CONFIG = {
   tabHeight: 52,
   tabIconSize: 16,
   minTouchSize: 44,
-  // Gap between the blocks and the tab.
+  // Gap between the tab and the blocks, and between the open blocks and the
+  // screen edge (closed, the tab itself sits flush with the edge).
   tabGap: 4,
+  edgeGap: 6,
   // One block.
   blockWidth: 82,
   blockHeight: 42,
@@ -65,10 +67,12 @@ export const HOME_INFO_BAR_CONFIG = {
   blockIconSize: 11,
   blockLabelFontSize: 10,
   blockValueFontSize: 15,
-  // Open / close animation.
+  // Snap animation after a drag is let go, or after a tap on the tab.
   animationMs: 220,
-  // Swiping on the scene: a horizontal drag at least this long opens (left)
-  // or closes (right) the bar. Drags that are mostly vertical are left to
-  // the page's scroll.
-  swipeMinDistance: 30,
+  // Dragging the bar out: it follows the finger, and on release snaps open
+  // if pulled out past this share of its width, else back closed…
+  snapOpenFraction: 0.5,
+  // …unless the finger was flicked faster than this (px per ms), which
+  // decides on its own: a quick flick left opens, right closes.
+  flingVelocity: 0.3,
 };

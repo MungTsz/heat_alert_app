@@ -152,11 +152,10 @@ const HomeScreen = () => {
   const [mapFullscreen, setMapFullscreen] = useState(false);
   const [heatExplainerOpen, setHeatExplainerOpen] = useState(false);
 
-  const openHeatSheet = () => setHeatSheetOpen(true);
   // Each block in its own colours (NWS for heat index, EPD for AQHI) — the
-  // Environmental Index palette stays on the card. Temp and Humidity have no
-  // levels, so a neutral stripe, and they open the heat forecast, whose
-  // chart carries the temperature line.
+  // Environmental Index palette stays on the card. Only the two hazards open
+  // a forecast; Temp and Humidity have no levels (neutral stripe) and are
+  // read-only context.
   const infoBlocks: HomeInfoBlockData[] = [
     {
       key: 'heat',
@@ -164,7 +163,7 @@ const HomeScreen = () => {
       label: HOME_INFO_BAR_COPY.heat,
       value: heatIndexTemp === null ? null : `${heatIndexTemp}°`,
       stripeColor: heatInfo?.color ?? NEUTRAL_STRIPE_COLOR,
-      onPress: openHeatSheet,
+      onPress: () => setHeatSheetOpen(true),
     },
     {
       key: 'aqhi',
@@ -181,7 +180,6 @@ const HomeScreen = () => {
       label: HOME_INFO_BAR_COPY.temperature,
       value: actualTemp === null ? null : `${actualTemp}°`,
       stripeColor: NEUTRAL_STRIPE_COLOR,
-      onPress: openHeatSheet,
     },
     {
       key: 'humidity',
@@ -189,7 +187,6 @@ const HomeScreen = () => {
       label: HOME_INFO_BAR_COPY.humidity,
       value: currentHumidity === null ? null : `${currentHumidity}%`,
       stripeColor: NEUTRAL_STRIPE_COLOR,
-      onPress: openHeatSheet,
     },
   ];
 

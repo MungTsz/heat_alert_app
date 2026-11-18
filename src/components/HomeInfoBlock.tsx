@@ -14,7 +14,10 @@ export type HomeInfoBlockData = {
   value: string | null;
   // The hazard's own level colour (NWS / EPD); neutral for context values.
   stripeColor: string;
-  onPress: () => void;
+  // Opens that hazard's forecast. Left out for Temp and Humidity: they are
+  // context for the heat index, not something with a forecast of its own
+  // here, so they are plain read-only blocks.
+  onPress?: () => void;
 };
 
 // Shown on unavailable values and on Temp / Humidity, which have no levels.
@@ -28,15 +31,8 @@ const C = HOME_INFO_BAR_CONFIG;
 const HomeInfoBlock: React.FC<{ block: HomeInfoBlockData }> = ({ block }) => {
   const { Icon, label, value, stripeColor, onPress } = block;
   const shown = value ?? HOME_INFO_BAR_COPY.unavailable;
-  return (
-    <TouchableOpacity
-      style={styles.block}
-      onPress={onPress}
-      activeOpacity={0.75}
-      accessibilityRole="button"
-      accessibilityLabel={`${label} ${shown}`}
-      accessibilityHint={HOME_INFO_BAR_COPY.blockHint}
-    >
+  const content = (
+    <>
       <View
         style={[
           styles.stripe,
@@ -54,6 +50,26 @@ const HomeInfoBlock: React.FC<{ block: HomeInfoBlockData }> = ({ block }) => {
           {shown}
         </Text>
       </View>
+    </>
+  );
+
+  if (!onPress) {
+    return (
+      <View style={styles.block} accessible accessibilityLabel={`${label} ${shown}`}>
+        {content}
+      </View>
+    );
+  }
+  return (
+    <TouchableOpacity
+      style={styles.block}
+      onPress={onPress}
+      activeOpacity={0.75}
+      accessibilityRole="button"
+      accessibilityLabel={`${label} ${shown}`}
+      accessibilityHint={HOME_INFO_BAR_COPY.blockHint}
+    >
+      {content}
     </TouchableOpacity>
   );
 };
