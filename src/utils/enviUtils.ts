@@ -56,7 +56,7 @@ export const seasonalHazard = (nowMs: number): HazardKind =>
 
 // The hazard that speaks for the Environmental Index: the higher one, or on
 // a tie (or with no readings) the season's. One rule for the card's
-// keywords, the detail sheet's chart and the map's starting layer, so all
-// three always point at the same hazard.
+// keywords and summary, the forecast sheet's opening tab and the map's
+// starting layer, so they always point at the same hazard.
 export const leadHazard = (current: HazardReadings, nowMs: number): HazardKind =>
   dominantHazard(current) ?? seasonalHazard(nowMs);

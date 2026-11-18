@@ -28,14 +28,12 @@ export const useHomeInfoBar = () => {
     };
   }, []);
 
-  const toggle = useCallback(() => {
-    setExpanded(previous => {
-      const next = !previous;
-      const stored: StoredState = { expanded: next };
-      AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(stored)).catch(() => {});
-      return next;
-    });
+  // Set by the tab (toggling) and by swipes (left opens, right closes).
+  const update = useCallback((next: boolean) => {
+    setExpanded(next);
+    const stored: StoredState = { expanded: next };
+    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(stored)).catch(() => {});
   }, []);
 
-  return { expanded, toggle };
+  return { expanded, setExpanded: update };
 };

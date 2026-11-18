@@ -68,7 +68,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   stripe: { width: C.stripeWidth },
-  body: { flex: 1, paddingHorizontal: 7, justifyContent: 'center', gap: 1 },
+  body: { flex: 1, paddingHorizontal: 6, justifyContent: 'center', gap: 1 },
   labelRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   label: { flexShrink: 1, fontSize: C.blockLabelFontSize, fontWeight: '600', ...glassLabelText },
   value: { fontSize: C.blockValueFontSize, fontWeight: '800', ...glassLabelText },

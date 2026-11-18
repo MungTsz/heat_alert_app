@@ -208,20 +208,51 @@ export const ENVI_COPY = {
   explainer:
     'Your overall outdoor risk from heat and air quality, from 1 (low) to 5 (serious).',
   unavailable: '--',
-  // The card's bottom bar, which opens the detail sheet.
-  moreLink: 'Full advice and forecast',
+  // The card's bottom bar, which opens the recommendations sheet.
+  moreLink: 'Detailed recommendations',
   // Above the band's two arrows.
   nowMarker: 'Now',
   peakMarker: "Today's peak",
-  // Detail sheet sections.
-  meaningHeading: 'What this means',
-  adviceHeading: 'What to do',
-  forecastHeading: 'Forecast',
-  linksHeading: 'Official advice',
+  // Sheet titles: tapping the index opens its forecast; the bottom bar
+  // opens the recommendations.
+  forecastTitle: 'Forecast',
+  recommendationsTitle: 'Recommendations',
+  // Recommendations sheet sections.
+  meaningHeading: 'What it means',
+  riskHeading: 'Health risk',
+  adviceHeading: 'Recommended actions',
+  linksHeading: 'Official guidance',
   // Screen-reader wording for the card: "Environmental Index 3, High".
   levelLabel: (level: number, name: string) => `Environmental Index ${level}, ${name}`,
   unavailableLabel: 'Environmental Index not available',
-  detailsHint: 'Opens the full advice and forecast',
+  forecastHint: 'Opens the forecast',
+  detailsHint: 'Opens detailed recommendations',
+};
+
+// The one plain-language line under the level: how heat and air feel right
+// now, e.g. "Air quality is good, but it's very hot." Keyed by each
+// hazard's own level name, so it can never disagree with the level tables.
+// Heat's lowest level is "not too hot" rather than "comfortable": in winter
+// a heat index under 27°C can be cold.
+export const ENVI_SUMMARY_COPY = {
+  heat: {
+    'No Caution': "it's not too hot",
+    Caution: "it's warm",
+    'Extreme Caution': "it's hot",
+    Danger: "it's very hot",
+    'Extreme Danger': "it's dangerously hot",
+  } as Record<string, string>,
+  aqhi: {
+    Low: 'air quality is good',
+    Moderate: 'air quality is fair',
+    High: 'air quality is poor',
+    'Very High': 'air quality is very poor',
+    Serious: 'air quality is hazardous',
+  } as Record<string, string>,
+  // The concern goes last, after "but" when the other hazard is fine.
+  contrast: (fine: string, concern: string) => `${fine}, but ${concern}.`,
+  both: (first: string, second: string) => `${first} and ${second}.`,
+  single: (phrase: string) => `${phrase}.`,
 };
 
 // The warning chip on the Environmental Index card: the risk in a few

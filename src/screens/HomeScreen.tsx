@@ -1,5 +1,5 @@
 // src/screens/HomeScreen.tsx
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   StyleSheet,
   View,
@@ -11,7 +11,6 @@ import {
 import Animated, {
   useSharedValue,
   useAnimatedScrollHandler,
-  withTiming,
 } from 'react-native-reanimated';
 import {
   SafeAreaView,
@@ -21,6 +20,7 @@ import { Droplet, MapPin, Thermometer, ThermometerSun, Wind } from 'lucide-react
 import TextTicker from 'react-native-text-ticker';
 import EnviCard from '../components/EnviCard';
 import EnviDetailSheet from '../components/EnviDetailSheet';
+import EnviForecastSheet from '../components/EnviForecastSheet';
 import HomeInfoBar from '../components/HomeInfoBar';
 import { HomeInfoBlockData, NEUTRAL_STRIPE_COLOR } from '../components/HomeInfoBlock';
 import HeatHourlyForecastChart from '../components/HeatHourlyForecastChart';
@@ -48,12 +48,11 @@ import { useHomeInfoBar } from '../hooks/useHomeInfoBar';
 import HomeAlertBanner from '../components/alerts/HomeAlertBanner';
 import { CURRENT_LOCATION_PLACE_ID } from '../config/alertConfig';
 import { HOME_INFO_BAR_COPY } from '../config/alertCopy';
-import { HOME_INFO_BAR_CONFIG, HOME_LAYOUT_CONFIG } from '../config/homeLayoutConfig';
+import { HOME_LAYOUT_CONFIG } from '../config/homeLayoutConfig';
 import { MapLayer } from '../types/mapSettings';
 import { homeAdviceFor } from '../utils/homeAdvice';
 import { HazardReadings, getEnviLevel } from '../utils/enviUtils';
 import { todaysPeakLevel } from '../utils/enviPeak';
-import { homeInfoBarArrangement, homeInfoBarWidth } from '../utils/homeInfoBarLayout';
 import { openPlace } from '../services/navigationBus';
 
 // Home, top to bottom: the cartoon scene with the side bar of raw readings
@@ -143,27 +142,12 @@ const HomeScreen = () => {
     HOME_LAYOUT_CONFIG.minGapBelowCharacter,
   );
 
-  // Side bar: while open, the character re-centres in the width the bar
-  // leaves, sliding over in step with the bar's own animation.
+  // Side bar open / closed, remembered across launches.
   const infoBar = useHomeInfoBar();
-  const infoBarArrangement = homeInfoBarArrangement(sceneAreaHeight);
-  const openSceneLayout = computeSceneLayout(
-    width,
-    height,
-    width - homeInfoBarWidth(infoBarArrangement),
-  );
-  const targetSceneShift = infoBar.expanded
-    ? openSceneLayout.characterCenterX - layout.characterCenterX
-    : 0;
-  const sceneShiftX = useSharedValue(0);
-  useEffect(() => {
-    sceneShiftX.value = withTiming(targetSceneShift, {
-      duration: HOME_INFO_BAR_CONFIG.animationMs,
-    });
-  }, [targetSceneShift, sceneShiftX]);
 
   const [heatSheetOpen, setHeatSheetOpen] = useState(false);
   const [aqhiSheetOpen, setAqhiSheetOpen] = useState(false);
+  const [enviForecastOpen, setEnviForecastOpen] = useState(false);
   const [enviSheetOpen, setEnviSheetOpen] = useState(false);
   const [mapFullscreen, setMapFullscreen] = useState(false);
   const [heatExplainerOpen, setHeatExplainerOpen] = useState(false);
@@ -218,7 +202,6 @@ const HomeScreen = () => {
           temperatureCelsius={heatIndexTemp}
           aqhi={currentAqhi}
           scrollY={scrollY}
-          shiftX={sceneShiftX}
         />
       </View>
 
@@ -257,20 +240,20 @@ const HomeScreen = () => {
             </View>
           </View>
 
-          {/* The scene area, with the side bar on its right edge. */}
-          <View style={[styles.sceneArea, { height: sceneAreaHeight }]}>
-            <HomeInfoBar
-              expanded={infoBar.expanded}
-              onToggle={infoBar.toggle}
-              arrangement={infoBarArrangement}
-              blocks={infoBlocks}
-            />
-          </View>
+          {/* The scene area: the side bar on its right edge, and the
+              surface a left / right swipe opens or closes it on. */}
+          <HomeInfoBar
+            height={sceneAreaHeight}
+            expanded={infoBar.expanded}
+            onExpandedChange={infoBar.setExpanded}
+            blocks={infoBlocks}
+          />
 
           {/* The headline: one level for heat and air together. */}
           <EnviCard
             current={currentReadings}
             peakLevel={peakLevel}
+            onOpenForecast={() => setEnviForecastOpen(true)}
             onOpenDetails={() => setEnviSheetOpen(true)}
           />
 
@@ -315,9 +298,14 @@ const HomeScreen = () => {
         current={currentReadings}
         peakLevel={peakLevel}
         liveAdvice={liveAdvice}
+      />
+
+      <EnviForecastSheet
+        visible={enviForecastOpen}
+        onClose={() => setEnviForecastOpen(false)}
         // The map's starting layer is the hazard that sets the level (or
-        // the season's), so the sheet's chart and the map always agree.
-        chartHazard={defaultMapLayer}
+        // the season's), so the forecast opens on the same hazard as the map.
+        defaultHazard={defaultMapLayer}
         heatForecast={{ days: heatForecastDays, loading: heatForecastLoading }}
         aqhiForecast={{ days: aqhiForecastDays, loading: aqhiForecastLoading }}
       />
@@ -397,7 +385,6 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0,0,0,0.2)',
     textShadowRadius: 3,
   },
-  sceneArea: { alignItems: 'flex-end', justifyContent: 'center' },
   mapContainer: {
     height: HOME_LAYOUT_CONFIG.mapPreviewHeight,
     borderRadius: 16,
