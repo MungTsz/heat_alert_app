@@ -18,7 +18,8 @@ import {
 } from 'react-native-safe-area-context';
 import { MapPin, User, Wind } from 'lucide-react-native';
 import TextTicker from 'react-native-text-ticker';
-import CurrentWeatherInfo, { HomeAdvice } from '../components/CurrentWeatherInfo';
+import CurrentWeatherInfo from '../components/CurrentWeatherInfo';
+import EnviCard from '../components/EnviCard';
 import HeatHourlyForecastChart from '../components/HeatHourlyForecastChart';
 import AqhiHourlyForecastChart from '../components/AqhiHourlyForecastChart';
 import HazardCard from '../components/HazardCard';
@@ -46,8 +47,8 @@ import { CURRENT_LOCATION_PLACE_ID } from '../config/alertConfig';
 import { HOME_LAYOUT_CONFIG } from '../config/homeLayoutConfig';
 import { HazardKind } from '../types/alerts';
 import { MapLayer } from '../types/mapSettings';
-import { adviceFor, adviceProfileFor } from '../utils/alertMessages';
-import { openAlertDetail } from '../services/alertCheckBus';
+import { homeAdviceFor } from '../utils/homeAdvice';
+import { HazardReadings } from '../utils/enviUtils';
 import { openPlace } from '../services/navigationBus';
 
 const LOCATION_BOX_WIDTH = 160;
@@ -100,33 +101,28 @@ const HomeScreen = () => {
   const aqhiInfo = currentAqhi === null ? null : getAqhiInfo(currentAqhi);
   const layout = computeSceneLayout(width, height);
 
-  // On alert days the footer under Temp · Humidity says what to do, so the
-  // user doesn't have to wait for a push. Only for alerts measured NOW (a
-  // heads-up is about later, and has its banner), voiced for the owner's
-  // About you answer — built by the same adviceFor the notification and the
-  // detail sheet use, so the three can never word it differently.
+  // Both hazards where the user is — what ENVI, its advice and the map's
+  // starting layer are all judged from, so the three always agree.
+  const currentReadings: HazardReadings = { heat: heatIndexTemp, aqhi: currentAqhi };
+
+  // The one sentence of advice on Home, on the ENVI card. With an alert
+  // measured NOW (a heads-up is about later, and has its banner) it is that
+  // alert's own advice, voiced for the owner's About you answer, so the
+  // user doesn't have to wait for a push; otherwise the suggestion for the
+  // current level. The alert's full details stay one tap away, on the
+  // banner above and the badges on the two cards below.
   const aboutYou = useNotificationSettings().settings.currentLocationProfile;
-  const liveAlerts = locationAlerts.filter(b => b.kind === 'now');
-  const liveMessageId = liveAlerts.find(b => b.messageId)?.messageId ?? null;
-  const advice: HomeAdvice | null =
-    liveAlerts.length > 0
-      ? {
-          text: adviceFor(
-            liveAlerts.map(b => b.hazard),
-            adviceProfileFor([aboutYou]),
-            liveAlerts.some(b => b.urgent),
-          ),
-          onPress: () => {
-            if (liveMessageId) openAlertDetail(liveMessageId);
-          },
-        }
-      : null;
+  const advice = homeAdviceFor({
+    liveAlerts: locationAlerts.filter(b => b.kind === 'now'),
+    aboutYou,
+    current: currentReadings,
+  });
 
   // One layer for the preview and the full-screen map (lifted here so
   // closing full screen keeps the user's pick). Until the user picks one it
-  // follows the data: whichever hazard has reached their alert level.
+  // follows the data: whichever hazard is higher, the one setting ENVI.
   const [chosenMapLayer, setChosenMapLayer] = useState<MapLayer | null>(null);
-  const defaultMapLayer = useDefaultMapLayer({ heat: heatIndexTemp, aqhi: currentAqhi });
+  const defaultMapLayer = useDefaultMapLayer(currentReadings);
   const mapLayer = chosenMapLayer ?? defaultMapLayer;
   // Saved places on the map — fetched once here for both maps.
   const placePins = useMapPlacePins();
@@ -199,11 +195,18 @@ const HomeScreen = () => {
 
           <View style={{ height: spacerHeight }} />
 
-          {/* Equal-weight Heat Index and AQHI cards, both tappable */}
+          {/* The headline: one level for heat and air together, with the
+              day's one sentence of advice. */}
+          <EnviCard current={currentReadings} advice={advice} />
+
+          {/* Under it, the two hazards behind it as equal-weight compact
+              cards, both tappable. Neither is marked as the one that set
+              ENVI — how the level is worked out is not shown. */}
           <View style={styles.hazardRow}>
             {/* heat card */}
             <HazardCard
-              icon={<User size={18} color="#FFFFFF" />}
+              compact
+              icon={<User size={15} color="#FFFFFF" />}
               label="Feels Like..."
               // "--" while loading or when the API is unreachable — never a
               // value from another source.
@@ -215,7 +218,8 @@ const HomeScreen = () => {
             />
             {/* aqhi card — same "--" / "—" placeholders as the heat card */}
             <HazardCard
-              icon={<Wind size={18} color="#FFFFFF" />}
+              compact
+              icon={<Wind size={15} color="#FFFFFF" />}
               label="AQHI"
               value={aqhiInfo ? `${currentAqhi}` : '--'}
               classification={aqhiInfo?.classification ?? '—'}
@@ -234,7 +238,6 @@ const HomeScreen = () => {
             humidity={currentHumidity}
             heatIndex={heatIndexTemp}
             onPressInfo={() => setHeatExplainerOpen(true)}
-            advice={advice}
           />
 
           <View style={styles.mapContainer}>

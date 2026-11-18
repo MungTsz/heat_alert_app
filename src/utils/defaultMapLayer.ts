@@ -1,41 +1,19 @@
 // src/utils/defaultMapLayer.ts
-import { HazardKind, PlaceAlertProfile } from '../types/alerts';
 import { MapLayer } from '../types/mapSettings';
-import { HAZARD_KINDS } from '../config/alertConfig';
 import { DEFAULT_MAP_LAYER_CONFIG } from '../config/mapLayerConfig';
-import { rankOf } from './hazardLevels';
-import { alertRankFor } from './alertProfile';
-import { toHkDateKey } from './hkDate';
-
-// Month 1-12 on the Hong Kong calendar, whatever the phone's own timezone.
-const hkMonthOf = (nowMs: number): number => Number(toHkDateKey(new Date(nowMs)).slice(5, 7));
+import { HazardReadings, dominantHazard, seasonalHazard } from './enviUtils';
 
 // The layer a map opens on — see DEFAULT_MAP_LAYER_CONFIG for the rules.
-// "Reached" is judged exactly as the alert engine judges it (alertSignals:
-// the reading's level rank against the profile's alert rank), so the map
-// opens on the same hazard a notification would be about. A hazard the
-// profile switched off never counts, and a missing reading (still loading,
-// or unavailable) never counts as reached.
+// It is the hazard that sets ENVI (dominantHazard, the same judgement Home's
+// ENVI card rests on), so the map opens on whatever is driving the level
+// the user just read. A missing reading (still loading, or unavailable)
+// never beats an available one.
 export const pickDefaultMapLayer = (params: {
-  current: Record<HazardKind, number | null>;
-  profile: PlaceAlertProfile;
+  current: HazardReadings;
   praiseConfigured: boolean;
   nowMs: number;
 }): MapLayer => {
-  const { current, profile, praiseConfigured, nowMs } = params;
+  const { current, praiseConfigured, nowMs } = params;
   if (!praiseConfigured) return DEFAULT_MAP_LAYER_CONFIG.noPraiseLayer;
-
-  const reached = HAZARD_KINDS.filter(hazard => {
-    const value = current[hazard];
-    return (
-      profile.hazards[hazard] &&
-      value !== null &&
-      rankOf(hazard, value) >= alertRankFor(profile, hazard)
-    );
-  });
-  if (reached.length === 1) return reached[0];
-
-  return DEFAULT_MAP_LAYER_CONFIG.aqhiSeasonMonths.includes(hkMonthOf(nowMs))
-    ? 'aqhi'
-    : DEFAULT_MAP_LAYER_CONFIG.seasonFallbackLayer;
+  return dominantHazard(current) ?? seasonalHazard(nowMs);
 };

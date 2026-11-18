@@ -104,7 +104,7 @@ describe('runAlertCheck', () => {
     expect(mockDisplay).toHaveBeenCalledTimes(1);
   });
 
-  it('never alerts on mock AQHI when PRAISE is not configured', async () => {
+  it('never alerts on AQHI when PRAISE is not configured', async () => {
     mockPraiseConfigured = false;
     mockValues.aqhi = 10;
     setNow(NOON_HKT);

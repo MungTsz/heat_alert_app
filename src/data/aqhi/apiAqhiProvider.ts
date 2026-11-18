@@ -5,7 +5,7 @@ import { fetchPraisePointData, toHkTimestamp } from '../../services/praiseApi';
 // PRAISE-HK's get_data returns ONE point for the exact lat/lng queried — to
 // give the map's IDW overlay multiple anchor points (needed for interpolation
 // across an area), we query a small ring of nearby coordinates around the
-// center, similar in spirit to your original mock station template.
+// center.
 const SAMPLE_OFFSETS = [
   { lat: 0, lng: 0 },
   { lat: 0.03, lng: 0.03 },

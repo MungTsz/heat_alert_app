@@ -6,7 +6,8 @@ export const PRAISE_CONFIG = {
   baseUrl: Config.PRAISE_BASE_URL ?? 'https://envf.ust.hk/uwsgi/praise-service',
 };
 
-// Lets every provider check this once instead of duplicating the same guard —
-// if the key isn't configured yet, callers fall back to mock data gracefully.
+// One check for everything that needs PRAISE. There is no mock AQHI: without
+// the key, praiseApi refuses every call, AQHI shows "--", the map never
+// opens on the AQHI layer and the alert engine skips AQHI.
 export const isPraiseConfigured = (): boolean =>
   PRAISE_CONFIG.apiKey.length > 0;

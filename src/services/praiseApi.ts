@@ -1,5 +1,12 @@
 // src/services/praiseApi.ts
-import { PRAISE_CONFIG } from '../config/praiseConfig';
+import { PRAISE_CONFIG, isPraiseConfigured } from '../config/praiseConfig';
+
+// There is no mock AQHI to fall back to, so without a key every caller ends
+// at "--" either way — fail here, before a request that can only be refused
+// leaves the phone, so they get there at once.
+const assertConfigured = (): void => {
+  if (!isPraiseConfigured()) throw new Error('PRAISE-HK is not configured (no PRAISE_API_KEY)');
+};
 
 const buildUrl = (
   params: Record<string, string>,
@@ -42,6 +49,7 @@ export const fetchPraisePointData = async (
   t1: string, // YYYYMMDDhh, HKT
   pids: string[],
 ): Promise<PraisePointDataResponse> => {
+  assertConfigured();
   const url = buildUrl({
     todo: 'get_data',
     lat: lat.toString(),
@@ -78,6 +86,7 @@ export const fetchPraiseTiles = async (
   ts: string, // YYYYMMDDhh, HKT
   bounds: { lng0: number; lat0: number; lng1: number; lat1: number },
 ): Promise<PraiseTilesResponse> => {
+  assertConfigured();
   const url = buildUrl({
     todo: 'get_mtiles',
     pid,

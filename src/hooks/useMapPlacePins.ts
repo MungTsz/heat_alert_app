@@ -3,11 +3,14 @@ import { useMemo } from 'react';
 import { useBookmarkList } from './useBookmarkList';
 import { usePlacesHeatIndex } from './useHeatData';
 import { usePlacesAqhi } from './useAqhiData';
+import { PlaceCategory } from '../types/bookmark';
 
 // A saved place as a map pin, with both hazards at its own coordinates.
 export type MapPlacePin = {
   id: string;
   label: string;
+  // Picks the pin's icon and colour, the same as the place's card.
+  category: PlaceCategory;
   latitude: number;
   longitude: number;
   heatIndex: number | null; // null = loading / unavailable → "--"
@@ -30,6 +33,7 @@ export const useMapPlacePins = (): MapPlacePin[] => {
       visible.map(b => ({
         id: b.id,
         label: b.label,
+        category: b.category,
         latitude: b.latitude,
         longitude: b.longitude,
         heatIndex: b.id in heatIndexById ? Math.round(heatIndexById[b.id]) : null,

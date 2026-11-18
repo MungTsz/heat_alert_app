@@ -1,5 +1,5 @@
 // src/services/exposureApi.ts
-import { EXPOSURE_API_CONFIG } from '../config/exposureApiConfig';
+import { EXPOSURE_API_CONFIG, isExposureApiConfigured } from '../config/exposureApiConfig';
 import { fetchWithTimeout as fetchWithTimeoutMs } from '../utils/fetchWithTimeout';
 import { PlaceLabel } from '../data/placeLabels/types';
 import {
@@ -14,11 +14,20 @@ import {
 // Harmless when the base URL points at a local backend instead.
 const NGROK_SKIP_WARNING_HEADERS = { 'ngrok-skip-browser-warning': '1' };
 
+const NOT_CONFIGURED_MESSAGE =
+  'Exposure data is not available: the exposure service is not set up.';
+
 // Every exposure-backend call (exposure and place labels) goes through here:
 // one shared timeout — long, since /ingest uploads can be large — and the
-// ngrok header merged under any per-call headers.
-const fetchWithTimeout = (input: string, init: RequestInit = {}): Promise<Response> =>
-  fetchWithTimeoutMs(
+// ngrok header merged under any per-call headers. It is also the one place
+// that stops calls when no backend is configured: there is no mock data to
+// fall back to, and a request to an empty base URL would only surface as a
+// vague "Network request failed".
+const fetchWithTimeout = (input: string, init: RequestInit = {}): Promise<Response> => {
+  if (!isExposureApiConfigured()) {
+    return Promise.reject(new ExposureApiError(NOT_CONFIGURED_MESSAGE));
+  }
+  return fetchWithTimeoutMs(
     input,
     {
       ...init,
@@ -29,6 +38,7 @@ const fetchWithTimeout = (input: string, init: RequestInit = {}): Promise<Respon
     },
     EXPOSURE_API_CONFIG.timeoutMs,
   );
+};
 
 const BYTES_PER_MB = 1024 * 1024;
 const formatMb = (bytes: number): string => `${(bytes / BYTES_PER_MB).toFixed(1)} MB`;

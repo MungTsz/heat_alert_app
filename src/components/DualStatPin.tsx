@@ -5,7 +5,10 @@ import { MapPin } from 'lucide-react-native';
 import { getHeatIndexInfo } from '../utils/heatIndexUtils';
 import { getAqhiInfo } from '../utils/aqhiUtils';
 import { HazardKind } from '../types/alerts';
+import { PlaceCategory } from '../types/bookmark';
 import { MAP_PLACE_PIN_CONFIG, MAP_POINT_PIN_CONFIG } from '../config/mapLayerConfig';
+import { PLACE_CATEGORY_CONFIG } from '../config/placeCategoryConfig';
+import { EXPOSURE_IO_CONFIG } from '../config/exposureIoConfig';
 
 // null = loading / unavailable
 type Props = {
@@ -15,9 +18,13 @@ type Props = {
   // both out: that line would cost two more lookups per place.
   airTemperature?: number | null;
   humidity?: number | null;
-  // A saved place: its name heads the pill, and a smaller grey pin keeps it
-  // apart from the tapped point.
+  // A saved place: its name heads the pill.
   title?: string;
+  // A saved place's category: the pin becomes that category's icon in its
+  // own colour (the same pair as its card in Places and its stays on the
+  // Exposure map), with a small copy in front of the name. Without it the
+  // pin is the tapped point's blue one.
+  category?: PlaceCategory;
   // Only this hazard's value — the small Home preview, where two numbers
   // per pin get crowded. Both when omitted.
   only?: HazardKind;
@@ -32,6 +39,7 @@ const DualStatPin: React.FC<Props> = ({
   humidity,
   aqhi,
   title,
+  category,
   only,
 }) => {
   // Same classification colors as the heat card, chart and legend.
@@ -43,15 +51,21 @@ const DualStatPin: React.FC<Props> = ({
     aqhi === null ? UNAVAILABLE_DOT_COLOR : getAqhiInfo(aqhi).color;
   const showHeat = only !== 'aqhi';
   const showAqhi = only !== 'heat';
-  const pin = title === undefined ? MAP_POINT_PIN_CONFIG : MAP_PLACE_PIN_CONFIG;
+  const CategoryIcon = category ? PLACE_CATEGORY_CONFIG[category].Icon : null;
+  const categoryColor = category ? EXPOSURE_IO_CONFIG[category].color : null;
 
   return (
     <View style={styles.wrapper}>
       <View style={styles.pill}>
         {title !== undefined && (
-          <Text style={styles.title} numberOfLines={1}>
-            {title}
-          </Text>
+          <View style={styles.titleRow}>
+            {CategoryIcon && categoryColor && (
+              <CategoryIcon size={MAP_PLACE_PIN_CONFIG.titleIconSize} color={categoryColor} />
+            )}
+            <Text style={styles.title} numberOfLines={1}>
+              {title}
+            </Text>
+          </View>
         )}
         <View style={styles.row}>
           {showHeat && (
@@ -81,7 +95,18 @@ const DualStatPin: React.FC<Props> = ({
         )}
       </View>
 
-      <MapPin size={pin.iconSize} color={pin.color} fill={pin.color} strokeWidth={1.5} />
+      {CategoryIcon && categoryColor ? (
+        <View style={[styles.categoryBadge, { borderColor: categoryColor }]}>
+          <CategoryIcon size={MAP_PLACE_PIN_CONFIG.iconSize} color={categoryColor} />
+        </View>
+      ) : (
+        <MapPin
+          size={MAP_POINT_PIN_CONFIG.iconSize}
+          color={MAP_POINT_PIN_CONFIG.color}
+          fill={MAP_POINT_PIN_CONFIG.color}
+          strokeWidth={1.5}
+        />
+      )}
     </View>
   );
 };
@@ -100,7 +125,8 @@ const styles = StyleSheet.create({
     marginBottom: 2,
     maxWidth: 220,
   },
-  title: { fontSize: 11, fontWeight: '700', color: '#555' },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 4, maxWidth: '100%' },
+  title: { fontSize: 11, fontWeight: '700', color: '#555', flexShrink: 1 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   dot: { width: 8, height: 8, borderRadius: 4 },
   divider: {
@@ -111,6 +137,17 @@ const styles = StyleSheet.create({
   },
   text: { fontSize: 12, fontWeight: '700', color: '#222' },
   subText: { fontSize: 11, fontWeight: '500', color: '#666' },
+  // White so the category colour reads on any map style; the coloured ring
+  // keeps the badge visible on a pale map.
+  categoryBadge: {
+    width: MAP_PLACE_PIN_CONFIG.badgeSize,
+    height: MAP_PLACE_PIN_CONFIG.badgeSize,
+    borderRadius: MAP_PLACE_PIN_CONFIG.badgeSize / 2,
+    borderWidth: MAP_PLACE_PIN_CONFIG.borderWidth,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });
 
 export default DualStatPin;

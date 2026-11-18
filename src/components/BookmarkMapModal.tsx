@@ -9,8 +9,8 @@ import { MapLayer } from '../types/mapSettings';
 type Props = {
   visible: boolean;
   bookmark: BookmarkEntry | null;
-  // Picked by the caller from this place's own values and alert profile
-  // (useDefaultMapLayer), like every other map.
+  // Picked by the caller from this place's own values — the higher of its
+  // two hazards (useDefaultMapLayer), like every other map.
   layer: MapLayer;
   onClose: () => void;
 };

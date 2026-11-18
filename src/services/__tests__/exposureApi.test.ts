@@ -1,3 +1,4 @@
+let mockConfigured = true;
 jest.mock('../../config/exposureApiConfig', () => ({
   EXPOSURE_API_CONFIG: {
     baseUrl: 'http://etl.test',
@@ -7,12 +8,14 @@ jest.mock('../../config/exposureApiConfig', () => ({
     batchMaxWaitMs: 0,
     maxFilesPerImport: 10,
   },
+  isExposureApiConfigured: () => mockConfigured,
 }));
 
 import {
   deleteExposureDay,
   deletePlaceLabel,
   ExposureApiError,
+  fetchHourlyExposure,
   ingestExposureGpx,
   ingestExposurePings,
   upsertPlaceLabel,
@@ -22,6 +25,24 @@ const GPX = '<?xml version="1.0"?><gpx><trk><trkseg><trkpt lat="22.3" lon="114.2
 
 const jsonResponse = (status: number, body: unknown) =>
   ({ ok: status >= 200 && status < 300, status, json: () => Promise.resolve(body) }) as Response;
+
+describe('with no backend configured', () => {
+  afterEach(() => {
+    mockConfigured = true;
+  });
+
+  it('fails every call at once, without sending a request', async () => {
+    mockConfigured = false;
+    const fetchMock = jest.fn();
+    globalThis.fetch = fetchMock;
+
+    const error = await fetchHourlyExposure('p').catch(e => e);
+    expect(error).toBeInstanceOf(ExposureApiError);
+    expect(error.message).toContain('not set up');
+    await expect(ingestExposureGpx('p', GPX)).rejects.toBeInstanceOf(ExposureApiError);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
 
 describe('ingestExposureGpx', () => {
   const fetchMock = jest.fn();

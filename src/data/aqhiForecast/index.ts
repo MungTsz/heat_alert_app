@@ -1,11 +1,8 @@
-import { mockAqhiForecastProvider } from './mockAqhiForecastProvider';
 import { apiAqhiForecastProvider } from './apiAqhiForecastProvider';
-import { isPraiseConfigured } from '../../config/praiseConfig';
-
 import { AqhiForecastProvider } from './types';
 
-export const aqhiForecastProvider: AqhiForecastProvider = isPraiseConfigured()
-  ? apiAqhiForecastProvider
-  : mockAqhiForecastProvider;
+// API only, by design (no mock provider) — same rule as data/aqhi. With no
+// forecast the chart shows its "not available right now" state.
+export const aqhiForecastProvider: AqhiForecastProvider = apiAqhiForecastProvider;
 
 export * from './types';

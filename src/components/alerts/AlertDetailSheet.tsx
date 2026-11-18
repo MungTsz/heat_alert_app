@@ -9,21 +9,16 @@ import {
   Linking,
   useWindowDimensions,
 } from 'react-native';
-import { AlertDetailItem, AlertMessageRecord, HazardKind } from '../../types/alerts';
+import { AlertDetailItem, AlertMessageRecord } from '../../types/alerts';
 import { HAZARD_KINDS } from '../../config/alertConfig';
-import {
-  AQHI_LEVEL_MEANING,
-  DETAIL_COPY,
-  HAZARD_COPY,
-  OFFICIAL_LINKS,
-} from '../../config/alertCopy';
+import { DETAIL_COPY, HAZARD_COPY, OFFICIAL_LINKS } from '../../config/alertCopy';
 import { ALERT_UI } from '../../config/alertUiConfig';
 import {
   readAlertFeedback,
   readMessageLog,
   saveAlertFeedback,
 } from '../../services/alertStateStorage';
-import { levelAtRank } from '../../utils/hazardLevels';
+import { levelAtRank, levelMeaning } from '../../utils/hazardLevels';
 import { urgentRankFor } from '../../utils/alertProfile';
 import {
   adviceFor,
@@ -78,9 +73,6 @@ const itemLine = (item: AlertDetailItem, nowMs: number): string => {
       );
   }
 };
-
-const levelMeaning = (hazard: HazardKind, level: string): string =>
-  hazard === 'heat' ? getHeatZoneByClassification(level).risk : AQHI_LEVEL_MEANING[level] ?? '';
 
 // What the user was told, in full: each place's level, what the level
 // means, the same advice as the push, the forecast chart for the first

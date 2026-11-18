@@ -7,6 +7,7 @@ import {
   getHeatZoneByClassification,
 } from './heatIndexUtils';
 import { formatAqhiLevelRange, formatAqhiValue, getAqhiInfo } from './aqhiUtils';
+import { AQHI_LEVEL_MEANING } from '../config/alertCopy';
 
 // One adapter over the two hazards' own level tables, so the alert engine
 // treats heat and AQHI identically (ranks, comparisons, labels) while each
@@ -32,6 +33,12 @@ export const rankOf = (hazard: HazardKind, value: number): number =>
 
 export const levelAtRank = (hazard: HazardKind, rank: number): string =>
   HAZARD_LEVELS[hazard][Math.max(0, Math.min(rank, HAZARD_LEVELS[hazard].length - 1))];
+
+// What a level means for health, in a sentence: heat's NWS risk text
+// (HEAT_INDEX_ZONES) and EPD's wording for AQHI. One lookup for the alert
+// detail sheet and the ENVI sheet, so they never describe a level differently.
+export const levelMeaning = (hazard: HazardKind, level: string): string =>
+  hazard === 'heat' ? getHeatZoneByClassification(level).risk : AQHI_LEVEL_MEANING[level] ?? '';
 
 // The number as the rest of the app shows it: "7", "10+", "41°C".
 export const formatHazardValue = (hazard: HazardKind, value: number): string =>

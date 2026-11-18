@@ -113,8 +113,8 @@ export type ExposureBatchStatus = {
 // output count doesn't read as lost data. processedRows is the batch's own
 // `rows`: time segments (stays / thinned route points, split per HK clock
 // hour) this upload wrote, incl. out-of-HK and failed-PRAISE rows — not
-// "valid GPS points". The API always returns an integer once done; null
-// only comes from the mock provider.
+// "valid GPS points". The API returns an integer once done; null covers a
+// batch that reports no row count.
 export type ExposureIngestResult = { processedRows: number | null };
 
 // One hourly-API row adapted into the shape the app's UI already renders

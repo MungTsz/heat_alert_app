@@ -2,10 +2,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   isPermanentPlaceLabelError,
-  isPlaceLabelDataMocked,
   placeLabelDataProvider,
   PlaceLabel,
 } from '../data/placeLabels';
+import { isPlaceLabelApiConfigured } from '../config/placeLabelConfig';
 import { BookmarkEntry } from '../types/bookmark';
 import { readBookmarks } from './bookmarkStorage';
 
@@ -98,10 +98,10 @@ const reconcile = async (): Promise<void> => {
 let queue: Promise<void> = Promise.resolve();
 
 export const syncPlaceLabels = (): Promise<void> => {
-  // With no exposure backend configured there's nothing to sync to — and
-  // recording mock "successes" would stop those labels from ever being
-  // uploaded once a backend URL is set.
-  if (isPlaceLabelDataMocked) return Promise.resolve();
+  // With no exposure backend configured there's nothing to sync to. Not an
+  // error (the place works locally), and nothing is recorded as synced, so
+  // these labels upload once a backend URL is set.
+  if (!isPlaceLabelApiConfigured()) return Promise.resolve();
   const run = queue.then(reconcile);
   queue = run.catch(() => {});
   return run;

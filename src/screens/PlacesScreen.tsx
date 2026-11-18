@@ -116,13 +116,13 @@ const PlacesScreen = ({ focusPlaceId = null, onFocusHandled }: Props) => {
   const visibleRows = bookmarkRows.filter(row => !row.hidden);
   const hiddenRows = bookmarkRows.filter(row => row.hidden);
 
-  // The opened place's map starts on the hazard that has reached THIS
-  // place's alert level, judged with its own values and profile.
+  // The opened place's map starts on whichever hazard is higher at THIS
+  // place, judged from its own values.
   const selectedRow = bookmarkRows.find(row => row.id === selectedBookmark?.id);
-  const selectedMapLayer = useDefaultMapLayer(
-    { heat: selectedRow?.temperature ?? null, aqhi: selectedRow?.aqhi ?? null },
-    selectedRow?.alertProfile,
-  );
+  const selectedMapLayer = useDefaultMapLayer({
+    heat: selectedRow?.temperature ?? null,
+    aqhi: selectedRow?.aqhi ?? null,
+  });
 
   const renameOtherNames = useMemo(
     () => bookmarks.filter(b => b.id !== renamingBookmark?.id).map(b => b.label),

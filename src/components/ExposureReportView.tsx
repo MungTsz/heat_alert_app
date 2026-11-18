@@ -1,10 +1,9 @@
 // src/components/ExposureReportView.tsx
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
-import { AlertTriangle } from 'lucide-react-native';
 import { ExposureReport } from '../types/exposure';
-import { isExposureDataMocked } from '../data/exposure';
 import { EXPOSURE_MAP_CONFIG } from '../config/exposureMapConfig';
+import { EXPOSURE_SCREEN_COPY } from '../config/exposureScreenConfig';
 import { EXPOSURE_IO_CONFIG } from '../config/exposureIoConfig';
 import { EXPOSURE_IO_ICONS } from '../config/exposureIoIconConfig';
 import { clusterStayPoints } from '../utils/geoClustering';
@@ -77,17 +76,20 @@ const ExposureReportView: React.FC<Props> = ({ report, title, hourlyChart }) => 
     [report.segments],
   );
 
+  // Nothing to report (no data came back, or no segment was long enough):
+  // one plain card instead of a "0.00" total, a zero duration and an empty
+  // map, which would read as measured values.
+  if (report.segments.length === 0) {
+    return (
+      <View style={styles.summaryCard}>
+        <Text style={styles.title}>{title}</Text>
+        <Text style={styles.emptyText}>{EXPOSURE_SCREEN_COPY.reportEmpty}</Text>
+      </View>
+    );
+  }
+
   return (
     <View>
-      {isExposureDataMocked && (
-        <View style={styles.mockBanner}>
-          <AlertTriangle size={14} color="#9A6700" />
-          <Text style={styles.mockBannerText}>
-            Mock data — not yet connected to the exposure ETL backend
-          </Text>
-        </View>
-      )}
-
       <View style={styles.summaryCard}>
         <Text style={styles.title}>{title}</Text>
         <View style={styles.statsRow}>
@@ -108,77 +110,63 @@ const ExposureReportView: React.FC<Props> = ({ report, title, hourlyChart }) => 
             <Text style={styles.statLabel}>Time outdoors</Text>
           </View>
         </View>
-        {report.segments.length > 0 && (
-          <Text style={styles.rangeText}>
-            {formatTime(report.timeRangeStart)} –{' '}
-            {formatTime(report.timeRangeEnd)}
-          </Text>
-        )}
+        <Text style={styles.rangeText}>
+          {formatTime(report.timeRangeStart)} –{' '}
+          {formatTime(report.timeRangeEnd)}
+        </Text>
       </View>
 
       <ExposureTrajectoryMap segments={report.segments} />
 
-      {hourlyChart ? (
-        <View style={styles.trendCard}>{hourlyChart}</View>
-      ) : (
-        report.segments.length > 0 && (
-          <View style={styles.trendCard}>
-            <ExposureTrendChart segments={report.segments} title="Hourly Exposure" />
-          </View>
-        )
-      )}
+      <View style={styles.trendCard}>
+        {hourlyChart ?? (
+          <ExposureTrendChart segments={report.segments} title="Hourly Exposure" />
+        )}
+      </View>
 
-      {report.segments.length === 0 ? (
-        <Text style={styles.emptyText}>
-          No segments long enough to calculate exposure.
+      <View style={styles.segmentListHeader}>
+        <View style={styles.segmentBadgeSpacer} />
+        <Text style={styles.segmentListHeaderText}>Timeline</Text>
+        <Text style={[styles.segmentListHeaderText, styles.segmentListHeaderExposure]}>
+          Exposure (%AR·h)
         </Text>
-      ) : (
-        <>
-          <View style={styles.segmentListHeader}>
-            <View style={styles.segmentBadgeSpacer} />
-            <Text style={styles.segmentListHeaderText}>Timeline</Text>
-            <Text style={[styles.segmentListHeaderText, styles.segmentListHeaderExposure]}>
-              Exposure (%AR·h)
-            </Text>
-          </View>
-          <ScrollView style={styles.segmentList} nestedScrollEnabled>
-            {timeline.map((item, i) => {
-              const row = timelineRowContent(item);
-              const { color, label } = EXPOSURE_IO_CONFIG[row.io];
-              const Icon = EXPOSURE_IO_ICONS[row.io];
-              return (
-                <View key={`${item.type}-${row.startTime}-${i}`} style={styles.segmentRow}>
-                  {/* Same icon badge as the map's stay dots, so a row is
-                      matched to the map by shape and color alone. */}
-                  <View
-                    style={[
-                      styles.segmentBadge,
-                      { backgroundColor: row.inHk ? color : EXPOSURE_MAP_CONFIG.outsideHkColor },
-                    ]}
-                  >
-                    <Icon size={12} color="#fff" />
-                  </View>
-                  <View style={styles.segmentInfo}>
-                    <Text style={styles.segmentTime}>
-                      {formatTime(row.startTime)} – {formatTime(row.endTime)}{' '}
-                      ({formatDuration(row.durationMs)})
-                    </Text>
-                    <Text style={styles.segmentLocation} numberOfLines={1}>
-                      {label}
-                      {row.detail && ` · ${row.detail}`}
-                      {!row.inHk && ' · Outside HK'}
-                    </Text>
-                  </View>
-                  {/* "—" not "0.000": outside HK means "not calculated", not zero. */}
-                  <Text style={styles.segmentExposure}>
-                    {row.inHk ? row.exposure.toFixed(3) : '—'}
-                  </Text>
-                </View>
-              );
-            })}
-          </ScrollView>
-        </>
-      )}
+      </View>
+      <ScrollView style={styles.segmentList} nestedScrollEnabled>
+        {timeline.map((item, i) => {
+          const row = timelineRowContent(item);
+          const { color, label } = EXPOSURE_IO_CONFIG[row.io];
+          const Icon = EXPOSURE_IO_ICONS[row.io];
+          return (
+            <View key={`${item.type}-${row.startTime}-${i}`} style={styles.segmentRow}>
+              {/* Same icon badge as the map's stay dots, so a row is
+                  matched to the map by shape and color alone. */}
+              <View
+                style={[
+                  styles.segmentBadge,
+                  { backgroundColor: row.inHk ? color : EXPOSURE_MAP_CONFIG.outsideHkColor },
+                ]}
+              >
+                <Icon size={12} color="#fff" />
+              </View>
+              <View style={styles.segmentInfo}>
+                <Text style={styles.segmentTime}>
+                  {formatTime(row.startTime)} – {formatTime(row.endTime)}{' '}
+                  ({formatDuration(row.durationMs)})
+                </Text>
+                <Text style={styles.segmentLocation} numberOfLines={1}>
+                  {label}
+                  {row.detail && ` · ${row.detail}`}
+                  {!row.inHk && ' · Outside HK'}
+                </Text>
+              </View>
+              {/* "—" not "0.000": outside HK means "not calculated", not zero. */}
+              <Text style={styles.segmentExposure}>
+                {row.inHk ? row.exposure.toFixed(3) : '—'}
+              </Text>
+            </View>
+          );
+        })}
+      </ScrollView>
     </View>
   );
 };
@@ -195,17 +183,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.06,
     shadowRadius: 3,
   },
-  mockBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#FFF3CD',
-    borderRadius: 10,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    marginBottom: 12,
-  },
-  mockBannerText: { fontSize: 12, color: '#9A6700', flexShrink: 1 },
   title: { fontSize: 16, fontWeight: '700', color: '#1C1C1E', marginBottom: 10 },
   statsRow: { flexDirection: 'row', justifyContent: 'space-between' },
   stat: { alignItems: 'center', flex: 1 },

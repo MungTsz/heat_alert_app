@@ -13,7 +13,7 @@ export type HeatConditions = {
   heatIndexC: number;
 };
 
-// Contract every data source (mock or real) must follow
+// Contract the heat data source must follow
 export interface HeatDataProvider {
   getConditionsAt: (coords: Coordinates) => Promise<HeatConditions>;
   // Heat index alone — one request instead of three, for lists of places

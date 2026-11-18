@@ -198,6 +198,44 @@ export const HEAT_URGENT_ADVICE: Voiced = {
   family: 'Call to check on them now and make sure they are somewhere cool.',
 };
 
+// What to do at each level, for anyone — Home's ENVI card on days without
+// an alert (an alert brings the personal advice above instead). Keyed by
+// each hazard's own level name; the lowest level has no entry because it
+// needs no message. The top level reuses the urgent advice, so the card and
+// an urgent alert never word it differently. Health advice: needs a
+// public-health review before release.
+export const HEAT_LEVEL_SUGGESTION: Record<string, string> = {
+  Caution: "Drink water regularly and take breaks in the shade if you're active outdoors.",
+  'Extreme Caution':
+    'Keep outdoor activity to early morning or evening, drink water often, and rest in the shade.',
+  Danger:
+    'Avoid outdoor activity in the hottest hours, stay somewhere cool, and watch for dizziness, headache or nausea.',
+  'Extreme Danger': HEAT_URGENT_ADVICE.self,
+};
+
+export const AQHI_LEVEL_SUGGESTION: Record<string, string> = {
+  Moderate: 'Most people can carry on as normal. Ease off outdoors if you feel symptoms.',
+  High: 'Sensitive groups should cut down outdoor exertion, especially near busy roads.',
+  'Very High':
+    'Cut down outdoor exertion and time outdoors. Sensitive groups should keep it to a minimum.',
+  Serious: AQHI_URGENT_ADVICE.self,
+};
+
+// Home's ENVI card and the sheet it opens. The explainer says what ENVI is,
+// not how it is worked out — that stays out of the UI on purpose.
+export const ENVI_COPY = {
+  title: 'ENVI',
+  explainer:
+    "ENVI is this app's overall level for heat and air quality combined, from 1 (low) to 5 (serious).",
+  unavailable: '--',
+  warningHeading: 'Warning',
+  suggestionHeading: 'Suggestion',
+  // Screen-reader wording for the card: "ENVI 3, High".
+  levelLabel: (level: number, name: string) => `ENVI ${level}, ${name}`,
+  unavailableLabel: 'ENVI not available',
+  detailsHint: 'Opens what this level means',
+};
+
 // The closing line of a cancelled heads-up and an all clear. A carer has
 // to pass the news on, so their version says so.
 export const CANCELLED_CLOSING: Voiced = {

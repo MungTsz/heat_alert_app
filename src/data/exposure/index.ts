@@ -1,16 +1,9 @@
-import { mockExposureProvider } from './mockExposureProvider';
 import { apiExposureProvider } from './apiExposureProvider';
-import { isExposureApiConfigured } from '../../config/exposureApiConfig';
 import { ExposureDataProvider } from './types';
 
-// Switches to the local exposure ETL backend once EXPOSURE_API_BASE_URL is
-// set, the same way aqhi/aqhiForecast auto-switch on their own config.
-export const exposureDataProvider: ExposureDataProvider = isExposureApiConfigured()
-  ? apiExposureProvider
-  : mockExposureProvider;
-
-// Lets the UI show a "mock data" indicator without hardcoding that
-// assumption in components — flip together with exposureDataProvider above.
-export const isExposureDataMocked = exposureDataProvider === mockExposureProvider;
+// API only, by design (no mock provider): every exposure number comes from
+// the exposure ETL backend. Without EXPOSURE_API_BASE_URL every call fails
+// at once (services/exposureApi.ts) and the screens show their empty states.
+export const exposureDataProvider: ExposureDataProvider = apiExposureProvider;
 
 export * from './types';

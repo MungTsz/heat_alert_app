@@ -2,6 +2,7 @@
 import React, { useMemo } from 'react';
 import { AqhiDayForecast } from '../data/aqhiForecast/types';
 import { formatAqhiValue } from '../utils/aqhiUtils';
+import { ENVI_LEVELS } from '../config/enviConfig';
 import HourlyForecastChart, {
   ForecastChartBand,
   ForecastChartDay,
@@ -17,21 +18,29 @@ const Y_AXIS_LABELS = [
 // Fixed EPD severity bands — background zones, not per-point colors. This is
 // a deliberately independent, coarser 5-color palette for the chart backdrop,
 // separate from aqhiUtils' per-value gradient used by the map/legend/pins.
-const BANDS: ForecastChartBand[] = [
-  { min: 0, max: 3, color: '#4CAF33', opacity: 0.55 }, // Low
-  { min: 3, max: 6, color: '#F2C300', opacity: 0.55 }, // Moderate
-  { min: 6, max: 7, color: '#E8242A', opacity: 0.55 }, // High
-  { min: 7, max: 10, color: '#8D4A3C', opacity: 0.55 }, // Very High
-  { min: 10, max: 11, color: '#000000', opacity: 0.85 }, // Serious ("10+")
+// The five colors themselves come from ENVI_LEVELS (ENVI adopted this
+// palette), so they are written down once; what stays here is where each
+// band sits on the AQHI axis, lowest level first like ENVI_LEVELS.
+const BAND_SPANS = [
+  { min: 0, max: 3, opacity: 0.55, label: 'Low', range: '1  2  3' },
+  { min: 3, max: 6, opacity: 0.55, label: 'Moderate', range: '4  5  6' },
+  { min: 6, max: 7, opacity: 0.55, label: 'High', range: '7' },
+  { min: 7, max: 10, opacity: 0.55, label: 'Very High', range: '8  9  10' },
+  { min: 10, max: 11, opacity: 0.85, label: 'Serious', range: '10+' },
 ];
 
-const LEGEND = [
-  { label: 'Low', range: '1  2  3', color: '#4CAF33' },
-  { label: 'Moderate', range: '4  5  6', color: '#F2C300' },
-  { label: 'High', range: '7', color: '#E8242A' },
-  { label: 'Very High', range: '8  9  10', color: '#8D4A3C' },
-  { label: 'Serious', range: '10+', color: '#000000' },
-];
+const BANDS: ForecastChartBand[] = BAND_SPANS.map(({ min, max, opacity }, i) => ({
+  min,
+  max,
+  color: ENVI_LEVELS[i].color,
+  opacity,
+}));
+
+const LEGEND = BAND_SPANS.map(({ label, range }, i) => ({
+  label,
+  range,
+  color: ENVI_LEVELS[i].color,
+}));
 
 const PRIMARY = { label: 'AQHI', format: formatAqhiValue };
 

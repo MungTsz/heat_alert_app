@@ -364,8 +364,9 @@ const MapScreen = ({
         {places.map(place => (
           <Marker
             // Same remount-on-values trick as the tapped-point marker below,
-            // so Android re-measures the pin once its values arrive.
-            key={`place-${place.id}-${place.heatIndex}-${place.aqhi}-${mapLayer}`}
+            // so Android re-measures the pin once its values arrive — and
+            // when its category (so its icon) changes.
+            key={`place-${place.id}-${place.category}-${place.heatIndex}-${place.aqhi}-${mapLayer}`}
             coordinate={{ latitude: place.latitude, longitude: place.longitude }}
             anchor={{ x: 0.5, y: 1 }}
             zIndex={2}
@@ -374,6 +375,7 @@ const MapScreen = ({
           >
             <DualStatPin
               title={place.label}
+              category={place.category}
               temperature={place.heatIndex}
               aqhi={place.aqhi}
               // The small preview shows only the layer on screen; the

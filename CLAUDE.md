@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project overview
 
-React Native (0.86) app for Hong Kong heat and air-quality alerts. It shows a live heat index / AQHI map, an animated "scene" (Skia canvas) reacting to current conditions, forecast cards, community bookmarks, and background threshold-based push notifications.
+React Native (0.86) app for Hong Kong heat and air-quality alerts. It shows ENVI (one overall level for heat and air quality), a live heat index / AQHI map, an animated "scene" (Skia canvas) reacting to current conditions, forecast cards, community bookmarks, and background threshold-based push notifications.
 
 ## Commands
 
@@ -21,25 +21,35 @@ No native rebuild is needed for JS/TS-only changes — Metro + Fast Refresh pick
 
 ## Architecture
 
-### Data providers: mock/api pairs behind a single switch file
+### Data providers: API only, behind one index file per domain
 
 Every data domain lives under `src/data/<domain>/` with the same shape:
 
 - `types.ts` — the provider interface and domain types
-- `mockAqhiProvider.ts` / `apiAqhiProvider.ts` (etc.) — two implementations of that interface (heat and forecast are api-only, see below)
-- `index.ts` — picks which implementation is live and re-exports the types
+- `apiAqhiProvider.ts` (etc.) — the one implementation of that interface
+- `index.ts` — exports the provider and re-exports the types
 
-Domains: `heat`, `forecast`, `aqhi`, `aqhiForecast`.
+Domains: `heat`, `forecast`, `aqhi`, `aqhiForecast`, `exposure`, `placeLabels`.
 
-Two different switching strategies are in use:
-- `heat` and `forecast` have **no mock provider at all** — only the Spatial Temperature API provider below. Don't add one back: the user wants it impossible for fake heat data to reach the screen.
-- `aqhi` and `aqhiForecast` switch automatically based on `isPraiseConfigured()` (from `src/config/praiseConfig.ts`), which checks whether `PRAISE_API_KEY` is set.
+**No domain has a mock provider.** Don't add one back: the user wants it impossible for fake data to reach the screen or a notification. When a value can't be fetched the UI shows "--" (or the screen's empty / "not available right now" state) — never a placeholder number.
+- `heat` and `forecast` use the Spatial Temperature API below.
+- `aqhi` and `aqhiForecast` use PRAISE. Without `PRAISE_API_KEY` (`isPraiseConfigured()` in `src/config/praiseConfig.ts`) `praiseApi` refuses every call before it is sent.
+- `exposure` and `placeLabels` use the exposure ETL backend. Without `EXPOSURE_API_BASE_URL` (`isExposureApiConfigured()`) `exposureApi` refuses every call, and `placeLabelSyncService` skips syncing (labels upload once a backend is set).
 
 When adding a feature that needs new backend data, follow this same pattern rather than fetching directly from a component/hook.
 
 ### PRAISE API (real environmental data source)
 
-`src/config/praiseConfig.ts` reads `PRAISE_API_KEY`, `PRAISE_MYID`, `PRAISE_BASE_URL` via `react-native-config` from the `.env` file. `src/services/praiseApi.ts` talks to this API directly (used by `MapScreen` for tapped-point lookups). When PRAISE isn't configured, AQHI features transparently fall back to mock data — don't assume the API key is always present.
+`src/config/praiseConfig.ts` reads `PRAISE_API_KEY`, `PRAISE_MYID`, `PRAISE_BASE_URL` via `react-native-config` from the `.env` file. `src/services/praiseApi.ts` talks to this API directly (used by `MapScreen` for tapped-point lookups). When PRAISE isn't configured there is no AQHI at all: cards and pins show "--", the forecast sheet shows its not-available state, the map never opens on the AQHI layer and the alert engine skips AQHI — don't assume the API key is always present.
+
+### ENVI (one overall level for heat and air quality)
+
+Heat index and AQHI each have five levels; ENVI is the **higher of the two**, 1 to 5 (Low, Moderate, High, Very High, Serious). With one reading missing it is the other hazard's level; with both missing it is `null` and the screen shows "--".
+- `src/config/enviConfig.ts`: `ENVI_LEVELS` (name, colour, text colour per level — the AQHI forecast chart's five flat bands, which reads its colours from this table), `ENVI_CONFIG` (advice thresholds), `ENVI_BAND_CONFIG` (the band's sizes).
+- `src/utils/enviUtils.ts`: `hazardLevelOf` (always `rankOf() + 1`, so the level tables stay only in `heatIndexUtils.ts` / `aqhiUtils.ts`), `getEnviLevel`, `dominantHazard` (the higher hazard; `null` on a tie or with no readings) and `seasonalHazard` (the tie-break: AQHI December to May, heat June to November, from `DEFAULT_MAP_LAYER_CONFIG.aqhiSeasonMonths`).
+- `src/utils/enviAdvice.ts`: `enviAdviceFor` — nothing at level 1; `DUAL_ADVICE` when both hazards reach `dualAdviceMinLevel`; otherwise the higher hazard's sentence from `HEAT_LEVEL_SUGGESTION` / `AQHI_LEVEL_SUGGESTION` (`alertCopy.ts`; on a tie, the season's hazard). `src/utils/homeAdvice.ts` (`homeAdviceFor`) puts a live alert's own `adviceFor()` ahead of it.
+- **How ENVI is worked out is never shown to the user.** The band carries no heat index / AQHI markers, neither small card is marked as the one that set the level, and `ENVI_COPY.explainer` says what ENVI is, not how it is calculated. Don't add UI that reveals it.
+- The level suggestions are health advice and need a public-health review before release.
 
 ### Spatial Temperature API (heat data source — single source of truth)
 
@@ -48,10 +58,10 @@ When adding a feature that needs new backend data, follow this same pattern rath
 - Anchor queries on `/{family}/latest`, not the phone's clock (data lands 1–2 h late).
 - `/area` paints any part of the box outside the data footprint as opaque white — always trim map boxes with `clipToDataFootprint` first (the heat tile hooks do).
 - Heat levels follow the API's map PNG colours: NWS bands for Caution and above, and "No Caution" (`#009933`, sampled from the API's PNG) below 27°C — never "Safe". `HEAT_INDEX_ZONES` in `heatIndexUtils.ts` is the single table every legend, chart band and card reads.
-- Product decision: the map and headline numbers are heat-index-only (no temperature/RH map layer). Temperature and humidity appear only as context at a single place — the home card's "Humidity makes it feel N° hotter" line, the map pin's "Temp · Humidity" sub-line, and the forecast chart's dashed "Temperature" line. Always write "Temp"/"Temperature" and "Heat index" in full words — never "Air" or "RH" in UI copy. `HeatIndexExplainerSheet` opens only from the home card's gap line (shown only when there is a gap) — no standing "what is heat index?" link, since AQHI has none. On days with a live alert at your location that footer line shows the alert's advice instead (`CurrentWeatherInfo`'s `advice` prop). Tunables in `src/config/heatDisplayConfig.ts`.
+- Product decision: the map and headline numbers are heat-index-only (no temperature/RH map layer). Temperature and humidity appear only as context at a single place — the home card's "Humidity makes it feel N° hotter" line, the map pin's "Temp · Humidity" sub-line, and the forecast chart's dashed "Temperature" line. Always write "Temp"/"Temperature" and "Heat index" in full words — never "Air" or "RH" in UI copy. `HeatIndexExplainerSheet` opens only from the home card's gap line (shown only when there is a gap) — no standing "what is heat index?" link, since AQHI has none. Advice is not on that card: Home gives it in one place, the ENVI card. Tunables in `src/config/heatDisplayConfig.ts`.
 - Heat and AQHI are **peer hazard layers and must stay consistent** everywhere: map layer (per-region tile, shared opacity slider, matching vertical legend, Play Forecast with the same frame count/speed from `src/config/mapLayerConfig.ts`, shared `MapForecastFrame` type), home cards, and forecast charts (both are thin wrappers over the shared `HourlyForecastChart`: day tabs + swipeable day pages + readout row + one-row `ChartBandLegend`; the sheet carries the title, so the chart has none). Any feature added to one layer must be added to the other.
 - The API has no forecast yet: while `forecastFromHistory` is true, future hours repeat the reading from 48 h earlier (demo), and the alert engine ignores the heat forecast (heat events start at "active", no heat heads-ups). For the same reason Home has no inline forecast chart — add one (for heat and AQHI together) only once the API has a real forecast.
-- Maps always show a hazard layer (`MapLayer = HazardKind`, no plain "Default" layer). `MapScreen` is controlled (`layer` / `onLayerChange`); the screen owning the map picks the starting layer with `useDefaultMapLayer` (rules in `DEFAULT_MAP_LAYER_CONFIG`: the hazard at/above the alert level, else the HK season, heat whenever PRAISE isn't configured). Home lifts the layer so its preview and `FullscreenMapModal` share it; the preview keeps its layer picker usable (`onPreviewPress` puts the tap-to-expand area under the map's own controls). The base map style (Default / Satellite, `MAP_TYPE_OPTIONS`) is offered both in `MapLayerPicker` and in App settings — one stored value via the shared `useMapSettings`.
+- Maps always show a hazard layer (`MapLayer = HazardKind`, no plain "Default" layer). `MapScreen` is controlled (`layer` / `onLayerChange`); the screen owning the map picks the starting layer with `useDefaultMapLayer` from the readings it already has (rules in `DEFAULT_MAP_LAYER_CONFIG`: the hazard with the higher level — `dominantHazard`, the one setting ENVI — else, on a tie or with no readings, the HK season; heat whenever PRAISE isn't configured). Alert profiles play no part. Home lifts the layer so its preview and `FullscreenMapModal` share it; the preview keeps its layer picker usable (`onPreviewPress` puts the tap-to-expand area under the map's own controls). Saved places on the map (`useMapPlacePins` → `DualStatPin`'s `category`) are a white badge with the place's category icon in the category's own colour (`PLACE_CATEGORY_CONFIG` / `EXPOSURE_IO_CONFIG`, sizes in `MAP_PLACE_PIN_CONFIG`), plus a small copy of the icon before the name — the same icon and colour as in Places and Exposure, never a grey pin; only the tapped point keeps the blue pin. The base map style (Default / Satellite, `MAP_TYPE_OPTIONS`) is offered both in `MapLayerPicker` and in App settings — one stored value via the shared `useMapSettings`.
 
 Google Maps requires `GOOGLE_ANDROID_MAP_KEY` in `.env` (wired into the native Android config).
 
@@ -70,10 +80,10 @@ Alerts are per **event** (one hazard at one place, first sign to all clear), not
 - Audience → level table, urgent levels, event timing and delivery limits: `src/config/alertConfig.ts`. Every word of UI and notification copy: `src/config/alertCopy.ts`.
 - "About you" is asked once on first launch (`AboutYouOnboarding`, gated by `NotificationSettings.aboutYouConfirmed`); the Alerts tab then shows a one-line summary row that opens `AlertProfileSheet` (the same sheet saved places use). Advanced level chips select the level in effect — no separate "Default" chip; `withAlertLevel()` clears the override when the audience's own level is picked.
 - Places ask "Who is this place for?" first. A place for yourself follows the About you audience (`followsAboutYou`, looked up on every read) and only shows that answer with a "Change" link; only a family place opens the full audience list. Always read bookmark profiles through `resolvePlaceAlertProfile(stored, aboutYou)`, and change them via `withCaringFor` / `withPlaceAudience`.
-- Message bodies are facts + one action (`adviceFor`), voiced by `adviceProfileFor()` across every place in the message (family voice only if all places are family; the more careful advice when audiences differ). The same `adviceFor` feeds the detail sheet and Home's advice line, so the three never word it differently. `ALERT_MESSAGE_CONFIG.pushBodyMaxChars` and `HOME_LAYOUT_CONFIG.adviceMaxChars` are enforced by tests. `src/utils/__tests__/__snapshots__/alertSamples.test.ts.snap` is the readable catalogue of every message's wording (built by `buildSampleGallery`, also sent on-device by the dev-only "Send Every Message Type" button in App settings).
+- Message bodies are facts + one action (`adviceFor`), voiced by `adviceProfileFor()` across every place in the message (family voice only if all places are family; the more careful advice when audiences differ). The same `adviceFor` feeds the detail sheet and, while an alert is live, the ENVI card's advice sentence (`homeAdviceFor`), so the three never word it differently. `ALERT_MESSAGE_CONFIG.pushBodyMaxChars` and `HOME_LAYOUT_CONFIG.adviceMaxChars` are enforced by tests. `src/utils/__tests__/__snapshots__/alertSamples.test.ts.snap` is the readable catalogue of every message's wording (built by `buildSampleGallery`, also sent on-device by the dev-only "Send Every Message Type" button in App settings).
 
 Pipeline (`runAlertCheck` in `src/services/alertCheckService.ts`, a plain async function that reads settings/places from storage, so it can run outside React later):
-1. `alertReadings.ts` fetches current value + hourly forecast per place. Heat forecast is skipped while `forecastFromHistory`; AQHI is skipped entirely when PRAISE isn't configured (mock data must never push).
+1. `alertReadings.ts` fetches current value + hourly forecast per place. Heat forecast is skipped while `forecastFromHistory`; AQHI is skipped entirely when PRAISE isn't configured (there is no AQHI to read).
 2. `utils/alertSignals.ts` reduces each place × hazard to ranks and the first forecast window at/above the place's level.
 3. `utils/alertEvents.ts` is the state machine (`forecast` → `active` → `easing` → `cleared`, or `cancelled`) deciding what the user is owed (`preview` / `breaking` / `escalation` / `cancelled` / `cleared`). Events persist in AsyncStorage (`alertStateStorage.ts`).
 4. `utils/alertDelivery.ts` applies quiet hours, the 10-min batching wait, per-event cooldown, and the daily cap (urgent levels bypass all of them).
@@ -99,7 +109,7 @@ Not built yet: official HKO/Labour Department warnings, heat heads-ups (needs a 
 ### Screens & navigation
 
 There is no navigation library — `App.tsx` holds `activeTab` state and switches between four screens directly, with `FloatingNavBar` as the tab switcher. Tabs (key, label, icon, order) and the default tab come from `src/config/navConfig.ts`; each answers one part of "how dangerous are heat and air for me and the people I care about?" and is named for the user's question, not the system:
-- `Environment` → `HomeScreen`: alert banner (only while an alert is active), scene, Heat index + AQHI cards, Temp · Humidity with advice/gap footer, map preview with saved-place pins.
+- `Environment` → `HomeScreen`: alert banner (only while an alert is active), scene, the ENVI card (`EnviCard`: level number and name, the five-level `EnviBand` with one pointer, one sentence of advice; a tap opens `EnviDetailSheet` with each hazard's level, Warning and Suggestion), compact Heat index + AQHI cards under it, Temp · Humidity with the gap footer, map preview with saved-place pins. Advice appears only on the ENVI card (none at level 1). Sizes in `src/config/homeLayoutConfig.ts`.
 - `Places` → `PlacesScreen`: saved places, their values, badges and alert profiles (the alert watch list).
 - `Exposure` → `ExposureScreen`: "My day" (with today's top saved places by exposure, from the report itself — `usePlaceStays`) and imported tracks.
 - `Alerts` → `AlertsScreen`: "Active now" and "Recent alerts" summary rows (each opens a sheet), About you, notification settings. App-wide settings (map style, location, exposure tracking, dev tools) are `AppSettingsScreen`, opened only from the Alerts header's gear.

@@ -45,8 +45,8 @@ const fetchHeatReading = async (coords: Coordinates): Promise<HazardReading> => 
 };
 
 const fetchAqhiReading = async (coords: Coordinates): Promise<HazardReading> => {
-  // Without PRAISE the AQHI providers serve mock data — fine for the map,
-  // never for a push notification.
+  // Without PRAISE there is no AQHI at all: skip the lookups (they could
+  // only fail) so the place reads as "unknown", never as a level.
   if (!isPraiseConfigured()) return UNAVAILABLE;
   const [current, days] = await Promise.all([
     orNull(aqhiDataProvider.getAqhiAt(coords), 'AQHI'),

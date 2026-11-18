@@ -15,11 +15,16 @@ const mockUpsert = jest.fn();
 const mockRemove = jest.fn();
 jest.mock('../../data/placeLabels', () => ({
   ...jest.requireActual('../../data/placeLabels/types'),
-  isPlaceLabelDataMocked: false,
   placeLabelDataProvider: {
     upsert: (...args: unknown[]) => mockUpsert(...args),
     remove: (...args: unknown[]) => mockRemove(...args),
   },
+}));
+
+let mockBackendConfigured = true;
+jest.mock('../../config/placeLabelConfig', () => ({
+  ...jest.requireActual('../../config/placeLabelConfig'),
+  isPlaceLabelApiConfigured: () => mockBackendConfigured,
 }));
 
 import { syncPlaceLabels } from '../placeLabelSyncService';
@@ -46,6 +51,19 @@ describe('syncPlaceLabels', () => {
     mockStore.clear();
     mockUpsert.mockReset().mockResolvedValue(undefined);
     mockRemove.mockReset().mockResolvedValue(undefined);
+    mockBackendConfigured = true;
+  });
+
+  it('waits while no backend is configured, then uploads once one is', async () => {
+    storeBookmarks([bookmark('a')]);
+    mockBackendConfigured = false;
+    await expect(syncPlaceLabels()).resolves.toBeUndefined();
+    expect(mockUpsert).not.toHaveBeenCalled();
+
+    // Nothing was recorded as synced, so the label still goes up later.
+    mockBackendConfigured = true;
+    await syncPlaceLabels();
+    expect(mockUpsert).toHaveBeenCalledTimes(1);
   });
 
   it('uploads category + circle only, never the name or address', async () => {

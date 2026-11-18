@@ -14,6 +14,9 @@ export const EXPOSURE_SCREEN_COPY = {
   calculating: 'Calculating…',
   importedEmpty:
     'Tap + to import a GPS track and browse its exposure by date, kept apart from your own day.',
+  // A report with nothing in it (ExposureReportView) — said plainly, in
+  // place of zeros that would look like measurements.
+  reportEmpty: 'No exposure data to show for this period.',
   placesHeading: 'Highest at your places',
   // Same 2 decimals as the day's total above it.
   placeExposure: (value: number) => `${value.toFixed(2)} %AR·h`,

@@ -3,8 +3,9 @@ import Config from 'react-native-config';
 // The exposure ETL backend (exposure_api_github) — normally the office PC's
 // ngrok tunnel, with a local `adb reverse` backend as the fallback (both
 // documented in .env). No hardcoded default: an internal, unauthenticated
-// server shouldn't be baked into the bundle, and leaving it unset falls back
-// to mock data.
+// server shouldn't be baked into the bundle. Leaving it unset means no
+// exposure data at all (there is no mock): the screens show their empty
+// states.
 //
 // timeoutMs defaults well above the platform's ~60s default networking
 // timeout: /ingest triggers GPS-spike rejection, indoor/outdoor dwell
@@ -31,7 +32,8 @@ export const EXPOSURE_API_CONFIG = {
   maxFilesPerImport: Number(Config.EXPOSURE_API_MAX_FILES_PER_IMPORT) || 10,
 };
 
-// Lets exposureDataProvider fall back to mock data gracefully when the
-// backend URL isn't configured yet, same pattern as isPraiseConfigured().
+// One check for everything that needs the backend (exposureApi refuses
+// every call without it; place labels wait to sync) — same pattern as
+// isPraiseConfigured().
 export const isExposureApiConfigured = (): boolean =>
   EXPOSURE_API_CONFIG.baseUrl.length > 0;

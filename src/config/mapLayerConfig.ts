@@ -23,26 +23,33 @@ export const MAP_LAYER_CONFIG = {
 // Which hazard layer a map opens on (useDefaultMapLayer). There is no plain
 // map: one without either layer shows none of this app's data, wasting the
 // first look. In order:
-// 1. the hazard that has reached the user's alert level right now;
-// 2. on a tie (both or neither), the season's usual concern;
-// 3. heat whenever AQHI can't show real data (PRAISE not configured) —
-//    rule 3 is checked first, since it overrides the other two.
+// 1. the hazard with the higher level right now — the one setting ENVI
+//    (utils/enviUtils' dominantHazard);
+// 2. on a tie (same level, or no reading at all), the season's usual concern;
+// 3. heat whenever AQHI has no data (PRAISE not configured) — rule 3 is
+//    checked first, since it overrides the other two.
 export const DEFAULT_MAP_LAYER_CONFIG = {
   // Hong Kong calendar months (1-12) that default to AQHI on a tie: winter
   // and spring, when regional haze peaks. The rest (June-November, the hot
-  // season) default to heat index.
+  // season) default to heat index. ENVI's advice breaks its ties the same way.
   aqhiSeasonMonths: [12, 1, 2, 3, 4, 5] as readonly number[],
   seasonFallbackLayer: 'heat' as MapLayer,
-  // Without PRAISE the AQHI layer would show mock data, so it never opens on it.
+  // Without PRAISE the AQHI layer has nothing to draw, so it never opens on it.
   noPraiseLayer: 'heat' as MapLayer,
 };
 
-// Saved places drawn on the map (Home's preview and full-screen map). A
-// smaller, grey pin than the tapped point's blue one, so "my places" and
-// "the spot I'm looking at" never read as the same thing.
+// Saved places drawn on the map (Home's preview and full-screen map): a
+// white badge holding the place's category icon, in the category's own
+// colour (PLACE_CATEGORY_CONFIG / EXPOSURE_IO_CONFIG) — the same icon and
+// colour the place has in Places and on the Exposure map, and nothing like
+// the tapped point's blue pin, so "my places" and "the spot I'm looking at"
+// never read as the same thing.
 export const MAP_PLACE_PIN_CONFIG = {
-  iconSize: 28,
-  color: '#5B5B5B',
+  badgeSize: 30,
+  iconSize: 16,
+  borderWidth: 2,
+  // The small copy of the icon in front of the place's name.
+  titleIconSize: 12,
 };
 
 // The tapped point's pin.
