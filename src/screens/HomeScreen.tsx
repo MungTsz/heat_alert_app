@@ -174,7 +174,7 @@ const HomeScreen = () => {
         <HeatScene
           width={width}
           height={height}
-          temperatureCelsius={heatIndexTemp}
+          heatIndexC={heatIndexTemp}
           aqhi={currentAqhi}
           scrollY={scrollY}
         />

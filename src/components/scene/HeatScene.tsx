@@ -1,109 +1,81 @@
 // src/components/scene/HeatScene.tsx
 import React from 'react';
+import { StyleSheet } from 'react-native';
+import { Blur, Canvas, Group } from '@shopify/react-native-skia';
 import {
-  Canvas,
-  Rect,
-  LinearGradient,
-  vec,
-  Group,
-  Blur,
-} from '@shopify/react-native-skia';
-import {
-  SharedValue,
-  useDerivedValue,
-  interpolate,
   Extrapolation,
+  SharedValue,
+  interpolate,
+  useDerivedValue,
 } from 'react-native-reanimated';
-import CharacterLayer from './CharacterLayer';
-import ThermometerLayer from './ThermometerLayer';
+import SceneBackdrop from './SceneBackdrop';
 import AqhiHazeLayer from './AqhiHazeLayer';
 import CleanAirSparkleLayer from './CleanAirSparkleLayer';
+import HeatShimmerLayer from './HeatShimmerLayer';
+import DogCharacter from './DogCharacter';
+import PersonCharacter from './PersonCharacter';
 import { computeSceneLayout } from '../../utils/sceneLayout';
-import { getHeatIndexInfo } from '../../utils/heatIndexUtils';
+import { sceneMoodFor } from '../../utils/sceneMood';
+import { SCENE_LAYOUT } from '../../config/sceneConfig';
 
 type Props = {
   width: number;
   height: number;
-  // null = not loaded yet / unavailable: the scene then shows no reading
-  // (empty thermometer, no haze or sparkles, neutral face) instead of
-  // guessing one.
-  temperatureCelsius: number | null;
+  // null = not loaded yet / unavailable: the scene then shows no reaction
+  // to that hazard (see sceneMoodFor) instead of guessing one.
+  heatIndexC: number | null;
   aqhi: number | null;
   scrollY?: SharedValue<number>;
 };
 
-const getSkyColors = (): [string, string] => {
-  const hour = new Date().getHours();
-  const isDaytime = hour >= 6 && hour < 18;
-  return isDaytime ? ['#8FC1E8', '#FFFFFF'] : ['#1E3A5F', '#5D7A96'];
-};
-
-const HeatScene: React.FC<Props> = ({
-  width,
-  height,
-  temperatureCelsius,
-  aqhi,
-  scrollY,
-}) => {
+// Home's mood picture, back to front: the harbour view (sky, sun, hills,
+// towers, water, lawn), the air (haze or clean-air glints), heat shimmer
+// over the ground, then the dog and the person. What each element does at
+// each level is decided by sceneMoodFor; this file only stacks the layers.
+const HeatScene: React.FC<Props> = ({ width, height, heatIndexC, aqhi, scrollY }) => {
+  // The characters soften as the cards scroll up over them.
   const blurAmount = useDerivedValue(() => {
     if (!scrollY) return 0;
-    return interpolate(
-      scrollY.value ?? 0,
-      [0, 150],
-      [0, 10],
-      Extrapolation.CLAMP,
-    );
+    return interpolate(scrollY.value ?? 0, [0, 150], [0, 10], Extrapolation.CLAMP);
   });
 
   const layout = computeSceneLayout(width, height);
-  const [skyTop, skyBottom] = getSkyColors();
-
-  const heatSevere =
-    temperatureCelsius !== null &&
-    ['Danger', 'Extreme Danger'].includes(
-      getHeatIndexInfo(temperatureCelsius).classification,
-    );
+  const mood = sceneMoodFor({ heatIndexC, aqhi, hour: new Date().getHours() });
+  const env = mood.environment;
 
   return (
-    <Canvas style={{ flex: 1 }}>
-      <Rect x={0} y={0} width={width} height={height}>
-        <LinearGradient
-          start={vec(0, 0)}
-          end={vec(0, height)}
-          colors={[skyTop, skyBottom]}
-          positions={[0, 1]}
-        />
-      </Rect>
+    <Canvas style={styles.canvas}>
+      <SceneBackdrop width={width} height={height} layout={layout} mood={env} />
 
-      {/* Neither layer without a reading — sparkles would claim clean air. */}
-      {aqhi === null ? null : aqhi > 4 ? (
-        <AqhiHazeLayer width={width} height={height} aqhi={aqhi} />
-      ) : (
-        <CleanAirSparkleLayer width={width} height={height} />
-      )}
+      <AqhiHazeLayer
+        width={width}
+        horizonY={layout.horizonY}
+        groundY={layout.groundY}
+        intensity={env.haze}
+        isNight={env.isNight}
+      />
+      {env.sparkles && <CleanAirSparkleLayer width={width} horizonY={layout.horizonY} />}
+      <HeatShimmerLayer width={width} groundY={layout.groundY} intensity={env.shimmer} />
 
       <Group>
         <Blur blur={blurAmount} />
-
-        <ThermometerLayer
-          x={layout.thermometerX}
-          topY={layout.topY}
-          bottomY={layout.bottomY}
-          temperatureCelsius={temperatureCelsius}
+        <DogCharacter
+          x={layout.dogX}
+          groundY={layout.groundY}
+          scale={SCENE_LAYOUT.characterScale}
+          mood={mood.dog}
         />
-
-        <CharacterLayer
-          width={width}
-          height={height}
-          horizonY={layout.horizonY}
-          centerX={layout.characterCenterX}
-          petCx={layout.petCx}
-          aqhi={aqhi}
-          heatSevere={heatSevere}
+        <PersonCharacter
+          x={layout.personX}
+          groundY={layout.groundY}
+          scale={SCENE_LAYOUT.characterScale}
+          mood={mood.person}
         />
       </Group>
     </Canvas>
   );
 };
+
+const styles = StyleSheet.create({ canvas: { flex: 1 } });
 
 export default HeatScene;

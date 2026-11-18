@@ -1,81 +1,62 @@
 // src/components/scene/CleanAirSparkleLayer.tsx
-import React, { useEffect } from 'react';
-import { Group, Circle } from '@shopify/react-native-skia';
-import {
-  useSharedValue,
-  useDerivedValue,
-  withRepeat,
-  withTiming,
-  Easing,
-} from 'react-native-reanimated';
+import React from 'react';
+import { Group, Path } from '@shopify/react-native-skia';
+import { SharedValue, useDerivedValue } from 'react-native-reanimated';
+import { SCENE_LIMITS, SCENE_PALETTE, SCENE_TIMING } from '../../config/sceneConfig';
+import { useSceneLoop } from './useSceneLoop';
 
-type Props = { width: number; height: number };
+type Props = { width: number; horizonY: number };
 
-const SPARKLE_COUNT = 6;
+// Small four-point glints drifting up — "the air is fresh" — shown only for
+// a Low AQHI reading (never without one).
+const GLINT = (() => {
+  const r = 3.2;
+  const k = 0.9; // waist of the star
+  return `M 0 ${-r} Q ${k} ${-k} ${r} 0 Q ${k} ${k} 0 ${r} Q ${-k} ${k} ${-r} 0 Q ${-k} ${-k} 0 ${-r} Z`;
+})();
 
-const CleanAirSparkleLayer: React.FC<Props> = ({ width, height }) => {
-  const rise = useSharedValue(0);
+const Sparkle: React.FC<{
+  index: number;
+  width: number;
+  horizonY: number;
+  loop: SharedValue<number>;
+}> = ({ index, width, horizonY, loop }) => {
+  const count = SCENE_LIMITS.sparkles;
+  const baseX = (width / count) * index + width * 0.08;
+  const startY = horizonY - 30 - (index % 3) * 34;
+  const phase = index / count;
 
-  useEffect(() => {
-    rise.value = withRepeat(
-      withTiming(1, { duration: 4200, easing: Easing.linear }),
-      -1,
-      false,
-    );
-  }, []);
-
-  const s0 = useSparkle(0, width, height, rise);
-  const s1 = useSparkle(1, width, height, rise);
-  const s2 = useSparkle(2, width, height, rise);
-  const s3 = useSparkle(3, width, height, rise);
-  const s4 = useSparkle(4, width, height, rise);
-  const s5 = useSparkle(5, width, height, rise);
-  const sparkles = [s0, s1, s2, s3, s4, s5];
+  const transform = useDerivedValue(() => {
+    const t = (loop.value + phase) % 1;
+    return [
+      { translateX: baseX + Math.sin(t * Math.PI * 2) * 8 },
+      { translateY: startY - t * 60 },
+      { scale: 0.7 + Math.sin(t * Math.PI) * 0.5 },
+    ];
+  });
+  const opacity = useDerivedValue(() => {
+    const t = (loop.value + phase) % 1;
+    if (t < 0.15) return t / 0.15;
+    if (t > 0.75) return (1 - t) / 0.25;
+    return 1;
+  });
 
   return (
-    <Group>
-      {sparkles.map((s, i) => (
-        <Circle
-          key={`sparkle-${i}`}
-          cx={s.cx}
-          cy={s.cy}
-          r={2.5}
-          color="#EAF6FF"
-          opacity={s.opacity}
-        />
-      ))}
+    <Group transform={transform} opacity={opacity}>
+      <Path path={GLINT} color={SCENE_PALETTE.sparkle} />
     </Group>
   );
 };
 
-function useSparkle(
-  index: number,
-  width: number,
-  height: number,
-  rise: ReturnType<typeof useSharedValue<number>>,
-) {
-  const baseX = (width / SPARKLE_COUNT) * index + width * 0.08;
-  const startY = height * (0.15 + (index % 3) * 0.1);
-  const phaseOffset = index / SPARKLE_COUNT;
-
-  const cx = useDerivedValue(() => {
-    const t = (rise.value + phaseOffset) % 1;
-    return baseX + Math.sin(t * Math.PI * 2) * 8;
-  }, [rise]);
-
-  const cy = useDerivedValue(() => {
-    const t = (rise.value + phaseOffset) % 1;
-    return startY - t * 60;
-  }, [rise]);
-
-  const opacity = useDerivedValue(() => {
-    const t = (rise.value + phaseOffset) % 1;
-    if (t < 0.15) return t / 0.15;
-    if (t > 0.75) return (1 - t) / 0.25;
-    return 1;
-  }, [rise]);
-
-  return { cx, cy, opacity };
-}
+const CleanAirSparkleLayer: React.FC<Props> = ({ width, horizonY }) => {
+  const loop = useSceneLoop(SCENE_TIMING.sparkleMs);
+  return (
+    <Group>
+      {Array.from({ length: SCENE_LIMITS.sparkles }).map((_, i) => (
+        <Sparkle key={`sparkle-${i}`} index={i} width={width} horizonY={horizonY} loop={loop} />
+      ))}
+    </Group>
+  );
+};
 
 export default CleanAirSparkleLayer;

@@ -1,57 +1,26 @@
-import { getHeatIndexInfo } from './heatIndexUtils';
+// src/utils/sceneColors.ts
+// Colour arithmetic for the cartoon scene: the haze fades the far hills and
+// towers towards the smog colour, heat warms the low sky and dries the lawn,
+// and night darkens everything — all by mixing palette colours rather than
+// listing every combination.
 
-export type SkyPalette = {
-  topColor: string;
-  bottomColor: string;
-  sunColor: string;
-  lawnColor: string;
-  hazeIntensity: number; // 0–1, reserved for Stage 2's GLSL/SkSL shader
+const parseHex = (hex: string): [number, number, number] => {
+  const h = hex.replace('#', '');
+  return [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16)) as [number, number, number];
 };
 
-export const getSkyPalette = (tempCelsius: number): SkyPalette => {
-  const { classification } = getHeatIndexInfo(tempCelsius);
+const toHex = (n: number): string =>
+  Math.round(Math.max(0, Math.min(255, n))).toString(16).padStart(2, '0');
 
-  switch (classification) {
-    case 'Extreme Danger':
-      return {
-        topColor: '#B23A48',
-        bottomColor: '#E53232',
-        sunColor: '#FFEDD5',
-        lawnColor: '#B79458', // parched, dry grass
-        hazeIntensity: 1.0,
-      };
-    case 'Danger':
-      return {
-        topColor: '#D9603B',
-        bottomColor: '#E8590C',
-        sunColor: '#FFF3C4',
-        lawnColor: '#A6A050',
-        hazeIntensity: 0.8,
-      };
-    case 'Extreme Caution':
-      return {
-        topColor: '#E8A94B',
-        bottomColor: '#FDB827',
-        sunColor: '#FFF7DB',
-        lawnColor: '#8FB35A',
-        hazeIntensity: 0.55,
-      };
-    case 'Caution':
-      return {
-        topColor: '#EBCB6A',
-        bottomColor: '#F5E050',
-        sunColor: '#FFFDE7',
-        lawnColor: '#79B863',
-        hazeIntensity: 0.3,
-      };
-    default: // No Caution — the scene keeps a clear blue sky, an illustration
-      // colour rather than a legend colour, so it does not follow the band green
-      return {
-        topColor: '#3F7FA6',
-        bottomColor: '#5DADE2',
-        sunColor: '#FFFFFF',
-        lawnColor: '#5FA65B', // lush green
-        hazeIntensity: 0.1,
-      };
-  }
+// `a` at t = 0, `b` at t = 1. Both must be #RRGGBB.
+export const mixHex = (a: string, b: string, t: number): string => {
+  const k = Math.max(0, Math.min(1, t));
+  const [ar, ag, ab] = parseHex(a);
+  const [br, bg, bb] = parseHex(b);
+  return `#${toHex(ar + (br - ar) * k)}${toHex(ag + (bg - ag) * k)}${toHex(ab + (bb - ab) * k)}`;
+};
+
+export const withAlpha = (hex: string, alpha: number): string => {
+  const [r, g, b] = parseHex(hex);
+  return `rgba(${r},${g},${b},${Math.max(0, Math.min(1, alpha))})`;
 };

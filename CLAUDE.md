@@ -111,7 +111,11 @@ Not built yet: official HKO/Labour Department warnings, heat heads-ups (needs a 
 
 ### Scene rendering (Skia)
 
-`src/components/scene/*` renders an animated illustration (sky, horizon, character, thermometer, haze/sparkle layers) on a `@shopify/react-native-skia` `Canvas`, composed in `HeatScene.tsx`. Layout math lives in `src/utils/sceneLayout.ts`; colors in `src/utils/sceneColors.ts`; heat index classification in `src/utils/heatIndexUtils.ts`. Layer choice (haze vs. sparkle) is driven by the current AQHI value. `react-native-reanimated`/`react-native-worklets` drive scroll-linked blur.
+`src/components/scene/*` renders Home's animated mood picture on a `@shopify/react-native-skia` `Canvas`, composed in `HeatScene.tsx`, back to front: `SceneBackdrop` (sky, sun / moon by phone hour, hills, two rows of towers, harbour, lawn), `AqhiHazeLayer` or `CleanAirSparkleLayer`, `HeatShimmerLayer`, then `DogCharacter` and `PersonCharacter`.
+- **The scene is a mood picture, never an instrument**: no numbers, scales or gauges (there is no thermometer — the numbers are in the side bar and the card). Heat shows through the sun's glow, a warmer low sky, the lawn drying from green to scorched, shimmer over the ground, and the characters; air quality through distance fading into smog (hills first, then far towers, then near ones — a grey-brown veil, never the AQHI legend colours) and the person's cough / mask.
+- Every reaction is decided by one pure function, `sceneMoodFor` (`src/utils/sceneMood.ts`, tested), from the tables in `src/config/sceneConfig.ts` (`SCENE_HEAT_LEVELS` / `SCENE_AIR_LEVELS`, indexed by `hazardLevelOf` 1-5, so the scene classifies exactly like the cards). The face follows the worse hazard; without a reading there is no reaction to that hazard at all (flat mouth, calm dog, no haze or sparkles).
+- **Dogs don't sweat**: the dog pants, its tongue lolls, drool grows from a drip to a puddle, the tail stops wagging, and from Danger up it lies flat. The person sweats (drops run down the face), flushes, and fans.
+- Characters are drawn around their ground point and every foot / paw rests on it — only the upper body moves with breathing, so nothing floats. Layout in `src/utils/sceneLayout.ts` (Home sizes its scene area from `bottomY`), colour mixing in `src/utils/sceneColors.ts`, every loop through `useSceneLoop` (holds still under Reduce Motion). `react-native-reanimated`/`react-native-worklets` drive the loops and the scroll-linked blur.
 
 ### Screens & navigation
 
