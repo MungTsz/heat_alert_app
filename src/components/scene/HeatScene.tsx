@@ -16,7 +16,8 @@ import DogCharacter from './DogCharacter';
 import PersonCharacter from './PersonCharacter';
 import { computeSceneLayout } from '../../utils/sceneLayout';
 import { sceneMoodFor } from '../../utils/sceneMood';
-import { SCENE_LAYOUT } from '../../config/sceneConfig';
+import { SCENE_ENTRANCE, SCENE_LAYOUT } from '../../config/sceneConfig';
+import { useSceneEntrance } from './useSceneLoop';
 
 type Props = {
   width: number;
@@ -41,6 +42,9 @@ const HeatScene: React.FC<Props> = ({ width, height, heatIndexC, aqhi, scrollY, 
     return interpolate(scrollY.value ?? 0, [0, 150], [0, 10], Extrapolation.CLAMP);
   });
 
+  // The walk-in clock, shared by both characters so they arrive together.
+  const entrance = useSceneEntrance();
+
   const layout = computeSceneLayout(width, height);
   const mood = sceneMoodFor({ heatIndexC, aqhi, hour: hour ?? new Date().getHours() });
   const env = mood.environment;
@@ -61,17 +65,24 @@ const HeatScene: React.FC<Props> = ({ width, height, heatIndexC, aqhi, scrollY, 
 
       <Group>
         <Blur blur={blurAmount} />
+        {/* Both start the same distance off-screen to the left (enough to
+            hide the person, who is further right), so they walk in side
+            by side at the same pace and stop together. */}
         <DogCharacter
           x={layout.dogX}
           groundY={layout.groundY}
           scale={SCENE_LAYOUT.characterScale}
           mood={mood.dog}
+          entrance={entrance}
+          walkDistance={layout.personX + SCENE_ENTRANCE.startMarginPx}
         />
         <PersonCharacter
           x={layout.personX}
           groundY={layout.groundY}
           scale={SCENE_LAYOUT.characterScale}
           mood={mood.person}
+          entrance={entrance}
+          walkDistance={layout.personX + SCENE_ENTRANCE.startMarginPx}
         />
       </Group>
     </Canvas>

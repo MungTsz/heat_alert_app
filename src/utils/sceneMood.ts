@@ -31,13 +31,9 @@ export type PersonMood = {
 };
 
 export type DogMood = DogReaction & {
-  // From heat.
+  // From heat only.
   droolDrops: number;
   puddle: number;
-  // From air.
-  redEyes: boolean;
-  teary: boolean;
-  runnyNose: boolean;
 };
 
 export type EnvironmentMood = {
@@ -75,7 +71,7 @@ const DOG_MOUTH_SEVERITY: DogMouth[] = ['smile', 'closed', 'pant'];
 const DOG_EYES_SEVERITY: DogEyes[] = ['open', 'tired', 'closed'];
 
 // With no reading at all the dog just sits there: mouth closed (no grin),
-// tail still, no symptoms.
+// tail still.
 const CALM_DOG: DogMood = {
   pose: 'sit',
   tongue: 'none',
@@ -86,9 +82,6 @@ const CALM_DOG: DogMood = {
   heavyBreath: false,
   droolDrops: 0,
   puddle: 0,
-  redEyes: false,
-  teary: false,
-  runnyNose: false,
 };
 
 // Both hazards act on the same dog: each part takes the worse of the two
@@ -174,9 +167,6 @@ export const sceneMoodFor = ({
           ...reactions.reduce(mergeDog),
           droolDrops: Math.min(heat?.dog.droolDrops ?? 0, SCENE_LIMITS.maxDroolDrops),
           puddle: heat?.dog.puddle ?? 0,
-          redEyes: air?.dog.redEyes ?? false,
-          teary: air?.dog.teary ?? false,
-          runnyNose: air?.dog.runnyNose ?? false,
         };
 
   const environment: EnvironmentMood = {

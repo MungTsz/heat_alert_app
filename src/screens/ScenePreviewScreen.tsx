@@ -75,9 +75,6 @@ const describe = (mood: SceneMood): string[] => {
       d.mouth === 'pant' ? (d.heavyBreath ? 'panting hard (huffs)' : 'panting') : `mouth ${d.mouth}`,
       d.tongue !== 'none' && `${d.tongue} tongue`,
       d.eyes !== 'open' && `eyes ${d.eyes}`,
-      d.redEyes && 'red eyes',
-      d.teary && 'watery eyes',
-      d.runnyNose && 'runny nose',
       d.droolDrops > 0 && `${d.droolDrops} drool drop${d.droolDrops > 1 ? 's' : ''}`,
       d.puddle > 0 && 'drool puddle',
       d.tailWagMs ? 'tail wagging' : 'tail still',
@@ -120,6 +117,8 @@ const ScenePreviewScreen: React.FC<Props> = ({ visible, onClose }) => {
   const { width, height } = useWindowDimensions();
   const [situation, setSituation] = useState<Situation>(TOUR[0]);
   const [tourIndex, setTourIndex] = useState<number | null>(null);
+  // Bumped to remount the scene, which replays the walk-in.
+  const [entranceKey, setEntranceKey] = useState(0);
 
   // Play: step through TOUR, looping, until a chip is tapped or it's paused.
   useEffect(() => {
@@ -191,7 +190,14 @@ const ScenePreviewScreen: React.FC<Props> = ({ visible, onClose }) => {
 
         <View style={[styles.sceneBox, { height: sceneBoxHeight }]}>
           <View style={{ width, height }}>
-            <HeatScene width={width} height={height} heatIndexC={heatIndexC} aqhi={aqhi} hour={hour} />
+            <HeatScene
+              key={entranceKey}
+              width={width}
+              height={height}
+              heatIndexC={heatIndexC}
+              aqhi={aqhi}
+              hour={hour}
+            />
           </View>
         </View>
 
@@ -216,6 +222,11 @@ const ScenePreviewScreen: React.FC<Props> = ({ visible, onClose }) => {
           <View style={styles.chipRow}>
             <Chip label="Day" selected={!situation.night} onPress={() => pick({ night: false })} />
             <Chip label="Night" selected={situation.night} onPress={() => pick({ night: true })} />
+          </View>
+          <Text style={styles.label}>Entrance</Text>
+          <View style={styles.chipRow}>
+            {/* As when Home opens: they walk in, already reacting. */}
+            <Chip label="Replay walk-in" selected={false} onPress={() => setEntranceKey(k => k + 1)} />
           </View>
         </ScrollView>
       </SafeAreaView>

@@ -45,9 +45,6 @@ describe('sceneMoodFor', () => {
       pantMs: null,
       droolDrops: 0,
       puddle: 0,
-      redEyes: false,
-      teary: false,
-      runnyNose: false,
     });
     expect(mood.environment).toMatchObject({ haze: 0, sparkles: false, shimmer: 0, lawnLevel: null });
   });
@@ -84,22 +81,19 @@ describe('sceneMoodFor', () => {
     });
   });
 
-  it('the dog reacts to dirty air: no grin, sore eyes, runny nose, then lies down', () => {
+  it('the dog grows listless in dirty air: no grin, no wagging, then lies down', () => {
     const dogs = AQHI_BY_LEVEL.map(a => sceneMoodFor({ heatIndexC: null, aqhi: a, hour: NOON }).dog);
     expect(dogs[0].mouth).toBe('smile');
     dogs.slice(1).forEach(d => expect(d.mouth).not.toBe('smile'));
-    // High and up: watery eyes and a runny nose, no tail wagging.
-    dogs.slice(2).forEach(d => {
-      expect(d).toMatchObject({ teary: true, runnyNose: true, tailWagMs: null });
-    });
-    // Very High and up: red eyes, fast breathing at rest, lying down.
+    // High and up: no interest in playing.
+    dogs.slice(2).forEach(d => expect(d.tailWagMs).toBeNull());
+    // Very High and up: fast breathing at rest, lying down.
     dogs.slice(3).forEach(d => {
-      expect(d.redEyes).toBe(true);
       expect(d.pantMs).not.toBeNull();
       expect(d.pose).toBe('lie');
     });
-    // Clean air alone gives no symptoms and no drool.
-    expect(dogs[0]).toMatchObject({ redEyes: false, teary: false, runnyNose: false, droolDrops: 0 });
+    // Air never makes the dog drool — that's a heat reaction.
+    dogs.forEach(d => expect(d.droolDrops).toBe(0));
   });
 
   it('a hot, smoggy day is never easier on the dog than either hazard alone', () => {
@@ -110,7 +104,7 @@ describe('sceneMoodFor', () => {
     expect(both.tongue).toBe(hot.tongue); // long, from the heat
     expect(both.pantMs).toBe(Math.min(hot.pantMs!, smog.pantMs!));
     expect(both.droolDrops).toBe(hot.droolDrops);
-    expect(both).toMatchObject({ redEyes: true, runnyNose: true, tailWagMs: null });
+    expect(both.tailWagMs).toBeNull();
   });
 
   it('never gives the dog sweat', () => {

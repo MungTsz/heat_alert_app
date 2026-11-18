@@ -10,7 +10,7 @@
 // thermometer). Heat shows through the sun, the sky, the grass, the shimmer
 // over the ground and how the two characters cope; air quality through how
 // far you can see (haze over the hills and towers), the person's
-// cough / mask and the dog's sore eyes, runny nose and laboured breathing.
+// cough / mask and the dog's listlessness and fast breathing.
 //
 // Both tables are indexed by the hazard's own level 1-5 (hazardLevelOf:
 // heat No Caution … Extreme Danger, AQHI Low … Serious), so the scene can
@@ -66,13 +66,9 @@ export type AirSceneLevel = {
     cough: boolean;
     mask: boolean;
   };
-  // Dogs breathing dirty air: red, watery eyes, a runny nose, fast or
-  // laboured breathing, and lethargy (no wagging, then lying down).
-  dog: DogReaction & {
-    redEyes: boolean;
-    teary: boolean;
-    runnyNose: boolean;
-  };
+  // Dogs breathing dirty air: listless (no grin, no wagging), then lying
+  // down, breathing fast even at rest.
+  dog: DogReaction;
   environment: {
     haze: number; // 0 = clear view to the hills, 1 = hills gone
     sparkles: boolean; // the "fresh air" glints, only for clean air
@@ -132,7 +128,6 @@ export const SCENE_HEAT_LEVELS: Record<1 | 2 | 3 | 4 | 5, HeatSceneLevel> = {
 const AIR_DOG_FINE = {
   pose: 'sit', tongue: 'none', mouth: 'smile', eyes: 'open',
   tailWagMs: 260, pantMs: null, heavyBreath: false,
-  redEyes: false, teary: false, runnyNose: false,
 } as const;
 
 // AQHI level 1-5 → reactions. Thresholds come from aqhiUtils.ts.
@@ -143,36 +138,55 @@ export const SCENE_AIR_LEVELS: Record<1 | 2 | 3 | 4 | 5, AirSceneLevel> = {
     dog: AIR_DOG_FINE,
     environment: { haze: 0, sparkles: true },
   },
-  // Moderate — no symptoms yet, but no happy grin either.
+  // Moderate — no grin, wagging less.
   2: {
     person: { mouth: 'neutral', eyes: 'open', sadBrows: false, cough: false, mask: false },
     dog: { ...AIR_DOG_FINE, mouth: 'closed', tailWagMs: 600 },
     environment: { haze: 0.3, sparkles: false },
   },
-  // High — watery eyes and a runny nose; no interest in playing.
+  // High — listless: no interest in playing, tail still, heavy eyelids.
   3: {
     person: { mouth: 'neutral', eyes: 'open', sadBrows: false, cough: true, mask: false },
-    dog: { ...AIR_DOG_FINE, mouth: 'closed', tailWagMs: null, teary: true, runnyNose: true },
+    dog: { ...AIR_DOG_FINE, mouth: 'closed', eyes: 'tired', tailWagMs: null },
     environment: { haze: 0.55, sparkles: false },
   },
-  // Very High — red sore eyes, fast breathing even at rest, lies down.
+  // Very High — won't walk or play: lies down, breathing fast even at rest.
   4: {
     person: { mouth: 'frown', eyes: 'tired', sadBrows: true, cough: false, mask: true },
     dog: {
       ...AIR_DOG_FINE, pose: 'lie', tongue: 'short', mouth: 'pant', eyes: 'tired',
-      tailWagMs: null, pantMs: 380, redEyes: true, teary: true, runnyNose: true,
+      tailWagMs: null, pantMs: 380,
     },
     environment: { haze: 0.78, sparkles: false },
   },
-  // Serious — laboured breathing on top.
+  // Serious — heavy, laboured breathing on top.
   5: {
     person: { mouth: 'frown', eyes: 'squint', sadBrows: true, cough: false, mask: true },
     dog: {
       ...AIR_DOG_FINE, pose: 'lie', tongue: 'short', mouth: 'pant', eyes: 'tired',
-      tailWagMs: null, pantMs: 300, heavyBreath: true, redEyes: true, teary: true, runnyNose: true,
+      tailWagMs: null, pantMs: 300, heavyBreath: true,
     },
     environment: { haze: 0.95, sparkles: false },
   },
+};
+
+// Home opens (and reopens, on coming back to the tab) with the person and
+// the dog strolling in from the left together. They already show how the
+// weather is treating them as they walk (sweating, fanning, panting) — no
+// stand-in expression that changes on arrival; the only change is the dog
+// sitting or lying down once it gets there. Skipped under Reduce Motion
+// (they're simply there).
+export const SCENE_ENTRANCE = {
+  walkMs: 3000, // from off-screen to their spots, at a stroll
+  // Share of the walk at an even pace; they slow to a stop over the rest.
+  cruiseShare: 0.75,
+  reactMs: 350, // the dog settling into its pose
+  startMarginPx: 60, // how far past the left edge they start
+  personStepMs: 760, // one full stride (left + right foot)
+  dogStepMs: 440,
+  personLegLiftPx: 4,
+  personArmSwing: 0.3, // radians each way
+  dogLegSwing: 0.45, // radians each way
 };
 
 // Without a reading the scene shows no reaction to that hazard at all: a
@@ -211,7 +225,10 @@ export const SCENE_LAYOUT = {
   personXFraction: 0.52,
   dogOffsetX: -70, // dog's ground point relative to the person
   characterScale: 1.15,
+  // The sun on the left by day, the moon across the sky on the right at
+  // night (kept clear of the side bar, which opens over the right edge).
   sunXFraction: 0.2,
+  moonXFraction: 0.7,
   sunAboveHorizon: 128,
   sunRadius: 24,
 };
@@ -223,8 +240,6 @@ export const SCENE_TIMING = {
   sweatMs: 1900,
   coughMs: 950,
   droolMs: 2100,
-  tearMs: 2600,
-  noseDripMs: 3000,
   shimmerMs: 2600,
   hazeDriftMs: 26000,
   sparkleMs: 4200,
@@ -298,11 +313,9 @@ export const SCENE_PALETTE = {
     tongue: '#E8748C',
     collar: '#E05A47',
     mouthInside: '#5A2E2E',
-    eyeWhite: '#FFFFFF',
-    redEye: '#E8616B', // sore, inflamed eye rims
-    tear: '#8FD3FF',
-    snot: 'rgba(205,235,250,0.95)', // a clear runny nose
-    breath: 'rgba(255,255,255,0.95)', // huff marks at the mouth
+    tongueCrease: 'rgba(150,40,60,0.45)',
+    highlight: 'rgba(255,255,255,0.85)',
+    breath:'rgba(255,255,255,0.95)', // huff marks at the mouth
     breathEdge: 'rgba(60,80,100,0.35)',
     drool: 'rgba(214,240,255,0.95)',
     droolEdge: 'rgba(120,170,205,0.7)',

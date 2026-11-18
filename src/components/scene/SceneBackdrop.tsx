@@ -85,6 +85,7 @@ const SceneBackdrop: React.FC<Props> = ({ width, height, layout, mood }) => {
   // The sun: brighter, wider glow and turning rays as it gets hotter; dimmer
   // and orange through smog. At night a moon instead.
   const sunCx = width * SCENE_LAYOUT.sunXFraction;
+  const moonCx = width * SCENE_LAYOUT.moonXFraction;
   const sunCy = horizonY - SCENE_LAYOUT.sunAboveHorizon;
   const sunR = SCENE_LAYOUT.sunRadius;
   const sunCore = mixHex(SCENE_PALETTE.sun.core, SCENE_PALETTE.sun.hazy, haze);
@@ -137,10 +138,10 @@ const SceneBackdrop: React.FC<Props> = ({ width, height, layout, mood }) => {
 
       {isNight ? (
         <Group opacity={sunVisibility}>
-          <Circle cx={sunCx} cy={sunCy} r={sunR * 1.9} color={withAlpha(SCENE_PALETTE.moon, 0.12)} />
-          <Circle cx={sunCx} cy={sunCy} r={sunR * 0.8} color={SCENE_PALETTE.moon} />
+          <Circle cx={moonCx} cy={sunCy} r={sunR * 1.9} color={withAlpha(SCENE_PALETTE.moon, 0.12)} />
+          <Circle cx={moonCx} cy={sunCy} r={sunR * 0.8} color={SCENE_PALETTE.moon} />
           {/* The crescent: the sky's own colour bites into the disc. */}
-          <Circle cx={sunCx + sunR * 0.35} cy={sunCy - sunR * 0.2} r={sunR * 0.68} color={skyTop} />
+          <Circle cx={moonCx + sunR * 0.35} cy={sunCy - sunR * 0.2} r={sunR * 0.68} color={skyTop} />
         </Group>
       ) : (
         <Group opacity={sunVisibility}>
