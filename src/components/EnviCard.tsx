@@ -1,104 +1,165 @@
 // src/components/EnviCard.tsx
-import React, { useState } from 'react';
+import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { ChevronRight } from 'lucide-react-native';
+import { ChevronRight, Gauge } from 'lucide-react-native';
 import { glassCardStyle, glassLabelText } from '../styles/glassCard';
-import { ENVI_COPY } from '../config/alertCopy';
-import { HOME_LAYOUT_CONFIG } from '../config/homeLayoutConfig';
+import { ENVI_ACTION_COPY, ENVI_COPY } from '../config/alertCopy';
+import { ENVI_TONES } from '../config/enviConfig';
+import { ENVI_ACTION_ICONS, ENVI_WARNING_ICON } from '../config/enviKeywordIcons';
+import { ENVI_CARD_CONFIG } from '../config/homeLayoutConfig';
 import { HazardReadings, getEnviLevel, getEnviLevelInfo } from '../utils/enviUtils';
+import { enviKeywordsFor } from '../utils/enviKeywords';
 import EnviBand from './EnviBand';
-import EnviDetailSheet from './EnviDetailSheet';
+import EnviLevelSquare from './EnviLevelSquare';
 
 type Props = {
   // Both hazards at the user's location; null = loading / unavailable.
   current: HazardReadings;
-  // The one sentence Home gives (utils/homeAdvice): an alert's own advice
-  // while one is live, else the suggestion for this level. null = no line.
-  advice: string | null;
+  // Today's peak level (utils/enviPeak); null = no peak arrow.
+  peakLevel: number | null;
+  // The bottom bar: opens EnviDetailSheet, owned by Home with the forecasts.
+  onOpenDetails: () => void;
 };
 
-// Home's headline: one level for heat and air together. Top to bottom —
-// "ENVI", the level number and name; the five-level band; then the advice
-// sentence, when there is one. The whole card opens EnviDetailSheet.
+const TONE = ENVI_TONES.glass;
+const C = ENVI_CARD_CONFIG;
+
+// Home's headline, for glancing — keywords here, sentences in the detail
+// sheet. Top to bottom: the level square with "Environmental Index" and the
+// level name; the five-level band with its arrows; one warning chip (two
+// when both hazards are high); up to three action tiles; then "Full advice
+// and forecast". At level 1 only the calm tile shows, and with no readings
+// only the "--" square and a faded band.
 //
-// The card shows only the outcome. Nothing on it says which hazard set the
-// level or how the level is worked out, and the two smaller cards below
-// carry no "this one decides" mark either.
-const EnviCard: React.FC<Props> = ({ current, advice }) => {
-  const [detailOpen, setDetailOpen] = useState(false);
+// The card shows only the outcome: nothing on it says which hazard set the
+// level or how the level is worked out. It also stays the same during a
+// live alert — the alert has its banner, and its personalised advice leads
+// the detail sheet.
+const EnviCard: React.FC<Props> = ({ current, peakLevel, onOpenDetails }) => {
   const level = getEnviLevel(current);
   const info = level === null ? null : getEnviLevelInfo(level);
+  const { warnings, actions } = enviKeywordsFor(current);
+  // Below level 2 there is nothing more to read, so no way into the sheet.
+  const showMore = level !== null && level > 1;
+
+  const accessibilityLabel = info
+    ? [
+        ENVI_COPY.levelLabel(info.level, info.name),
+        ...warnings,
+        ...actions.map(id => ENVI_ACTION_COPY[id].label),
+      ].join('. ')
+    : ENVI_COPY.unavailableLabel;
 
   return (
-    <>
-      <TouchableOpacity
-        style={styles.card}
-        onPress={() => setDetailOpen(true)}
-        activeOpacity={0.8}
-        accessibilityRole="button"
-        accessibilityLabel={
-          info
-            ? [ENVI_COPY.levelLabel(info.level, info.name), advice].filter(Boolean).join('. ')
-            : ENVI_COPY.unavailableLabel
-        }
-        accessibilityHint={ENVI_COPY.detailsHint}
-      >
+    <View style={styles.card}>
+      <View style={styles.summary} accessible accessibilityLabel={accessibilityLabel}>
         <View style={styles.headerRow}>
-          <Text style={styles.title}>{ENVI_COPY.title}</Text>
-          {/* "--" while loading or unavailable — never a made-up level. */}
-          {info ? (
-            <View style={[styles.levelChip, { backgroundColor: info.color }]}>
-              <Text style={[styles.levelNumber, { color: info.textColor }]}>{info.level}</Text>
+          <EnviLevelSquare level={level} tone="glass" />
+          <View style={styles.headerText}>
+            <View style={styles.labelRow}>
+              <Gauge size={C.labelIconSize} color={TONE.mutedText} />
+              <Text style={styles.label}>{ENVI_COPY.title}</Text>
             </View>
-          ) : (
-            <Text style={styles.unavailable}>{ENVI_COPY.unavailable}</Text>
-          )}
-          <Text style={styles.levelName} numberOfLines={1}>
-            {info?.name ?? ''}
-          </Text>
-          {/* Up here rather than beside the advice, so the card still shows
-              it can be opened on a level 1 day, when there is no advice. */}
-          <ChevronRight size={18} color="#FFFFFF" />
+            <Text style={styles.levelName} numberOfLines={1}>
+              {info?.name ?? ENVI_COPY.unavailable}
+            </Text>
+          </View>
         </View>
 
-        <EnviBand level={level} />
+        <EnviBand level={level} peakLevel={peakLevel} tone="glass" />
 
-        {advice !== null && <Text style={styles.advice}>{advice}</Text>}
-      </TouchableOpacity>
+        {warnings.length > 0 && (
+          <View style={styles.chipRow}>
+            {warnings.map(warning => (
+              <View key={warning} style={styles.chip}>
+                <ENVI_WARNING_ICON size={C.chipIconSize} color="#FFFFFF" />
+                <Text style={styles.chipText}>{warning}</Text>
+              </View>
+            ))}
+          </View>
+        )}
 
-      <EnviDetailSheet
-        visible={detailOpen}
-        current={current}
-        onClose={() => setDetailOpen(false)}
-      />
-    </>
+        {actions.length > 0 && (
+          <View style={styles.tileRow}>
+            {actions.map(id => {
+              const Icon = ENVI_ACTION_ICONS[id];
+              return (
+                <View key={id} style={styles.tile}>
+                  <Icon size={C.tileIconSize} color="#FFFFFF" />
+                  <Text style={styles.tileText} numberOfLines={2}>
+                    {ENVI_ACTION_COPY[id].label}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+        )}
+      </View>
+
+      {showMore && (
+        <TouchableOpacity
+          style={styles.moreBar}
+          onPress={onOpenDetails}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityHint={ENVI_COPY.detailsHint}
+        >
+          <Text style={styles.moreText}>{ENVI_COPY.moreLink}</Text>
+          <ChevronRight size={C.moreIconSize} color="#FFFFFF" />
+        </TouchableOpacity>
+      )}
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   card: {
     ...glassCardStyle,
-    paddingVertical: HOME_LAYOUT_CONFIG.enviCardPaddingVertical,
-    paddingHorizontal: 14,
-    marginBottom: 10,
-    gap: 8,
+    paddingTop: C.paddingVertical,
+    paddingHorizontal: C.paddingHorizontal,
+    marginBottom: 12,
+    overflow: 'hidden',
   },
-  headerRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  title: { fontSize: 16, fontWeight: '700', ...glassLabelText },
-  levelChip: {
-    minWidth: 34,
-    height: 34,
-    borderRadius: 10,
+  summary: { gap: C.rowGap, paddingBottom: C.paddingVertical },
+  headerRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  headerText: { flex: 1, gap: 2 },
+  labelRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  label: { fontSize: C.labelFontSize, fontWeight: '600', color: TONE.mutedText },
+  levelName: { fontSize: C.levelNameFontSize, fontWeight: '700', ...glassLabelText },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  chip: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    // Keeps the black level 5 chip visible against the dark glass card.
-    borderWidth: 0.5,
-    borderColor: 'rgba(255,255,255,0.45)',
+    gap: 5,
+    paddingVertical: 4,
+    paddingHorizontal: 9,
+    borderRadius: C.chipRadius,
+    backgroundColor: 'rgba(255,255,255,0.16)',
   },
-  levelNumber: { fontSize: 22, fontWeight: '800' },
-  unavailable: { fontSize: 22, fontWeight: '800', ...glassLabelText },
-  levelName: { flex: 1, fontSize: 18, fontWeight: '700', ...glassLabelText },
-  advice: { fontSize: 13, fontWeight: '600', lineHeight: 18, ...glassLabelText },
+  chipText: { fontSize: C.chipFontSize, fontWeight: '700', ...glassLabelText },
+  tileRow: { flexDirection: 'row', gap: 8 },
+  tile: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 5,
+    paddingVertical: C.tilePaddingVertical,
+    paddingHorizontal: 4,
+    borderRadius: C.tileRadius,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+  },
+  tileText: { fontSize: C.tileFontSize, fontWeight: '600', textAlign: 'center', ...glassLabelText },
+  moreBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    // Full card width, edge to edge under a hairline.
+    marginHorizontal: -C.paddingHorizontal,
+    paddingHorizontal: C.paddingHorizontal,
+    paddingVertical: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(255,255,255,0.3)',
+  },
+  moreText: { fontSize: C.moreFontSize, fontWeight: '700', ...glassLabelText },
 });
 
 export default EnviCard;

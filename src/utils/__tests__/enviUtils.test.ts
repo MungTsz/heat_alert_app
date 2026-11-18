@@ -3,6 +3,7 @@ import {
   getEnviLevel,
   getEnviLevelInfo,
   hazardLevelOf,
+  leadHazard,
   seasonalHazard,
 } from '../enviUtils';
 import { ENVI_LEVELS } from '../../config/enviConfig';
@@ -95,5 +96,18 @@ describe('seasonalHazard', () => {
   it('reads the month on the Hong Kong calendar', () => {
     // 31 May 20:00 UTC is already 1 June in Hong Kong.
     expect(seasonalHazard(Date.UTC(2026, 4, 31, 20))).toBe('heat');
+  });
+});
+
+describe('leadHazard', () => {
+  it('is the higher hazard whatever the season', () => {
+    expect(leadHazard({ heat: 45, aqhi: 2 }, hkNoon(1))).toBe('heat');
+    expect(leadHazard({ heat: 25, aqhi: 9 }, hkNoon(8))).toBe('aqhi');
+  });
+
+  it('falls back to the season on a tie or with no readings', () => {
+    expect(leadHazard({ heat: 30, aqhi: 5 }, hkNoon(8))).toBe('heat');
+    expect(leadHazard({ heat: 30, aqhi: 5 }, hkNoon(1))).toBe('aqhi');
+    expect(leadHazard({ heat: null, aqhi: null }, hkNoon(1))).toBe('aqhi');
   });
 });

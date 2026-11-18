@@ -1,6 +1,7 @@
 // src/config/alertCopy.ts
 import { AudienceGroup, CaringFor, HazardKind } from '../types/alerts';
 import { AllClearMode, NoEventDays } from '../types/settings';
+import { EnviActionId } from '../types/envi';
 
 // Every user-facing word about alerts lives here, so a Traditional Chinese
 // version later is a copy of this file rather than a hunt through logic.
@@ -198,42 +199,93 @@ export const HEAT_URGENT_ADVICE: Voiced = {
   family: 'Call to check on them now and make sure they are somewhere cool.',
 };
 
-// What to do at each level, for anyone — Home's ENVI card on days without
-// an alert (an alert brings the personal advice above instead). Keyed by
-// each hazard's own level name; the lowest level has no entry because it
-// needs no message. The top level reuses the urgent advice, so the card and
-// an urgent alert never word it differently. Health advice: needs a
-// public-health review before release.
-export const HEAT_LEVEL_SUGGESTION: Record<string, string> = {
-  Caution: "Drink water regularly and take breaks in the shade if you're active outdoors.",
-  'Extreme Caution':
-    'Keep outdoor activity to early morning or evening, drink water often, and rest in the shade.',
-  Danger:
-    'Avoid outdoor activity in the hottest hours, stay somewhere cool, and watch for dizziness, headache or nausea.',
-  'Extreme Danger': HEAT_URGENT_ADVICE.self,
-};
-
-export const AQHI_LEVEL_SUGGESTION: Record<string, string> = {
-  Moderate: 'Most people can carry on as normal. Ease off outdoors if you feel symptoms.',
-  High: 'Sensitive groups should cut down outdoor exertion, especially near busy roads.',
-  'Very High':
-    'Cut down outdoor exertion and time outdoors. Sensitive groups should keep it to a minimum.',
-  Serious: AQHI_URGENT_ADVICE.self,
-};
-
-// Home's ENVI card and the sheet it opens. The explainer says what ENVI is,
-// not how it is worked out — that stays out of the UI on purpose.
+// Home's Environmental Index card and the sheet it opens. Users only ever
+// see "Environmental Index", never the code name ENVI. The explainer says
+// what it is, not how it is worked out — that stays out of the UI on
+// purpose.
 export const ENVI_COPY = {
-  title: 'ENVI',
+  title: 'Environmental Index',
   explainer:
-    "ENVI is this app's overall level for heat and air quality combined, from 1 (low) to 5 (serious).",
+    'Your overall outdoor risk from heat and air quality, from 1 (low) to 5 (serious).',
   unavailable: '--',
-  warningHeading: 'Warning',
-  suggestionHeading: 'Suggestion',
-  // Screen-reader wording for the card: "ENVI 3, High".
-  levelLabel: (level: number, name: string) => `ENVI ${level}, ${name}`,
-  unavailableLabel: 'ENVI not available',
-  detailsHint: 'Opens what this level means',
+  // The card's bottom bar, which opens the detail sheet.
+  moreLink: 'Full advice and forecast',
+  // Above the band's two arrows.
+  nowMarker: 'Now',
+  peakMarker: "Today's peak",
+  // Detail sheet sections.
+  meaningHeading: 'What this means',
+  adviceHeading: 'What to do',
+  forecastHeading: 'Forecast',
+  linksHeading: 'Official advice',
+  // Screen-reader wording for the card: "Environmental Index 3, High".
+  levelLabel: (level: number, name: string) => `Environmental Index ${level}, ${name}`,
+  unavailableLabel: 'Environmental Index not available',
+  detailsHint: 'Opens the full advice and forecast',
+};
+
+// The warning chip on the Environmental Index card: the risk in a few
+// words, keyed by each hazard's own level name. The lowest level has no
+// entry (no chip at Environmental Index 1). Health wording: needs a
+// public-health review before release.
+export const ENVI_WARNING_COPY: Record<HazardKind, Record<string, string>> = {
+  heat: {
+    Caution: 'Tiredness possible',
+    'Extreme Caution': 'Heat exhaustion possible',
+    Danger: 'Heat stroke possible',
+    'Extreme Danger': 'Heat stroke likely',
+  },
+  aqhi: {
+    Moderate: 'Mild risk',
+    High: 'Risk for sensitive groups',
+    'Very High': 'Risk for everyone',
+    Serious: 'Serious risk',
+  },
+};
+
+// Each action keyword: `label` under its icon on the card (at most
+// ENVI_KEYWORD_LIMITS.maxTileWords words, held there by tests), `sentence` as the detail sheet's full advice. Which
+// actions show at which level is in config/enviKeywords.ts. Health advice:
+// needs a public-health review before release.
+export const ENVI_ACTION_COPY: Record<EnviActionId, { label: string; sentence: string }> = {
+  drinkWater: { label: 'Drink water', sentence: 'Drink water regularly, before you feel thirsty.' },
+  restInShade: {
+    label: 'Rest in shade',
+    sentence: "Take breaks in the shade if you're active outdoors.",
+  },
+  avoidMidday: {
+    label: 'Avoid midday',
+    sentence: 'Keep outdoor activity to early morning or evening, away from the hottest hours.',
+  },
+  stayCool: { label: 'Stay cool', sentence: 'Stay somewhere cool, such as an air-conditioned room.' },
+  airConOn: { label: 'Air-con on', sentence: 'Use air conditioning to keep cool indoors.' },
+  stayIndoors: { label: 'Stay indoors', sentence: 'Stay indoors as much as you can.' },
+  lessExertion: { label: 'Less exertion', sentence: 'Cut down on strenuous activity outdoors.' },
+  avoidExertion: { label: 'Avoid exertion', sentence: 'Avoid strenuous activity, indoors or out.' },
+  avoidBusyRoads: {
+    label: 'Avoid busy roads',
+    sentence: 'Keep away from busy roads, where traffic pollution is highest.',
+  },
+  lessTimeOutside: { label: 'Less time outside', sentence: 'Cut down the time you spend outdoors.' },
+  watchSymptoms: {
+    label: 'Watch symptoms',
+    sentence: 'If you have a heart or lung condition, ease off outdoors when you notice symptoms.',
+  },
+  windowsClosed: { label: 'Windows closed', sentence: 'Keep windows closed to keep polluted air out.' },
+  enjoyOutdoors: { label: 'Enjoy outdoors', sentence: 'A good time to be outdoors.' },
+};
+
+// Labels of Home's side bar blocks — full words, never "Air" or "RH".
+export const HOME_INFO_BAR_COPY = {
+  heat: 'Heat index',
+  aqhi: 'AQHI',
+  temperature: 'Temp',
+  humidity: 'Humidity',
+  unavailable: '--',
+  expandLabel: 'Show current readings',
+  collapseLabel: 'Hide current readings',
+  // Screen reader: "Heat index 34°, opens the forecast".
+  blockHint: 'Opens the forecast',
 };
 
 // The closing line of a cancelled heads-up and an all clear. A carer has

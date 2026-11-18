@@ -30,6 +30,11 @@ type Props = {
   temperatureCelsius: number | null;
   aqhi: number | null;
   scrollY?: SharedValue<number>;
+  // Horizontal shift of the character, dog and thermometer, animated by
+  // Home while its side bar opens or closes (see computeSceneLayout's
+  // availableWidth). A shared value so the slide runs on the UI thread
+  // without re-rendering the canvas every frame.
+  shiftX?: SharedValue<number>;
 };
 
 const getSkyColors = (): [string, string] => {
@@ -44,7 +49,10 @@ const HeatScene: React.FC<Props> = ({
   temperatureCelsius,
   aqhi,
   scrollY,
+  shiftX,
 }) => {
+  const groupTransform = useDerivedValue(() => [{ translateX: shiftX?.value ?? 0 }]);
+
   const blurAmount = useDerivedValue(() => {
     if (!scrollY) return 0;
     return interpolate(
@@ -82,7 +90,7 @@ const HeatScene: React.FC<Props> = ({
         <CleanAirSparkleLayer width={width} height={height} />
       )}
 
-      <Group>
+      <Group transform={groupTransform}>
         <Blur blur={blurAmount} />
 
         <ThermometerLayer

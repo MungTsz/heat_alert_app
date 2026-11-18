@@ -1,5 +1,5 @@
 // src/screens/HomeScreen.tsx
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   StyleSheet,
   View,
@@ -11,25 +11,28 @@ import {
 import Animated, {
   useSharedValue,
   useAnimatedScrollHandler,
+  withTiming,
 } from 'react-native-reanimated';
 import {
   SafeAreaView,
   useSafeAreaInsets,
 } from 'react-native-safe-area-context';
-import { MapPin, User, Wind } from 'lucide-react-native';
+import { Droplet, MapPin, Thermometer, ThermometerSun, Wind } from 'lucide-react-native';
 import TextTicker from 'react-native-text-ticker';
-import CurrentWeatherInfo from '../components/CurrentWeatherInfo';
 import EnviCard from '../components/EnviCard';
+import EnviDetailSheet from '../components/EnviDetailSheet';
+import HomeInfoBar from '../components/HomeInfoBar';
+import { HomeInfoBlockData, NEUTRAL_STRIPE_COLOR } from '../components/HomeInfoBlock';
 import HeatHourlyForecastChart from '../components/HeatHourlyForecastChart';
 import AqhiHourlyForecastChart from '../components/AqhiHourlyForecastChart';
-import HazardCard from '../components/HazardCard';
 import ForecastSheet from '../components/ForecastSheet';
+import FeelsLikeGapLine from '../components/FeelsLikeGapLine';
 import HeatIndexExplainerSheet from '../components/HeatIndexExplainerSheet';
 import FullscreenMapModal from '../components/FullscreenMapModal';
 import MapScreen from './MapScreen';
 import { useLocation } from '../utils/useLocation';
 import { getHeatIndexInfo } from '../utils/heatIndexUtils';
-import { estimateAqhiAt, getAqhiInfo } from '../utils/aqhiUtils';
+import { estimateAqhiAt, formatAqhiValue, getAqhiInfo } from '../utils/aqhiUtils';
 import { FALLBACK_CENTER, resolveDataCenter } from '../config/locationConfig';
 import HeatScene from '../components/scene/HeatScene';
 import { computeSceneLayout } from '../utils/sceneLayout';
@@ -41,21 +44,21 @@ import { useActiveAlerts } from '../hooks/useActiveAlerts';
 import { useNotificationSettings } from '../hooks/useNotificationSettings';
 import { useDefaultMapLayer } from '../hooks/useDefaultMapLayer';
 import { useMapPlacePins } from '../hooks/useMapPlacePins';
-import AlertBadge from '../components/alerts/AlertBadge';
+import { useHomeInfoBar } from '../hooks/useHomeInfoBar';
 import HomeAlertBanner from '../components/alerts/HomeAlertBanner';
 import { CURRENT_LOCATION_PLACE_ID } from '../config/alertConfig';
-import { HOME_LAYOUT_CONFIG } from '../config/homeLayoutConfig';
-import { HazardKind } from '../types/alerts';
+import { HOME_INFO_BAR_COPY } from '../config/alertCopy';
+import { HOME_INFO_BAR_CONFIG, HOME_LAYOUT_CONFIG } from '../config/homeLayoutConfig';
 import { MapLayer } from '../types/mapSettings';
 import { homeAdviceFor } from '../utils/homeAdvice';
-import { HazardReadings } from '../utils/enviUtils';
+import { HazardReadings, getEnviLevel } from '../utils/enviUtils';
+import { todaysPeakLevel } from '../utils/enviPeak';
+import { homeInfoBarArrangement, homeInfoBarWidth } from '../utils/homeInfoBarLayout';
 import { openPlace } from '../services/navigationBus';
 
-const LOCATION_BOX_WIDTH = 160;
-const MIN_GAP_BELOW_CHARACTER = 24;
-// Plain white like the cards' labels, so a "--" never reads as a level color.
-const UNAVAILABLE_VALUE_COLOR = '#FFFFFF';
-
+// Home, top to bottom: the cartoon scene with the side bar of raw readings
+// on its right edge, the Environmental Index card, the alert banner (only
+// while an alert is live), and the map preview.
 const HomeScreen = () => {
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -70,13 +73,8 @@ const HomeScreen = () => {
   const { days: aqhiForecastDays, loading: aqhiForecastLoading } =
     useAqhiForecastData(dataCenter);
   const { points: aqhiPoints } = useAqhiData(dataCenter);
-  // Alerts the user has been told about for their own location — the same
-  // badge on both hazard cards, as peers.
+  // Alerts the user has been told about for their own location.
   const locationAlerts = useActiveAlerts()[CURRENT_LOCATION_PLACE_ID] ?? [];
-  const alertBadgeFor = (hazard: HazardKind) => {
-    const badge = locationAlerts.find(b => b.hazard === hazard);
-    return badge ? <AlertBadge badge={badge} /> : undefined;
-  };
 
   // null until AQHI samples arrive (or if they never do) → "--", same as heat.
   const currentAqhi = dataCenter
@@ -99,28 +97,32 @@ const HomeScreen = () => {
 
   const heatInfo = heatIndexTemp === null ? null : getHeatIndexInfo(heatIndexTemp);
   const aqhiInfo = currentAqhi === null ? null : getAqhiInfo(currentAqhi);
-  const layout = computeSceneLayout(width, height);
 
-  // Both hazards where the user is — what ENVI, its advice and the map's
-  // starting layer are all judged from, so the three always agree.
+  // Both hazards where the user is — what the Environmental Index, its
+  // keywords, the detail sheet's chart and the map's starting layer are all
+  // judged from, so they always agree.
   const currentReadings: HazardReadings = { heat: heatIndexTemp, aqhi: currentAqhi };
+  const enviLevel = getEnviLevel(currentReadings);
+  // Hidden (null) while the heat "forecast" is the demo copy of 48 h ago.
+  const peakLevel = todaysPeakLevel({
+    heatDays: heatForecastDays,
+    aqhiDays: aqhiForecastDays,
+    nowLevel: enviLevel,
+    nowMs: Date.now(),
+  });
 
-  // The one sentence of advice on Home, on the ENVI card. With an alert
-  // measured NOW (a heads-up is about later, and has its banner) it is that
-  // alert's own advice, voiced for the owner's About you answer, so the
-  // user doesn't have to wait for a push; otherwise the suggestion for the
-  // current level. The alert's full details stay one tap away, on the
-  // banner above and the badges on the two cards below.
+  // With an alert measured NOW (a heads-up is about later, and has its
+  // banner), its own advice — voiced for the owner's About you answer —
+  // leads the detail sheet. The card itself doesn't change.
   const aboutYou = useNotificationSettings().settings.currentLocationProfile;
-  const advice = homeAdviceFor({
+  const liveAdvice = homeAdviceFor({
     liveAlerts: locationAlerts.filter(b => b.kind === 'now'),
     aboutYou,
-    current: currentReadings,
   });
 
   // One layer for the preview and the full-screen map (lifted here so
   // closing full screen keeps the user's pick). Until the user picks one it
-  // follows the data: whichever hazard is higher, the one setting ENVI.
+  // follows the data: the hazard that sets the Environmental Index.
   const [chosenMapLayer, setChosenMapLayer] = useState<MapLayer | null>(null);
   const defaultMapLayer = useDefaultMapLayer(currentReadings);
   const mapLayer = chosenMapLayer ?? defaultMapLayer;
@@ -132,16 +134,80 @@ const HomeScreen = () => {
     setContentAboveHeight(e.nativeEvent.layout.y + e.nativeEvent.layout.height);
   }, []);
 
+  // The scene area: from under the header to just below the character,
+  // where the side bar lives and above which the cards never rise.
+  const layout = computeSceneLayout(width, height);
   const characterBottomInScrollSpace = layout.bottomY - insets.top;
-  const spacerHeight = Math.max(
-    characterBottomInScrollSpace - contentAboveHeight + MIN_GAP_BELOW_CHARACTER,
-    MIN_GAP_BELOW_CHARACTER,
+  const sceneAreaHeight = Math.max(
+    characterBottomInScrollSpace - contentAboveHeight + HOME_LAYOUT_CONFIG.minGapBelowCharacter,
+    HOME_LAYOUT_CONFIG.minGapBelowCharacter,
   );
+
+  // Side bar: while open, the character re-centres in the width the bar
+  // leaves, sliding over in step with the bar's own animation.
+  const infoBar = useHomeInfoBar();
+  const infoBarArrangement = homeInfoBarArrangement(sceneAreaHeight);
+  const openSceneLayout = computeSceneLayout(
+    width,
+    height,
+    width - homeInfoBarWidth(infoBarArrangement),
+  );
+  const targetSceneShift = infoBar.expanded
+    ? openSceneLayout.characterCenterX - layout.characterCenterX
+    : 0;
+  const sceneShiftX = useSharedValue(0);
+  useEffect(() => {
+    sceneShiftX.value = withTiming(targetSceneShift, {
+      duration: HOME_INFO_BAR_CONFIG.animationMs,
+    });
+  }, [targetSceneShift, sceneShiftX]);
 
   const [heatSheetOpen, setHeatSheetOpen] = useState(false);
   const [aqhiSheetOpen, setAqhiSheetOpen] = useState(false);
+  const [enviSheetOpen, setEnviSheetOpen] = useState(false);
   const [mapFullscreen, setMapFullscreen] = useState(false);
   const [heatExplainerOpen, setHeatExplainerOpen] = useState(false);
+
+  const openHeatSheet = () => setHeatSheetOpen(true);
+  // Each block in its own colours (NWS for heat index, EPD for AQHI) — the
+  // Environmental Index palette stays on the card. Temp and Humidity have no
+  // levels, so a neutral stripe, and they open the heat forecast, whose
+  // chart carries the temperature line.
+  const infoBlocks: HomeInfoBlockData[] = [
+    {
+      key: 'heat',
+      Icon: ThermometerSun,
+      label: HOME_INFO_BAR_COPY.heat,
+      value: heatIndexTemp === null ? null : `${heatIndexTemp}°`,
+      stripeColor: heatInfo?.color ?? NEUTRAL_STRIPE_COLOR,
+      onPress: openHeatSheet,
+    },
+    {
+      key: 'aqhi',
+      Icon: Wind,
+      label: HOME_INFO_BAR_COPY.aqhi,
+      value: currentAqhi === null ? null : formatAqhiValue(currentAqhi),
+      // aqhiUtils' per-value colour, as on the AQHI map layer and legend.
+      stripeColor: aqhiInfo?.color ?? NEUTRAL_STRIPE_COLOR,
+      onPress: () => setAqhiSheetOpen(true),
+    },
+    {
+      key: 'temperature',
+      Icon: Thermometer,
+      label: HOME_INFO_BAR_COPY.temperature,
+      value: actualTemp === null ? null : `${actualTemp}°`,
+      stripeColor: NEUTRAL_STRIPE_COLOR,
+      onPress: openHeatSheet,
+    },
+    {
+      key: 'humidity',
+      Icon: Droplet,
+      label: HOME_INFO_BAR_COPY.humidity,
+      value: currentHumidity === null ? null : `${currentHumidity}%`,
+      stripeColor: NEUTRAL_STRIPE_COLOR,
+      onPress: openHeatSheet,
+    },
+  ];
 
   return (
     <View style={styles.mainContainer}>
@@ -152,6 +218,7 @@ const HomeScreen = () => {
           temperatureCelsius={heatIndexTemp}
           aqhi={currentAqhi}
           scrollY={scrollY}
+          shiftX={sceneShiftX}
         />
       </View>
 
@@ -188,57 +255,27 @@ const HomeScreen = () => {
                 </View>
               </View>
             </View>
-            {/* Inside the measured block, so the spacer below shrinks by its
-                height and the cards stay where they are. */}
-            <HomeAlertBanner badges={locationAlerts} />
           </View>
 
-          <View style={{ height: spacerHeight }} />
-
-          {/* The headline: one level for heat and air together, with the
-              day's one sentence of advice. */}
-          <EnviCard current={currentReadings} advice={advice} />
-
-          {/* Under it, the two hazards behind it as equal-weight compact
-              cards, both tappable. Neither is marked as the one that set
-              ENVI — how the level is worked out is not shown. */}
-          <View style={styles.hazardRow}>
-            {/* heat card */}
-            <HazardCard
-              compact
-              icon={<User size={15} color="#FFFFFF" />}
-              label="Feels Like..."
-              // "--" while loading or when the API is unreachable — never a
-              // value from another source.
-              value={heatInfo ? `${heatIndexTemp}°` : '--°'}
-              classification={heatInfo?.classification ?? '—'}
-              valueColor={heatInfo?.color ?? UNAVAILABLE_VALUE_COLOR}
-              onPress={() => setHeatSheetOpen(true)}
-              badge={alertBadgeFor('heat')}
-            />
-            {/* aqhi card — same "--" / "—" placeholders as the heat card */}
-            <HazardCard
-              compact
-              icon={<Wind size={15} color="#FFFFFF" />}
-              label="AQHI"
-              value={aqhiInfo ? `${currentAqhi}` : '--'}
-              classification={aqhiInfo?.classification ?? '—'}
-              // Same per-value color as the AQHI map layer and legend
-              // (aqhiUtils' AQHI_COLOR_BY_VALUE), so the number reads as the
-              // band the map shows — like the heat card's heatInfo.color.
-              // Deliberately NOT the forecast chart's own background bands.
-              valueColor={aqhiInfo?.color ?? UNAVAILABLE_VALUE_COLOR}
-              onPress={() => setAqhiSheetOpen(true)}
-              badge={alertBadgeFor('aqhi')}
+          {/* The scene area, with the side bar on its right edge. */}
+          <View style={[styles.sceneArea, { height: sceneAreaHeight }]}>
+            <HomeInfoBar
+              expanded={infoBar.expanded}
+              onToggle={infoBar.toggle}
+              arrangement={infoBarArrangement}
+              blocks={infoBlocks}
             />
           </View>
 
-          <CurrentWeatherInfo
-            temperature={actualTemp}
-            humidity={currentHumidity}
-            heatIndex={heatIndexTemp}
-            onPressInfo={() => setHeatExplainerOpen(true)}
+          {/* The headline: one level for heat and air together. */}
+          <EnviCard
+            current={currentReadings}
+            peakLevel={peakLevel}
+            onOpenDetails={() => setEnviSheetOpen(true)}
           />
+
+          {/* Only while an alert is live: what happened. */}
+          <HomeAlertBanner badges={locationAlerts} />
 
           <View style={styles.mapContainer}>
             {/* A preview: a tap opens the full-screen map, but the layer
@@ -272,11 +309,31 @@ const HomeScreen = () => {
         onClose={() => setMapFullscreen(false)}
       />
 
+      <EnviDetailSheet
+        visible={enviSheetOpen}
+        onClose={() => setEnviSheetOpen(false)}
+        current={currentReadings}
+        peakLevel={peakLevel}
+        liveAdvice={liveAdvice}
+        // The map's starting layer is the hazard that sets the level (or
+        // the season's), so the sheet's chart and the map always agree.
+        chartHazard={defaultMapLayer}
+        heatForecast={{ days: heatForecastDays, loading: heatForecastLoading }}
+        aqhiForecast={{ days: aqhiForecastDays, loading: aqhiForecastLoading }}
+      />
+
       <ForecastSheet
         visible={heatSheetOpen}
         title="Heat Index Forecast"
         onClose={() => setHeatSheetOpen(false)}
       >
+        {/* The heat index explainer's one way in: only when humidity makes
+            a gap worth explaining. */}
+        <FeelsLikeGapLine
+          temperature={actualTemp}
+          heatIndex={heatIndexTemp}
+          onPress={() => setHeatExplainerOpen(true)}
+        />
         <HeatHourlyForecastChart
           days={heatForecastDays}
           loading={heatForecastLoading}
@@ -305,7 +362,10 @@ const HomeScreen = () => {
 const styles = StyleSheet.create({
   mainContainer: { flex: 1, backgroundColor: '#F5F5F5' },
   safeArea: { flex: 1 },
-  scrollContent: { padding: 20, paddingBottom: 140 },
+  scrollContent: {
+    padding: HOME_LAYOUT_CONFIG.screenPadding,
+    paddingBottom: 140,
+  },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -325,7 +385,7 @@ const styles = StyleSheet.create({
   locationContainer: { flexDirection: 'row', alignItems: 'center' },
   locationIcon: { marginRight: 6, flexShrink: 0 },
   locationBox: {
-    width: LOCATION_BOX_WIDTH,
+    width: HOME_LAYOUT_CONFIG.locationBoxWidth,
     height: 24,
     justifyContent: 'center',
     overflow: 'hidden',
@@ -337,16 +397,12 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0,0,0,0.2)',
     textShadowRadius: 3,
   },
-  hazardRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 12,
-  },
+  sceneArea: { alignItems: 'flex-end', justifyContent: 'center' },
   mapContainer: {
     height: HOME_LAYOUT_CONFIG.mapPreviewHeight,
     borderRadius: 16,
     overflow: 'hidden',
-    marginTop: 16,
+    marginTop: 4,
   },
 });
 
