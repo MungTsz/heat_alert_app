@@ -1,5 +1,5 @@
 // src/screens/MapScreen.tsx
-import React, { useEffect, useRef, useState } from 'react';
+import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import {
   StyleSheet,
   View,
@@ -24,9 +24,14 @@ import { useHeatIndexForecastTiles } from '../hooks/useHeatIndexForecastTiles';
 import { useAqhiData } from '../hooks/useAqhiData';
 import { useIdwOverlayImage } from '../hooks/useIdwOverlayImage';
 import { useAqhiForecastTiles } from '../hooks/useAqhiForecastTiles';
+import { useEnviTile } from '../hooks/useEnviTile';
+import { useEnviForecastTiles } from '../hooks/useEnviForecastTiles';
 import { estimateAqhiAt, valueToAqhiColor } from '../utils/aqhiUtils';
+import { enviTileSource, pinEnviLevel } from '../utils/enviMapLayer';
 import { FALLBACK_CENTER, resolveDataCenter } from '../config/locationConfig';
 import MapLayerPicker from '../components/MapLayerPicker';
+import MapLayerReturnChip from '../components/MapLayerReturnChip';
+import MapPointCard from '../components/MapPointCard';
 import DualStatPin from '../components/DualStatPin';
 import { MapLayer } from '../types/mapSettings';
 import { MapPlacePin } from '../hooks/useMapPlacePins';
@@ -34,15 +39,26 @@ import { usePraiseAqhiTile } from '../hooks/usePraiseAqhiTile';
 import { isPraiseConfigured } from '../config/praiseConfig';
 import AqhiLegend from '../components/AqhiLegend';
 import HeatLegend from '../components/HeatLegend';
+import EnviMapLegend from '../components/EnviMapLegend';
 import {
   fetchPraisePointData,
   toHkTimestamp,
   formatHkTimestampLabel,
 } from '../services/praiseApi';
 import { useMapSettings } from '../hooks/useMapSettings';
-import { MAP_LAYER_CONFIG } from '../config/mapLayerConfig';
+import {
+  ENVI_MAP_LEGEND_CONFIG,
+  ENVI_MAP_SOURCE,
+  MAP_LAYER_CONFIG,
+  MAP_LAYER_ORDER,
+  MAP_LAYER_PICKER_CONFIG,
+  MAP_LAYER_RETURN_CHIP_CONFIG,
+  MAP_POINT_CARD_CONFIG,
+} from '../config/mapLayerConfig';
+import { MAP_LAYER_COPY } from '../config/alertCopy';
 
 const BOTTOM_ROW_HEIGHT = 58; // approx height of the opacity-bar/locate-button row, used to space things above it
+const { buttonSize: PICKER_SIZE, buttonSizeLarge: PICKER_SIZE_LARGE } = MAP_LAYER_PICKER_CONFIG;
 
 // Heat values for the pin aren't stored here — they're looked up from the
 // API by useHeatConditions, keyed on these coordinates.
@@ -57,10 +73,18 @@ type Coordinates = {
   longitude: number;
 };
 
+// What a screen holding the map can ask of it. The map lives inside a
+// Modal, whose onRequestClose receives Android's back button before any
+// BackHandler listener here would, so the Modal asks the map first.
+export type MapScreenHandle = {
+  // Closes the map's own open panel (the tapped point's details); true if
+  // it did, so back doesn't also close the map.
+  handleBack: () => boolean;
+};
+
 type Props = {
-  // Always a hazard layer — chosen by the screen that owns the map (see
-  // useDefaultMapLayer), so a preview and its full-screen map stay on the
-  // same one.
+  // Chosen by the screen that owns the map — starts on the Environmental
+  // Index (useDefaultMapLayer); Home's preview is fixed to it.
   layer: MapLayer;
   // Without it the layer is fixed and the picker is hidden.
   onLayerChange?: (layer: MapLayer) => void;
@@ -70,8 +94,7 @@ type Props = {
   showLayerControls?: boolean;
   // Makes this a preview: the map itself doesn't pan, zoom or take point
   // taps, and a tap anywhere on it calls this (e.g. to open full screen).
-  // The tap area sits under the map's own controls, so the layer picker
-  // still works on the preview.
+  // The tap area sits under the map's own controls.
   onPreviewPress?: () => void;
   enableForecastPlayback?: boolean;
   fullscreen?: boolean;
@@ -80,28 +103,48 @@ type Props = {
   onPlacePress?: (placeId: string) => void;
 };
 
-const MapScreen = ({
-  layer: mapLayer,
-  onLayerChange,
-  overrideCenter,
-  showModeToggle = true,
-  showLayerControls = true,
-  onPreviewPress,
-  enableForecastPlayback = false,
-  fullscreen = false,
-  places = [],
-  onPlacePress,
-}: Props) => {
+const MapScreen = forwardRef<MapScreenHandle, Props>(function MapScreenView(
+  {
+    layer: mapLayer,
+    onLayerChange,
+    overrideCenter,
+    showModeToggle = true,
+    showLayerControls = true,
+    onPreviewPress,
+    enableForecastPlayback = false,
+    fullscreen = false,
+    places = [],
+    onPlacePress,
+  },
+  ref,
+) {
   const { coords, loading: locating } = useLocation();
-  const { settings: mapSettings, update: updateMapSettings } = useMapSettings();
+  const { settings: mapSettings } = useMapSettings();
   const insets = useSafeAreaInsets();
   const [forecastPlaying, setForecastPlaying] = useState(false);
   const [frameIndex, setFrameIndex] = useState(0);
+  // The tapped point's "Details" on the index layer.
+  const [pointDetailsOpen, setPointDetailsOpen] = useState(false);
 
-  // Heat index and AQHI are peer hazard layers: everything below (current
-  // tile, opacity slider, legend, Play Forecast, locate button) is shared
-  // so the two always look and behave the same — only the data differs.
+  // The three layers (Environmental Index, heat index, AQHI) are drawn by
+  // the same code: everything below (current tile, opacity slider, legend
+  // styling, Play Forecast, locate button) is shared, so they always look
+  // and behave the same — only the data differs.
   const showPicker = showModeToggle && onLayerChange !== undefined;
+  const isPreview = onPreviewPress !== undefined;
+  const isDetailLayer = mapLayer !== MAP_LAYER_ORDER.primary;
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      handleBack: () => {
+        if (!pointDetailsOpen) return false;
+        setPointDetailsOpen(false);
+        return true;
+      },
+    }),
+    [pointDetailsOpen],
+  );
 
   // 1. SPLIT STATES: One for the slider UI, one for the actual map overlay
   const [sliderOpacity, setSliderOpacity] = useState(
@@ -144,7 +187,9 @@ const MapScreen = ({
   const pinHumidity = pinConditions
     ? Math.round(pinConditions.relativeHumidityPct)
     : null;
-  const pinSignature = `${pinHeatIndex}-${pinAirTemp}-${pinHumidity}-${selectedPoint?.aqhi}`;
+  // The layer is part of it: the pin's content (square vs numbers) and so
+  // its size change with the layer.
+  const pinSignature = `${pinHeatIndex}-${pinAirTemp}-${pinHumidity}-${selectedPoint?.aqhi}-${mapLayer}`;
 
   const weightedAqhiPoints = aqhiPoints.map(p => ({
     latitude: p.latitude,
@@ -166,12 +211,28 @@ const MapScreen = ({
     region,
     mapLayer === 'heat' && !forecastPlaying,
   );
+  const { tile: enviTile } = useEnviTile(
+    region,
+    mapLayer === 'envi' && !forecastPlaying,
+  );
+  const layerTile =
+    mapLayer === 'heat' ? heatIndexTile : mapLayer === 'aqhi' ? praiseAqhiTile : enviTile;
+
+  // The index layer's frames, if it has any. None during the AQHI demo or
+  // while heat has no real forecast (useEnviForecastTiles), and with none
+  // there is no Play button on this layer.
+  const enviForecast = useEnviForecastTiles(
+    region,
+    enableForecastPlayback && mapLayer === 'envi',
+  );
 
   // AQHI's forecast needs PRAISE configured; heat's comes from the spatial
   // temperature API, which is always on.
   const forecastAvailable =
     enableForecastPlayback &&
-    (mapLayer === 'heat' || (mapLayer === 'aqhi' && isPraiseConfigured()));
+    (mapLayer === 'heat' ||
+      (mapLayer === 'aqhi' && isPraiseConfigured()) ||
+      (mapLayer === 'envi' && (enviForecast.loading || enviForecast.frames.length > 0)));
 
   // Fetches (and fully pre-caches) forecast frames as soon as a hazard layer
   // is up, well before the user taps Play — so playback starts instantly
@@ -185,13 +246,15 @@ const MapScreen = ({
     forecastAvailable && mapLayer === 'heat',
   );
   const { frames: forecastFrames, loading: forecastLoading } =
-    mapLayer === 'heat' ? heatForecast : aqhiForecast;
+    mapLayer === 'heat' ? heatForecast : mapLayer === 'aqhi' ? aqhiForecast : enviForecast;
   const forecastReady = !forecastLoading && forecastFrames.length > 0;
 
   // Switching layers mid-playback would keep animating the old layer's
-  // frames, so playback always stops on a layer change.
+  // frames, so playback always stops on a layer change. The point details
+  // belong to the index layer, so they close with it too.
   useEffect(() => {
     setForecastPlaying(false);
+    setPointDetailsOpen(false);
   }, [mapLayer]);
 
   // Resets to the first frame whenever a fresh batch comes in (e.g. after panning)
@@ -292,16 +355,39 @@ const MapScreen = ({
     });
   };
 
-  const showRealAqhiTile =
-    mapLayer === 'aqhi' &&
-    isPraiseConfigured() &&
-    !!praiseAqhiTile &&
-    !activeFrame;
+  // Layers whose picture is AQHI's: the AQHI layer, and the index layer
+  // while its demo borrows the AQHI tile. Until that tile loads they show
+  // the IDW estimate from the AQHI samples — nothing without PRAISE, since
+  // there are no samples then.
+  const usesAqhiPicture =
+    mapLayer === 'aqhi' ||
+    (mapLayer === 'envi' && enviTileSource(ENVI_MAP_SOURCE, isPraiseConfigured()) === 'aqhi');
+  const showLayerTile = !!layerTile && !activeFrame;
   const showFallbackAqhiOverlay =
-    mapLayer === 'aqhi' &&
-    !showRealAqhiTile &&
-    !activeFrame &&
-    !!aqhiOverlayUri;
+    usesAqhiPicture && !showLayerTile && !activeFrame && !!aqhiOverlayUri;
+
+  // The tapped point's card under the map (index layer only; a preview
+  // takes no point taps).
+  const showPointCard = mapLayer === 'envi' && !!selectedPoint && !isPreview;
+  // The Play button and the point card are stacked just above the bottom
+  // controls (or the map's bottom edge, without them).
+  const bottomStackOffset = showLayerControls
+    ? fullscreen
+      ? insets.bottom + 16 + BOTTOM_ROW_HEIGHT + 16
+      : 64
+    : 8;
+  const topBarTop = fullscreen ? insets.top + 16 : 16;
+  const pickerSize = fullscreen ? PICKER_SIZE_LARGE : PICKER_SIZE;
+  const compactLegend = mapLayer === 'envi' && isPreview;
+
+  const legend =
+    mapLayer === 'envi' ? (
+      <EnviMapLegend variant={compactLegend ? 'compact' : 'vertical'} opacity={mapOpacity} />
+    ) : mapLayer === 'aqhi' ? (
+      <AqhiLegend />
+    ) : (
+      <HeatLegend />
+    );
 
   return (
     <View style={styles.container}>
@@ -323,29 +409,20 @@ const MapScreen = ({
         showsUserLocation={!overrideCenter}
         showsMyLocationButton={false}
       >
-        {mapLayer === 'heat' && heatIndexTile && !activeFrame && (
+        {showLayerTile && (
           <Overlay
-            // Same remount-on-opacity trick as the AQHI tile below
-            key={`heat-real-${mapOpacity}`}
-            image={{ uri: heatIndexTile.uri }}
-            bounds={heatIndexTile.bounds}
-            opacity={mapOpacity}
-          />
-        )}
-
-        {showRealAqhiTile && (
-          <Overlay
-            // 2. FORCE REMOUNT: Use mapOpacity as the key so it only rebuilds when sliding finishes
-            key={`aqhi-real-${mapOpacity}`}
-            image={{ uri: praiseAqhiTile!.uri }}
-            bounds={praiseAqhiTile!.bounds}
+            // 2. FORCE REMOUNT: Use mapOpacity as the key so it only rebuilds
+            // when sliding finishes (and the layer, so a switch swaps images).
+            key={`${mapLayer}-real-${mapOpacity}`}
+            image={{ uri: layerTile!.uri }}
+            bounds={layerTile!.bounds}
             opacity={mapOpacity}
           />
         )}
 
         {showFallbackAqhiOverlay && (
           <Overlay
-            key={`aqhi-fallback-${mapOpacity}`}
+            key={`${mapLayer}-fallback-${mapOpacity}`}
             image={{ uri: aqhiOverlayUri! }}
             bounds={overlayBounds}
             opacity={mapOpacity}
@@ -365,8 +442,9 @@ const MapScreen = ({
           <Marker
             // Same remount-on-values trick as the tapped-point marker below,
             // so Android re-measures the pin once its values arrive — and
-            // when its category (so its icon) changes.
-            key={`place-${place.id}-${place.category}-${place.heatIndex}-${place.aqhi}-${mapLayer}`}
+            // when its category (so its icon), its index level or the layer
+            // (square vs number) changes.
+            key={`place-${place.id}-${place.category}-${place.heatIndex}-${place.aqhi}-${pinEnviLevel(place)}-${mapLayer}`}
             coordinate={{ latitude: place.latitude, longitude: place.longitude }}
             anchor={{ x: 0.5, y: 1 }}
             zIndex={2}
@@ -378,9 +456,9 @@ const MapScreen = ({
               category={place.category}
               temperature={place.heatIndex}
               aqhi={place.aqhi}
-              // The small preview shows only the layer on screen; the
-              // full-screen map has room for both.
-              only={fullscreen ? undefined : mapLayer}
+              // The index square on the index layer, else only the value
+              // of the hazard on screen.
+              layer={mapLayer}
             />
           </Marker>
         ))}
@@ -402,12 +480,23 @@ const MapScreen = ({
             zIndex={3}
             tracksViewChanges={true}
           >
-            <DualStatPin
-              temperature={pinHeatIndex}
-              airTemperature={pinAirTemp}
-              humidity={pinHumidity}
-              aqhi={selectedPoint.aqhi}
-            />
+            {mapLayer === 'envi' ? (
+              // Square and level name only: the readings are behind the
+              // card's "Details" under the map (a pin can't hold a button).
+              <DualStatPin
+                temperature={pinHeatIndex}
+                aqhi={selectedPoint.aqhi}
+                layer="envi"
+                showLevelName
+              />
+            ) : (
+              <DualStatPin
+                temperature={pinHeatIndex}
+                airTemperature={pinAirTemp}
+                humidity={pinHumidity}
+                aqhi={selectedPoint.aqhi}
+              />
+            )}
           </Marker>
         )}
       </MapView>
@@ -418,25 +507,33 @@ const MapScreen = ({
           activeOpacity={0.9}
           onPress={onPreviewPress}
           accessibilityRole="button"
-          accessibilityLabel="Open the full-screen map"
+          accessibilityLabel={MAP_LAYER_COPY.openFullscreenLabel}
         />
       )}
 
-      <View
-        style={[
-          styles.legendContainerRight,
-          // Nothing above or below it to clear (no picker / no control
-          // row), so the legend can use the map's full height.
-          !showPicker && styles.legendNoPicker,
-          !showLayerControls && styles.legendNoControls,
-          fullscreen && {
-            top: insets.top + 16 + 54 + 12,
-            bottom: insets.bottom + 16 + BOTTOM_ROW_HEIGHT + 16,
-          },
-        ]}
-      >
-        {mapLayer === 'aqhi' ? <AqhiLegend /> : <HeatLegend />}
-      </View>
+      {compactLegend ? (
+        // The small preview: one row along the bottom, out of the way of
+        // the pins.
+        <View style={styles.legendCompact} pointerEvents="none">
+          {legend}
+        </View>
+      ) : (
+        <View
+          style={[
+            styles.legendContainerRight,
+            // Nothing above or below it to clear (no picker / no control
+            // row), so the legend can use the map's full height.
+            !showPicker && styles.legendNoPicker,
+            !showLayerControls && styles.legendNoControls,
+            fullscreen && {
+              top: insets.top + 16 + PICKER_SIZE_LARGE + 12,
+              bottom: insets.bottom + 16 + BOTTOM_ROW_HEIGHT + 16,
+            },
+          ]}
+        >
+          {legend}
+        </View>
+      )}
 
       {showLayerControls && (
         <View
@@ -453,7 +550,7 @@ const MapScreen = ({
         >
           <View style={styles.opacityControl}>
             <Text style={styles.opacityLabel}>
-              Layer opacity: {Math.round(sliderOpacity * 100)}%
+              {MAP_LAYER_COPY.opacityLabel(Math.round(sliderOpacity * 100))}
             </Text>
             <Slider
               style={styles.opacitySlider}
@@ -474,6 +571,8 @@ const MapScreen = ({
               fullscreen && styles.locateButtonLarge,
             ]}
             onPress={recenter}
+            accessibilityRole="button"
+            accessibilityLabel={MAP_LAYER_COPY.locateLabel}
           >
             <Navigation
               size={fullscreen ? 24 : 20}
@@ -484,64 +583,111 @@ const MapScreen = ({
         </View>
       )}
 
-      {forecastAvailable && (
-        <TouchableOpacity
+      {(forecastAvailable || showPointCard) && (
+        <View
           style={[
-            styles.playForecastButton,
-            !forecastReady && styles.playForecastButtonDisabled,
-            fullscreen
-              ? {
-                  bottom: insets.bottom + 16 + BOTTOM_ROW_HEIGHT + 16,
-                  paddingVertical: 14,
-                  paddingHorizontal: 22,
-                }
-              : { bottom: 64 },
+            styles.bottomStack,
+            fullscreen ? styles.bottomStackFullscreen : styles.bottomStackSmall,
+            { bottom: bottomStackOffset },
           ]}
-          onPress={toggleForecastPlayback}
-          disabled={!forecastReady}
+          // Empty space in the stack still lets the map be dragged.
+          pointerEvents="box-none"
         >
-          {!forecastReady ? (
-            <ActivityIndicator size="small" color="#FFFFFF" />
-          ) : forecastPlaying ? (
-            <Square size={16} color="#FFFFFF" fill="#FFFFFF" />
-          ) : (
-            <Play size={16} color="#FFFFFF" fill="#FFFFFF" />
+          {forecastAvailable && (
+            <TouchableOpacity
+              style={[
+                styles.playForecastButton,
+                !forecastReady && styles.playForecastButtonDisabled,
+                fullscreen && { paddingVertical: 14, paddingHorizontal: 22 },
+              ]}
+              onPress={toggleForecastPlayback}
+              disabled={!forecastReady}
+              accessibilityRole="button"
+              accessibilityLabel={
+                forecastPlaying
+                  ? MAP_LAYER_COPY.stopForecastLabel
+                  : MAP_LAYER_COPY.playForecastLabel
+              }
+            >
+              {!forecastReady ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : forecastPlaying ? (
+                <Square size={16} color="#FFFFFF" fill="#FFFFFF" />
+              ) : (
+                <Play size={16} color="#FFFFFF" fill="#FFFFFF" />
+              )}
+              <Text
+                style={[
+                  styles.playForecastText,
+                  fullscreen && { fontSize: 15 },
+                ]}
+              >
+                {!forecastReady
+                  ? MAP_LAYER_COPY.loadingForecast
+                  : forecastPlaying
+                  ? activeFrame
+                    ? formatHkTimestampLabel(activeFrame.ts)
+                    : MAP_LAYER_COPY.stopForecast
+                  : MAP_LAYER_COPY.playForecast}
+              </Text>
+            </TouchableOpacity>
           )}
-          <Text
-            style={[
-              styles.playForecastText,
-              fullscreen && { fontSize: 15 },
-            ]}
-          >
-            {!forecastReady
-              ? 'Loading forecast…'
-              : forecastPlaying
-              ? activeFrame
-                ? formatHkTimestampLabel(activeFrame.ts)
-                : 'Stop'
-              : 'Play Forecast'}
-          </Text>
-        </TouchableOpacity>
+
+          {showPointCard && (
+            <MapPointCard
+              readings={{
+                heatIndex: pinHeatIndex,
+                aqhi: selectedPoint!.aqhi,
+                temperature: pinAirTemp,
+                humidity: pinHumidity,
+              }}
+              expanded={pointDetailsOpen}
+              onToggle={() => setPointDetailsOpen(open => !open)}
+            />
+          )}
+        </View>
       )}
 
       {showPicker && (
-        <View style={[styles.topBar, fullscreen && { top: insets.top + 16 }]}>
+        <View style={[styles.topBar, { top: topBarTop }]}>
           <MapLayerPicker
             layer={mapLayer}
             onChange={onLayerChange}
-            mapType={mapSettings.mapType}
-            onMapTypeChange={mapType => updateMapSettings({ ...mapSettings, mapType })}
             large={fullscreen}
+          />
+        </View>
+      )}
+
+      {/* A detail layer is up: one tap back to the index. In its own row
+          under the top controls, centred clear of the back button and
+          legend. */}
+      {showPicker && isDetailLayer && (
+        <View
+          style={[
+            styles.returnChipRow,
+            { top: topBarTop + pickerSize + MAP_LAYER_RETURN_CHIP_CONFIG.gapBelowTopBar },
+          ]}
+          pointerEvents="box-none"
+        >
+          <MapLayerReturnChip
+            layer={mapLayer}
+            onPress={() => onLayerChange(MAP_LAYER_ORDER.primary)}
           />
         </View>
       )}
     </View>
   );
-};
+});
 
 const styles = StyleSheet.create({
   container: { flex: 1, borderRadius: 16, overflow: 'hidden' },
-  topBar: { position: 'absolute', top: 16, right: 16 },
+  topBar: { position: 'absolute', right: 16 },
+  returnChipRow: {
+    position: 'absolute',
+    left: MAP_LAYER_RETURN_CHIP_CONFIG.sideInset,
+    right: MAP_LAYER_RETURN_CHIP_CONFIG.sideInset,
+    alignItems: 'center',
+  },
   // Sits at the end of the bottom row, beside the opacity slider.
   locateButton: {
     width: 48,
@@ -565,12 +711,24 @@ const styles = StyleSheet.create({
   },
   legendNoPicker: { top: 8 },
   legendNoControls: { bottom: 8 },
+  legendCompact: {
+    position: 'absolute',
+    left: ENVI_MAP_LEGEND_CONFIG.compactInset,
+    bottom: ENVI_MAP_LEGEND_CONFIG.compactInset,
+  },
   bottomRow: {
     position: 'absolute',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
+  bottomStack: {
+    position: 'absolute',
+    gap: MAP_POINT_CARD_CONFIG.gapAboveControls,
+  },
+  // Same side insets as the bottom row of controls.
+  bottomStackFullscreen: { left: 16, right: 16 },
+  bottomStackSmall: { left: 8, right: 8 },
   opacityControl: {
     flex: 1,
     backgroundColor: 'rgba(255,255,255,0.92)',
@@ -589,7 +747,6 @@ const styles = StyleSheet.create({
     height: 34,
   },
   playForecastButton: {
-    position: 'absolute',
     alignSelf: 'center',
     flexDirection: 'row',
     alignItems: 'center',

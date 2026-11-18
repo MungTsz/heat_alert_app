@@ -2,6 +2,7 @@
 import { AudienceGroup, CaringFor, HazardKind } from '../types/alerts';
 import { AllClearMode, NoEventDays } from '../types/settings';
 import { EnviActionId } from '../types/envi';
+import { MapLayer } from '../types/mapSettings';
 
 // Every user-facing word about alerts lives here, so a Traditional Chinese
 // version later is a copy of this file rather than a hunt through logic.
@@ -317,6 +318,42 @@ export const HOME_INFO_BAR_COPY = {
   collapseLabel: 'Hide current readings',
   // Screen reader: "Heat index 34°, opens the forecast".
   blockHint: 'Opens the forecast',
+};
+
+// The map: layer picker, return chip, tapped-point card and controls. The
+// layer names are the same words as Home's card and side bar.
+export const MAP_LAYER_COPY = {
+  layerNames: {
+    envi: ENVI_COPY.title,
+    heat: HOME_INFO_BAR_COPY.heat,
+    aqhi: HOME_INFO_BAR_COPY.aqhi,
+  } as Record<MapLayer, string>,
+  // Picker group holding the two hazard layers.
+  detailsGroup: 'View details',
+  // Under a layer with no data source (AQHI without PRAISE).
+  noData: 'Not available right now',
+  // "Heat index · ← Environmental Index"
+  returnChip: (layerName: string) => `${layerName} · ← ${ENVI_COPY.title}`,
+  // Tapped point's card on the index layer.
+  pointDetails: 'Details',
+  pointHideDetails: 'Hide details',
+  opacityLabel: (percent: number) => `Layer opacity: ${percent}%`,
+  playForecast: 'Play Forecast',
+  loadingForecast: 'Loading forecast…',
+  stopForecast: 'Stop',
+  // Screen-reader labels of the map's buttons.
+  pickerButtonLabel: 'Choose map layer',
+  layerOptionLabel: (layerName: string) => `Show ${layerName} on the map`,
+  returnChipLabel: `Back to ${ENVI_COPY.title}`,
+  pointDetailsLabel: 'Show heat index, AQHI, temperature and humidity here',
+  pointHideDetailsLabel: 'Hide heat index, AQHI, temperature and humidity',
+  pointLevelLabel: (level: number, name: string) => `${ENVI_COPY.title} here: ${level}, ${name}`,
+  pointUnavailableLabel: `${ENVI_COPY.title} here: not available`,
+  openFullscreenLabel: 'Open the full-screen map',
+  locateLabel: 'Go to my location',
+  playForecastLabel: 'Play the forecast on the map',
+  stopForecastLabel: 'Stop the forecast',
+  closeMapLabel: 'Close the map',
 };
 
 // The closing line of a cancelled heads-up and an all clear. A carer has

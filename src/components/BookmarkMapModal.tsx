@@ -1,29 +1,39 @@
 // src/components/BookmarkMapModal.tsx
-import React from 'react';
+import React, { useRef } from 'react';
 import { Modal, View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { X } from 'lucide-react-native';
-import MapScreen from '../screens/MapScreen';
+import MapScreen, { MapScreenHandle } from '../screens/MapScreen';
 import { BookmarkEntry } from '../types/bookmark';
-import { MapLayer } from '../types/mapSettings';
+import { useDefaultMapLayer } from '../hooks/useDefaultMapLayer';
+import { MAP_LAYER_COPY } from '../config/alertCopy';
 
 type Props = {
   visible: boolean;
   bookmark: BookmarkEntry | null;
-  // Picked by the caller from this place's own values — the higher of its
-  // two hazards (useDefaultMapLayer), like every other map.
-  layer: MapLayer;
   onClose: () => void;
 };
 
-const BookmarkMapModal: React.FC<Props> = ({ visible, bookmark, layer, onClose }) => {
+const BookmarkMapModal: React.FC<Props> = ({ visible, bookmark, onClose }) => {
+  // Like every map: opens on the Environmental Index, with heat index and
+  // AQHI a pick away, and back on the index each time it is opened. Called
+  // before the early return below (rules of hooks).
+  const [layer, setLayer] = useDefaultMapLayer(visible && bookmark !== null);
+  const mapRef = useRef<MapScreenHandle>(null);
+
   if (!bookmark) return null;
+
+  // Android back: the map's own open panel first, then this sheet.
+  const handleRequestClose = () => {
+    if (mapRef.current?.handleBack()) return;
+    onClose();
+  };
 
   return (
     <Modal
       visible={visible}
       animationType="slide"
       transparent
-      onRequestClose={onClose}
+      onRequestClose={handleRequestClose}
     >
       <View style={styles.overlay}>
         <TouchableOpacity
@@ -37,19 +47,25 @@ const BookmarkMapModal: React.FC<Props> = ({ visible, bookmark, layer, onClose }
             <Text style={styles.title} numberOfLines={1}>
               {bookmark.label}
             </Text>
-            <TouchableOpacity onPress={onClose}>
+            <TouchableOpacity
+              onPress={onClose}
+              hitSlop={11}
+              accessibilityRole="button"
+              accessibilityLabel={MAP_LAYER_COPY.closeMapLabel}
+            >
               <X size={22} color="#333" />
             </TouchableOpacity>
           </View>
 
           <View style={styles.mapContainer}>
             <MapScreen
+              ref={mapRef}
               layer={layer}
+              onLayerChange={setLayer}
               overrideCenter={{
                 latitude: bookmark.latitude,
                 longitude: bookmark.longitude,
               }}
-              showModeToggle={false}
             />
           </View>
 

@@ -18,6 +18,8 @@ type Props = {
   peakLevel: number | null;
   // A live alert's personalised advice (utils/homeAdvice); null = none.
   liveAdvice: string | null;
+  // Settles a tie by season; left out on Home (now), set by the dev preview.
+  nowMs?: number;
 };
 
 const TONE = ENVI_TONES.sheet;
@@ -32,11 +34,18 @@ const TONE = ENVI_TONES.sheet;
 // 5. the official HKO and EPD pages.
 // Built on ForecastSheet, a Modal with onRequestClose, so Android's back
 // button closes it first.
-const EnviDetailSheet: React.FC<Props> = ({ visible, onClose, current, peakLevel, liveAdvice }) => {
+const EnviDetailSheet: React.FC<Props> = ({
+  visible,
+  onClose,
+  current,
+  peakLevel,
+  liveAdvice,
+  nowMs,
+}) => {
   const level = getEnviLevel(current);
   const info = level === null ? null : getEnviLevelInfo(level);
-  const summary = enviSummaryFor(current);
-  const { warnings, actions } = enviKeywordsFor(current);
+  const summary = enviSummaryFor(current, nowMs);
+  const { warnings, actions } = enviKeywordsFor(current, nowMs);
 
   return (
     <ForecastSheet visible={visible} title={ENVI_COPY.recommendationsTitle} onClose={onClose}>

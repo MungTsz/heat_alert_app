@@ -15,7 +15,6 @@ import { usePlacesHeatIndex } from '../hooks/useHeatData';
 import { usePlacesAqhi } from '../hooks/useAqhiData';
 import { useActiveAlerts } from '../hooks/useActiveAlerts';
 import { useBookmarkList } from '../hooks/useBookmarkList';
-import { useDefaultMapLayer } from '../hooks/useDefaultMapLayer';
 import { distanceMiles } from '../utils/distance';
 import { useNotificationSettings } from '../hooks/useNotificationSettings';
 import { resolvePlaceAlertProfile, summarizeAlertProfile } from '../utils/alertProfile';
@@ -115,14 +114,6 @@ const PlacesScreen = ({ focusPlaceId = null, onFocusHandled }: Props) => {
   );
   const visibleRows = bookmarkRows.filter(row => !row.hidden);
   const hiddenRows = bookmarkRows.filter(row => row.hidden);
-
-  // The opened place's map starts on whichever hazard is higher at THIS
-  // place, judged from its own values.
-  const selectedRow = bookmarkRows.find(row => row.id === selectedBookmark?.id);
-  const selectedMapLayer = useDefaultMapLayer({
-    heat: selectedRow?.temperature ?? null,
-    aqhi: selectedRow?.aqhi ?? null,
-  });
 
   const renameOtherNames = useMemo(
     () => bookmarks.filter(b => b.id !== renamingBookmark?.id).map(b => b.label),
@@ -303,7 +294,6 @@ const PlacesScreen = ({ focusPlaceId = null, onFocusHandled }: Props) => {
       <BookmarkMapModal
         visible={selectedBookmark !== null}
         bookmark={selectedBookmark}
-        layer={selectedMapLayer}
         onClose={() => setSelectedBookmark(null)}
       />
     </SafeAreaView>

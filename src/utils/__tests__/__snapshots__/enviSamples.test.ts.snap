@@ -1,0 +1,123 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`ENVI_SAMPLES matches the reviewed wording 1`] = `
+"
+## Calm day (heat 25, AQHI 2)
+Index: 1 Low
+Line: Air quality is good and it's not too hot.
+Tiles: Enjoy outdoors
+Detailed recommendations: hidden
+- A good time to be outdoors.
+
+## Warm summer day (heat 30, AQHI 2)
+Index: 2 Moderate
+Line: Air quality is good, but it's warm.
+Tiles: Drink water · Rest in shade
+Detailed recommendations: shown
+Health risk: Tiredness possible
+- Drink water regularly, before you feel thirsty.
+- Take breaks in the shade if you're active outdoors.
+
+## Level tie in winter (heat 30, AQHI 5)
+Index: 2 Moderate
+Line: Air quality is fair and it's warm.
+Tiles: Watch symptoms
+Detailed recommendations: shown
+Health risk: Mild risk
+- If you have a heart or lung condition, ease off outdoors when you notice symptoms.
+
+## Poor air, mild heat (heat 25, AQHI 9)
+Index: 4 Very High
+Line: It's not too hot, but air quality is very poor.
+Tiles: Less exertion · Avoid busy roads · Less time outside
+Detailed recommendations: shown
+Health risk: Risk for everyone
+- Cut down on strenuous activity outdoors.
+- Keep away from busy roads, where traffic pollution is highest.
+- Cut down the time you spend outdoors.
+
+## Dangerous heat (heat 45, AQHI 5)
+Index: 4 Very High
+Line: It's very hot and air quality is fair.
+Tiles: Avoid midday · Stay cool · Drink water
+Detailed recommendations: shown
+Health risk: Heat stroke possible
+- Keep outdoor activity to early morning or evening, away from the hottest hours.
+- Stay somewhere cool, such as an air-conditioned room.
+- Drink water regularly, before you feel thirsty.
+
+## Heat and poor air together (heat 35, AQHI 7)
+Index: 3 High
+Line: It's hot and air quality is poor.
+Tiles: Stay indoors · Air-con on · Windows closed
+Detailed recommendations: shown
+Health risk: Heat exhaustion possible / Risk for sensitive groups
+- Stay indoors as much as you can.
+- Use air conditioning to keep cool indoors.
+- Keep windows closed to keep polluted air out.
+
+## Extreme heat (heat 55, AQHI 2)
+Index: 5 Serious
+Line: Air quality is good, but it's dangerously hot.
+Tiles: Stay indoors · Stay cool · Drink water
+Detailed recommendations: shown
+Health risk: Heat stroke likely
+- Stay indoors as much as you can.
+- Stay somewhere cool, such as an air-conditioned room.
+- Drink water regularly, before you feel thirsty.
+
+## Serious air pollution (heat 25, AQHI 11)
+Index: 5 Serious
+Line: It's not too hot, but air quality is hazardous.
+Tiles: Stay indoors · Avoid exertion
+Detailed recommendations: shown
+Health risk: Serious risk
+- Stay indoors as much as you can.
+- Avoid strenuous activity, indoors or out.
+
+## Today's peak, next level up (heat 30, AQHI 2)
+Index: 2 Moderate · today's peak 3
+Line: Air quality is good, but it's warm.
+Tiles: Drink water · Rest in shade
+Detailed recommendations: shown
+Health risk: Tiredness possible
+- Drink water regularly, before you feel thirsty.
+- Take breaks in the shade if you're active outdoors.
+
+## Today's peak, later (heat 30, AQHI 2)
+Index: 2 Moderate · today's peak 4
+Line: Air quality is good, but it's warm.
+Tiles: Drink water · Rest in shade
+Detailed recommendations: shown
+Health risk: Tiredness possible
+- Drink water regularly, before you feel thirsty.
+- Take breaks in the shade if you're active outdoors.
+
+## Live heat alert at your location (heat 45, AQHI 2)
+Index: 4 Very High
+Line: Air quality is good, but it's very hot.
+Tiles: Avoid midday · Stay cool · Drink water
+Detailed recommendations: shown
+Health risk: Heat stroke possible
+For you: Drink water, keep outdoor activity to early morning or evening, and watch for dizziness, headache or nausea.
+- Keep outdoor activity to early morning or evening, away from the hottest hours.
+- Stay somewhere cool, such as an air-conditioned room.
+- Drink water regularly, before you feel thirsty.
+
+## Air quality unavailable (heat 35, AQHI --)
+Index: 3 High
+Line: It's hot.
+Tiles: Drink water · Rest in shade · Avoid midday
+Detailed recommendations: shown
+Health risk: Heat exhaustion possible
+- Drink water regularly, before you feel thirsty.
+- Take breaks in the shade if you're active outdoors.
+- Keep outdoor activity to early morning or evening, away from the hottest hours.
+
+## Nothing available yet (heat --, AQHI --)
+Index: --
+Line: (none)
+Tiles: (none)
+Detailed recommendations: hidden
+"
+`;

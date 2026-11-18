@@ -13,6 +13,7 @@ import { useExposureTrackingSettings } from '../hooks/useExposureTrackingSetting
 import { ALERTS_SCREEN_COPY } from '../config/alertCopy';
 import { sendSampleGallery } from '../services/alertCheckService';
 import { runAlertCheckNow } from '../services/alertCheckBus';
+import EnviPreviewScreen from './EnviPreviewScreen';
 
 type Props = {
   visible: boolean;
@@ -32,6 +33,7 @@ const AppSettingsScreen = ({ visible, onClose }: Props) => {
     useExposureTrackingSettings();
 
   const [checking, setChecking] = React.useState(false);
+  const [enviPreviewOpen, setEnviPreviewOpen] = React.useState(false);
 
   const handleRunCheckNow = async () => {
     setChecking(true);
@@ -156,10 +158,20 @@ const AppSettingsScreen = ({ visible, onClose }: Props) => {
               >
                 <Text style={styles.testButtonText}>Show First-Launch Question Again</Text>
               </TouchableOpacity>
+              <View style={styles.divider} />
+              {/* The real Environmental Index card in every situation, from
+                  sample readings — check layout and wording per level. */}
+              <TouchableOpacity style={styles.testButton} onPress={() => setEnviPreviewOpen(true)}>
+                <Text style={styles.testButtonText}>Preview Environmental Index</Text>
+              </TouchableOpacity>
             </SettingsSection>
           )}
         </ScrollView>
       </SafeAreaView>
+
+      {__DEV__ && (
+        <EnviPreviewScreen visible={enviPreviewOpen} onClose={() => setEnviPreviewOpen(false)} />
+      )}
     </Modal>
   );
 };

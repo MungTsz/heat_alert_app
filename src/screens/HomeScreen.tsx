@@ -16,13 +16,13 @@ import {
   SafeAreaView,
   useSafeAreaInsets,
 } from 'react-native-safe-area-context';
-import { Droplet, MapPin, Thermometer, ThermometerSun, Wind } from 'lucide-react-native';
+import { MapPin } from 'lucide-react-native';
 import TextTicker from 'react-native-text-ticker';
 import EnviCard from '../components/EnviCard';
 import EnviDetailSheet from '../components/EnviDetailSheet';
 import EnviForecastSheet from '../components/EnviForecastSheet';
 import HomeInfoBar from '../components/HomeInfoBar';
-import { HomeInfoBlockData, NEUTRAL_STRIPE_COLOR } from '../components/HomeInfoBlock';
+import { readingBlocks } from '../components/readingBlocks';
 import HeatHourlyForecastChart from '../components/HeatHourlyForecastChart';
 import AqhiHourlyForecastChart from '../components/AqhiHourlyForecastChart';
 import ForecastSheet from '../components/ForecastSheet';
@@ -30,9 +30,9 @@ import FeelsLikeGapLine from '../components/FeelsLikeGapLine';
 import HeatIndexExplainerSheet from '../components/HeatIndexExplainerSheet';
 import FullscreenMapModal from '../components/FullscreenMapModal';
 import MapScreen from './MapScreen';
+import EnviPreviewScreen from './EnviPreviewScreen';
 import { useLocation } from '../utils/useLocation';
-import { getHeatIndexInfo } from '../utils/heatIndexUtils';
-import { estimateAqhiAt, formatAqhiValue, getAqhiInfo } from '../utils/aqhiUtils';
+import { estimateAqhiAt } from '../utils/aqhiUtils';
 import { FALLBACK_CENTER, resolveDataCenter } from '../config/locationConfig';
 import HeatScene from '../components/scene/HeatScene';
 import { computeSceneLayout } from '../utils/sceneLayout';
@@ -42,14 +42,14 @@ import { useAqhiData } from '../hooks/useAqhiData';
 import { useHeatConditions } from '../hooks/useHeatData';
 import { useActiveAlerts } from '../hooks/useActiveAlerts';
 import { useNotificationSettings } from '../hooks/useNotificationSettings';
-import { useDefaultMapLayer } from '../hooks/useDefaultMapLayer';
 import { useMapPlacePins } from '../hooks/useMapPlacePins';
 import { useHomeInfoBar } from '../hooks/useHomeInfoBar';
 import HomeAlertBanner from '../components/alerts/HomeAlertBanner';
 import { CURRENT_LOCATION_PLACE_ID } from '../config/alertConfig';
-import { HOME_INFO_BAR_COPY } from '../config/alertCopy';
 import { HOME_LAYOUT_CONFIG } from '../config/homeLayoutConfig';
-import { MapLayer } from '../types/mapSettings';
+import { DEFAULT_MAP_LAYER_CONFIG } from '../config/mapLayerConfig';
+import { isPraiseConfigured } from '../config/praiseConfig';
+import { pickForecastHazard } from '../utils/forecastHazard';
 import { homeAdviceFor } from '../utils/homeAdvice';
 import { HazardReadings, getEnviLevel } from '../utils/enviUtils';
 import { todaysPeakLevel } from '../utils/enviPeak';
@@ -94,8 +94,6 @@ const HomeScreen = () => {
     ? Math.round(conditions.relativeHumidityPct)
     : null;
 
-  const heatInfo = heatIndexTemp === null ? null : getHeatIndexInfo(heatIndexTemp);
-  const aqhiInfo = currentAqhi === null ? null : getAqhiInfo(currentAqhi);
 
   // Both hazards where the user is — what the Environmental Index, its
   // keywords, the detail sheet's chart and the map's starting layer are all
@@ -119,12 +117,13 @@ const HomeScreen = () => {
     aboutYou,
   });
 
-  // One layer for the preview and the full-screen map (lifted here so
-  // closing full screen keeps the user's pick). Until the user picks one it
-  // follows the data: the hazard that sets the Environmental Index.
-  const [chosenMapLayer, setChosenMapLayer] = useState<MapLayer | null>(null);
-  const defaultMapLayer = useDefaultMapLayer(currentReadings);
-  const mapLayer = chosenMapLayer ?? defaultMapLayer;
+  // The hazard the forecast sheet opens on: the one setting the index (or
+  // the season's on a tie; heat without PRAISE).
+  const forecastHazard = pickForecastHazard({
+    current: currentReadings,
+    praiseConfigured: isPraiseConfigured(),
+    nowMs: Date.now(),
+  });
   // Saved places on the map — fetched once here for both maps.
   const placePins = useMapPlacePins();
 
@@ -149,46 +148,25 @@ const HomeScreen = () => {
   const [aqhiSheetOpen, setAqhiSheetOpen] = useState(false);
   const [enviForecastOpen, setEnviForecastOpen] = useState(false);
   const [enviSheetOpen, setEnviSheetOpen] = useState(false);
+  // Development builds only: the card in every state, from sample readings.
+  const [enviPreviewOpen, setEnviPreviewOpen] = useState(false);
   const [mapFullscreen, setMapFullscreen] = useState(false);
   const [heatExplainerOpen, setHeatExplainerOpen] = useState(false);
 
-  // Each block in its own colours (NWS for heat index, EPD for AQHI) — the
-  // Environmental Index palette stays on the card. Only the two hazards open
-  // a forecast; Temp and Humidity have no levels (neutral stripe) and are
-  // read-only context.
-  const infoBlocks: HomeInfoBlockData[] = [
+  // The side bar's four blocks (the same builder as the map's point card).
+  // Only the two hazards open a forecast; Temp and Humidity are read-only.
+  const infoBlocks = readingBlocks(
     {
-      key: 'heat',
-      Icon: ThermometerSun,
-      label: HOME_INFO_BAR_COPY.heat,
-      value: heatIndexTemp === null ? null : `${heatIndexTemp}°`,
-      stripeColor: heatInfo?.color ?? NEUTRAL_STRIPE_COLOR,
-      onPress: () => setHeatSheetOpen(true),
+      heatIndex: heatIndexTemp,
+      aqhi: currentAqhi,
+      temperature: actualTemp,
+      humidity: currentHumidity,
     },
     {
-      key: 'aqhi',
-      Icon: Wind,
-      label: HOME_INFO_BAR_COPY.aqhi,
-      value: currentAqhi === null ? null : formatAqhiValue(currentAqhi),
-      // aqhiUtils' per-value colour, as on the AQHI map layer and legend.
-      stripeColor: aqhiInfo?.color ?? NEUTRAL_STRIPE_COLOR,
-      onPress: () => setAqhiSheetOpen(true),
+      onHeatPress: () => setHeatSheetOpen(true),
+      onAqhiPress: () => setAqhiSheetOpen(true),
     },
-    {
-      key: 'temperature',
-      Icon: Thermometer,
-      label: HOME_INFO_BAR_COPY.temperature,
-      value: actualTemp === null ? null : `${actualTemp}°`,
-      stripeColor: NEUTRAL_STRIPE_COLOR,
-    },
-    {
-      key: 'humidity',
-      Icon: Droplet,
-      label: HOME_INFO_BAR_COPY.humidity,
-      value: currentHumidity === null ? null : `${currentHumidity}%`,
-      stripeColor: NEUTRAL_STRIPE_COLOR,
-    },
-  ];
+  );
 
   return (
     <View style={styles.mainContainer}>
@@ -252,18 +230,19 @@ const HomeScreen = () => {
             peakLevel={peakLevel}
             onOpenForecast={() => setEnviForecastOpen(true)}
             onOpenDetails={() => setEnviSheetOpen(true)}
+            onLongPressIndex={__DEV__ ? () => setEnviPreviewOpen(true) : undefined}
           />
 
           {/* Only while an alert is live: what happened. */}
           <HomeAlertBanner badges={locationAlerts} />
 
           <View style={styles.mapContainer}>
-            {/* A preview: a tap opens the full-screen map, but the layer
-                picker works right here (same layer as full screen). The
-                opacity slider and locate button wait for full screen. */}
+            {/* A preview, fixed on the Environmental Index (no picker:
+                no onLayerChange) with a one-row legend; a tap opens the
+                full-screen map, where the details, opacity slider and
+                locate button are. */}
             <MapScreen
-              layer={mapLayer}
-              onLayerChange={setChosenMapLayer}
+              layer={DEFAULT_MAP_LAYER_CONFIG.startLayer}
               showLayerControls={false}
               places={placePins}
               onPreviewPress={() => setMapFullscreen(true)}
@@ -277,8 +256,6 @@ const HomeScreen = () => {
         // Camera only (no values are read off it), so the fallback is fine
         // here while locating.
         center={dataCenter ?? FALLBACK_CENTER}
-        layer={mapLayer}
-        onLayerChange={setChosenMapLayer}
         places={placePins}
         // A place pin leads to that place in Places — the link between
         // "conditions around me" and "the places I care about".
@@ -300,9 +277,9 @@ const HomeScreen = () => {
       <EnviForecastSheet
         visible={enviForecastOpen}
         onClose={() => setEnviForecastOpen(false)}
-        // The map's starting layer is the hazard that sets the level (or
-        // the season's), so the forecast opens on the same hazard as the map.
-        defaultHazard={defaultMapLayer}
+        // The hazard that sets the level (or the season's), the same one
+        // the card's words lead with.
+        defaultHazard={forecastHazard}
         heatForecast={{ days: heatForecastDays, loading: heatForecastLoading }}
         aqhiForecast={{ days: aqhiForecastDays, loading: aqhiForecastLoading }}
       />
@@ -335,6 +312,13 @@ const HomeScreen = () => {
           loading={aqhiForecastLoading}
         />
       </ForecastSheet>
+
+      {__DEV__ && (
+        <EnviPreviewScreen
+          visible={enviPreviewOpen}
+          onClose={() => setEnviPreviewOpen(false)}
+        />
+      )}
 
       <HeatIndexExplainerSheet
         visible={heatExplainerOpen}

@@ -1,15 +1,17 @@
 // src/hooks/useDefaultMapLayer.ts
+import { useEffect, useState } from 'react';
 import { MapLayer } from '../types/mapSettings';
-import { isPraiseConfigured } from '../config/praiseConfig';
 import { pickDefaultMapLayer } from '../utils/defaultMapLayer';
-import { HazardReadings } from '../utils/enviUtils';
 
-// The hazard layer a map opens on, for every screen that shows a map —
-// from the values the screen already has (the user's location on Home, a
-// saved place's own values on that place's map), so no extra lookups.
-export const useDefaultMapLayer = (current: HazardReadings): MapLayer =>
-  pickDefaultMapLayer({
-    current,
-    praiseConfigured: isPraiseConfigured(),
-    nowMs: Date.now(),
-  });
+// The layer state of one map that opens and closes (the full-screen map, a
+// saved place's map): it starts on the Environmental Index and goes back to
+// it every time the map closes, so each opening starts on the index again
+// even if the user last looked at a detail layer. Reset on close rather
+// than on open, so the map never shows the old layer for a frame.
+export const useDefaultMapLayer = (open: boolean) => {
+  const [layer, setLayer] = useState<MapLayer>(pickDefaultMapLayer);
+  useEffect(() => {
+    if (!open) setLayer(pickDefaultMapLayer());
+  }, [open]);
+  return [layer, setLayer] as const;
+};

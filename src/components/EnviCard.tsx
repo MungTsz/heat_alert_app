@@ -22,6 +22,12 @@ type Props = {
   onOpenForecast: () => void;
   // The bottom bar: the recommendations sheet.
   onOpenDetails: () => void;
+  // Settles a tie by season. Home leaves it out (now); the dev preview
+  // passes a sample's date.
+  nowMs?: number;
+  // Development builds only: Home opens the every-state preview on a long
+  // press of the index block. Left out in release builds.
+  onLongPressIndex?: () => void;
 };
 
 const TONE = ENVI_TONES.glass;
@@ -37,11 +43,18 @@ const C = ENVI_CARD_CONFIG;
 //   there is nothing more to recommend).
 // The card stays the same during a live alert — the alert has its banner,
 // and its personalised advice leads the recommendations sheet.
-const EnviCard: React.FC<Props> = ({ current, peakLevel, onOpenForecast, onOpenDetails }) => {
+const EnviCard: React.FC<Props> = ({
+  current,
+  peakLevel,
+  onOpenForecast,
+  onOpenDetails,
+  nowMs,
+  onLongPressIndex,
+}) => {
   const level = getEnviLevel(current);
   const info = level === null ? null : getEnviLevelInfo(level);
-  const summary = enviSummaryFor(current);
-  const { actions } = enviKeywordsFor(current);
+  const summary = enviSummaryFor(current, nowMs);
+  const { actions } = enviKeywordsFor(current, nowMs);
   const showMore = level !== null && level > 1;
 
   return (
@@ -49,6 +62,7 @@ const EnviCard: React.FC<Props> = ({ current, peakLevel, onOpenForecast, onOpenD
       <TouchableOpacity
         style={styles.indexBlock}
         onPress={onOpenForecast}
+        onLongPress={onLongPressIndex}
         activeOpacity={0.75}
         accessibilityRole="button"
         accessibilityLabel={

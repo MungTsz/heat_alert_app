@@ -76,3 +76,21 @@ export const HOME_INFO_BAR_CONFIG = {
   // decides on its own: a quick flick left opens, right closes.
   flingVelocity: 0.3,
 };
+
+// What a reading block (HomeInfoBlock) sits on, keyed like ENVI_TONES:
+// Home's dark scene ('glass') or a white surface such as the map's
+// tapped-point card ('sheet'). The level stripe colours never change; only
+// the surface, the text and the neutral stripe (no level, or "--") do.
+export const HOME_INFO_BLOCK_TONES = {
+  glass: {
+    // The surface itself is styles/glassCard's glassCardStyle.
+    text: '#FFFFFF',
+    neutralStripe: 'rgba(255,255,255,0.35)',
+  },
+  sheet: {
+    background: '#F2F2F7',
+    border: '#E5E5EA',
+    text: '#1C1C1E',
+    neutralStripe: '#C7C7CC',
+  },
+} as const;

@@ -4,11 +4,19 @@ import { View, Text, StyleSheet } from 'react-native';
 import { MapPin } from 'lucide-react-native';
 import { getHeatIndexInfo } from '../utils/heatIndexUtils';
 import { getAqhiInfo } from '../utils/aqhiUtils';
-import { HazardKind } from '../types/alerts';
+import { MapLayer } from '../types/mapSettings';
 import { PlaceCategory } from '../types/bookmark';
-import { MAP_PLACE_PIN_CONFIG, MAP_POINT_PIN_CONFIG } from '../config/mapLayerConfig';
+import {
+  MAP_PIN_ENVI_SQUARE_CONFIG,
+  MAP_PLACE_PIN_CONFIG,
+  MAP_POINT_PIN_CONFIG,
+} from '../config/mapLayerConfig';
 import { PLACE_CATEGORY_CONFIG } from '../config/placeCategoryConfig';
 import { EXPOSURE_IO_CONFIG } from '../config/exposureIoConfig';
+import { ENVI_COPY } from '../config/alertCopy';
+import { getEnviLevelInfo } from '../utils/enviUtils';
+import { pinEnviLevel } from '../utils/enviMapLayer';
+import EnviLevelSquare from './EnviLevelSquare';
 
 // null = loading / unavailable
 type Props = {
@@ -25,9 +33,13 @@ type Props = {
   // Exposure map), with a small copy in front of the name. Without it the
   // pin is the tapped point's blue one.
   category?: PlaceCategory;
-  // Only this hazard's value — the small Home preview, where two numbers
-  // per pin get crowded. Both when omitted.
-  only?: HazardKind;
+  // The map layer on screen. 'envi': a small Environmental Index square
+  // (from both values, as on Home's card) instead of numbers. 'heat' /
+  // 'aqhi': only that hazard's value. Both values when omitted.
+  layer?: MapLayer;
+  // On the index layer, the level's name beside the square — the tapped
+  // point; saved places keep to the square, as they already carry a name.
+  showLevelName?: boolean;
 };
 
 // Neutral grey, so a missing value never reads as a heat level color.
@@ -40,7 +52,8 @@ const DualStatPin: React.FC<Props> = ({
   aqhi,
   title,
   category,
-  only,
+  layer,
+  showLevelName = false,
 }) => {
   // Same classification colors as the heat card, chart and legend.
   const heatColor =
@@ -49,8 +62,10 @@ const DualStatPin: React.FC<Props> = ({
       : getHeatIndexInfo(temperature).color;
   const aqhiColor =
     aqhi === null ? UNAVAILABLE_DOT_COLOR : getAqhiInfo(aqhi).color;
-  const showHeat = only !== 'aqhi';
-  const showAqhi = only !== 'heat';
+  const showEnvi = layer === 'envi';
+  const showHeat = layer === undefined || layer === 'heat';
+  const showAqhi = layer === undefined || layer === 'aqhi';
+  const enviLevel = showEnvi ? pinEnviLevel({ heatIndex: temperature, aqhi }) : null;
   const CategoryIcon = category ? PLACE_CATEGORY_CONFIG[category].Icon : null;
   const categoryColor = category ? EXPOSURE_IO_CONFIG[category].color : null;
 
@@ -68,6 +83,20 @@ const DualStatPin: React.FC<Props> = ({
           </View>
         )}
         <View style={styles.row}>
+          {showEnvi && (
+            <>
+              <EnviLevelSquare
+                level={enviLevel}
+                tone="sheet"
+                dimensions={MAP_PIN_ENVI_SQUARE_CONFIG}
+              />
+              {showLevelName && (
+                <Text style={styles.text}>
+                  {enviLevel === null ? ENVI_COPY.unavailable : getEnviLevelInfo(enviLevel).name}
+                </Text>
+              )}
+            </>
+          )}
           {showHeat && (
             <>
               <View style={[styles.dot, { backgroundColor: heatColor }]} />
