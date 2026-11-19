@@ -1,9 +1,8 @@
 // src/hooks/useMapPlacePins.ts
 import { useMemo } from 'react';
-import { useBookmarkList } from './useBookmarkList';
 import { usePlacesHeatIndex } from './useHeatData';
 import { usePlacesAqhi } from './useAqhiData';
-import { PlaceCategory } from '../types/bookmark';
+import { BookmarkEntry, PlaceCategory } from '../types/bookmark';
 
 // A saved place as a map pin, with both hazards at its own coordinates.
 export type MapPlacePin = {
@@ -21,9 +20,9 @@ export type MapPlacePin = {
 // "hidden places are left out" rule) as the Places tab's cards, so a pin
 // always agrees with its card. Called once by the screen and handed to
 // every map it shows, so the preview and the full-screen map share one
-// set of requests.
-export const useMapPlacePins = (): MapPlacePin[] => {
-  const { bookmarks } = useBookmarkList();
+// set of requests. The screen passes its own useBookmarkList() list, so a
+// place it adds (Home's "Save this place as indoors") shows up at once.
+export const useMapPlacePins = (bookmarks: readonly BookmarkEntry[]): MapPlacePin[] => {
   const visible = useMemo(() => bookmarks.filter(b => !b.hidden), [bookmarks]);
   const { heatIndexById } = usePlacesHeatIndex(visible);
   const { aqhiById } = usePlacesAqhi(visible);

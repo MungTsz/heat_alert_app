@@ -33,6 +33,13 @@ export const ENVI_CARD_CONFIG = {
   levelNameFontSize: 22,
   // The plain-language line ("Air quality is good, but it's very hot.").
   summaryFontSize: 14,
+  // "For you: Pregnant · Outdoors now ✎" — quieter than the summary, but a
+  // full-size touch target: the row stays one line tall and its touch
+  // area reaches forYouMinTouchHeight above and below.
+  forYouFontSize: 13,
+  forYouLineHeight: 18,
+  forYouIconSize: 14,
+  forYouMinTouchHeight: 44,
   // Action tiles: icon with a few words underneath.
   tileIconSize: 22,
   tileFontSize: 12,

@@ -7,7 +7,7 @@ import {
   IdentityGroup,
 } from '../types/alerts';
 import { AllClearMode, NoEventDays } from '../types/settings';
-import { EnviActionId } from '../types/envi';
+import { EnviActionId, KnownLocationContext, LocationContextSource } from '../types/envi';
 import { MapLayer } from '../types/mapSettings';
 
 // Every user-facing word about alerts lives here, so a Traditional Chinese
@@ -17,14 +17,20 @@ import { MapLayer } from '../types/mapSettings';
 // no exclamation marks or scare words, describe people objectively.
 
 // `label` is also what summaries show ("Older adult (65+), Asthma"), so it
-// stands on its own; `hint` is the smaller line under it in the picker.
-export const IDENTITY_COPY: Record<IdentityGroup, { label: string; hint?: string }> = {
+// stands on its own; `hint` is the smaller line under it in the picker;
+// `short` is the one-line version for the Environmental Index card's "For
+// you" line and the recommendations sheet's "Based on" (label when absent).
+export const IDENTITY_COPY: Record<IdentityGroup, { label: string; hint?: string; short?: string }> = {
   general: { label: 'General adult' },
-  older: { label: 'Older adult (65+)' },
+  older: { label: 'Older adult (65+)', short: 'Older adult' },
   pregnant: { label: 'Pregnant' },
   asthma: { label: 'Asthma' },
-  heartLung: { label: 'Heart or other lung condition' },
-  otherChronic: { label: 'Other long-term condition', hint: 'e.g. kidney disease, diabetes' },
+  heartLung: { label: 'Heart or other lung condition', short: 'Heart or lung condition' },
+  otherChronic: {
+    label: 'Other long-term condition',
+    hint: 'e.g. kidney disease, diabetes',
+    short: 'Long-term condition',
+  },
   child: { label: 'Child' },
 };
 
@@ -332,35 +338,229 @@ export const ENVI_WARNING_COPY: Record<HazardKind, Record<string, string>> = {
 };
 
 // Each action keyword: `label` under its icon on the card (at most
-// ENVI_KEYWORD_LIMITS.maxTileWords words, held there by tests), `sentence` as the detail sheet's full advice. Which
-// actions show at which level is in config/enviKeywords.ts. Health advice:
-// needs a public-health review before release.
-export const ENVI_ACTION_COPY: Record<EnviActionId, { label: string; sentence: string }> = {
-  drinkWater: { label: 'Drink water', sentence: 'Drink water regularly, before you feel thirsty.' },
+// ENVI_KEYWORD_LIMITS.maxTileWords words, held there by tests), `sentence`
+// as the detail sheet's full advice. `family` is the sentence for a family
+// place, in the same "remind them" voice as alert messages — present on
+// every keyword a family place can get (the general 'unknown' sets, the
+// calm tile and the person tips; tests hold this), since the app never
+// knows where family members are. Which actions show when is in
+// config/enviKeywords.ts. Health advice: needs a public-health review
+// before release.
+export const ENVI_ACTION_COPY: Record<
+  EnviActionId,
+  { label: string; sentence: string; family?: string }
+> = {
+  drinkWater: {
+    label: 'Drink water',
+    sentence: 'Drink water regularly, before you feel thirsty.',
+    family: 'Remind them to drink water regularly, before they feel thirsty.',
+  },
+  carryWater: { label: 'Carry water', sentence: 'Take water with you and sip it on the way.' },
   restInShade: {
     label: 'Rest in shade',
     sentence: "Take breaks in the shade if you're active outdoors.",
+    family: "Remind them to take breaks in the shade if they're active outdoors.",
   },
+  waitInShade: {
+    label: 'Wait in shade',
+    sentence: 'Wait for your bus or ride in the shade, out of the sun.',
+  },
+  moveToShade: { label: 'Move to shade', sentence: 'Get out of the sun and into the shade now.' },
   avoidMidday: {
     label: 'Avoid midday',
     sentence: 'Keep outdoor activity to early morning or evening, away from the hottest hours.',
+    family:
+      'Remind them to keep outdoor activity to early morning or evening, away from the hottest hours.',
   },
-  stayCool: { label: 'Stay cool', sentence: 'Stay somewhere cool, such as an air-conditioned room.' },
-  airConOn: { label: 'Air-con on', sentence: 'Use air conditioning to keep cool indoors.' },
-  stayIndoors: { label: 'Stay indoors', sentence: 'Stay indoors as much as you can.' },
-  lessExertion: { label: 'Less exertion', sentence: 'Cut down on strenuous activity outdoors.' },
-  avoidExertion: { label: 'Avoid exertion', sentence: 'Avoid strenuous activity, indoors or out.' },
+  avoidMiddayOutings: {
+    label: 'Avoid midday outings',
+    sentence: 'If you need to go out, go in the early morning or evening, not the hottest hours.',
+  },
+  stayCool: {
+    label: 'Stay cool',
+    sentence: 'Stay somewhere cool, such as an air-conditioned room.',
+    family: 'Make sure they stay somewhere cool, such as an air-conditioned room.',
+  },
+  keepRoomsCool: {
+    label: 'Keep rooms cool',
+    sentence: 'Keep the room cool: draw the curtains against the sun, and use a fan or air-con.',
+  },
+  airConOn: {
+    label: 'Use air-con',
+    sentence: 'Use air conditioning to keep cool indoors.',
+    family: 'Make sure they use air conditioning to keep cool indoors.',
+  },
+  slowDown: {
+    label: 'Slow down',
+    sentence: 'Take it slower and cut down on effort until you are somewhere cooler.',
+  },
+  stopActivity: {
+    label: 'Stop activity',
+    sentence: 'Stop exercise or heavy work now and rest somewhere cool.',
+  },
+  restIfUnwell: {
+    label: 'Rest if unwell',
+    sentence: 'If you feel dizzy, sick or very tired, stop and rest somewhere cool.',
+  },
+  stayIndoors: {
+    label: 'Stay indoors',
+    sentence: 'Stay indoors as much as you can.',
+    family: 'Remind them to stay indoors as much as they can.',
+  },
+  waitIndoors: {
+    label: 'Wait indoors',
+    sentence: 'Wait indoors, such as in a station or shop, rather than out in the heat.',
+  },
+  goIndoors: {
+    label: 'Go indoors',
+    sentence: 'Go indoors to somewhere air-conditioned, with the windows closed.',
+  },
+  goIndoorsNow: {
+    label: 'Go indoors now',
+    sentence: 'Go indoors now and stay there until conditions improve.',
+  },
+  goIndoorsSoon: {
+    label: 'Go indoors soon',
+    sentence: 'These conditions are riskier for you outdoors, so head indoors soon.',
+  },
+  headIndoors: {
+    label: 'Head indoors',
+    sentence: 'Go indoors as soon as you reach where you are going.',
+  },
+  headIndoorsSooner: {
+    label: 'Head indoors sooner',
+    sentence: 'Spend less time out, and head indoors sooner than you planned.',
+  },
+  lessExertion: {
+    label: 'Less exertion',
+    sentence: 'Cut down on strenuous activity outdoors.',
+    family: 'Remind them to cut down on strenuous activity outdoors.',
+  },
+  avoidExertion: {
+    label: 'Avoid exertion',
+    sentence: 'Avoid strenuous activity, indoors or out.',
+    family: 'Remind them to avoid strenuous activity, indoors or out.',
+  },
+  exerciseIndoors: { label: 'Exercise indoors', sentence: 'Exercise indoors today, not outside.' },
   avoidBusyRoads: {
     label: 'Avoid busy roads',
     sentence: 'Keep away from busy roads, where traffic pollution is highest.',
+    family: 'Remind them to keep away from busy roads, where traffic pollution is highest.',
   },
-  lessTimeOutside: { label: 'Less time outside', sentence: 'Cut down the time you spend outdoors.' },
+  avoidRoadsideWaits: {
+    label: 'Avoid roadside waits',
+    sentence: 'Wait for transport away from the roadside where you can, such as inside a station.',
+  },
+  lessTimeOutside: {
+    label: 'Less time outside',
+    sentence: 'Cut down the time you spend outdoors.',
+    family: 'Remind them to cut down the time they spend outdoors.',
+  },
+  fewerOutings: {
+    label: 'Fewer outings',
+    sentence: 'Go out less today, and put off trips that can wait.',
+  },
   watchSymptoms: {
     label: 'Watch symptoms',
     sentence: 'If you have a heart or lung condition, ease off outdoors when you notice symptoms.',
+    family:
+      'If they have a heart or lung condition, remind them to ease off outdoors when they notice symptoms.',
   },
-  windowsClosed: { label: 'Windows closed', sentence: 'Keep windows closed to keep polluted air out.' },
-  enjoyOutdoors: { label: 'Enjoy outdoors', sentence: 'A good time to be outdoors.' },
+  windowsClosed: {
+    label: 'Windows closed',
+    sentence: 'Keep windows closed to keep polluted air out.',
+    family: 'Remind them to keep windows closed to keep polluted air out.',
+  },
+  windowsUp: { label: 'Windows up', sentence: 'In a car, taxi or minibus, keep the windows closed.' },
+  // "Windows up, air-con on" in the design draft — four words, one over the
+  // tile limit.
+  airConWindowsUp: {
+    label: 'Air-con, windows up',
+    sentence: 'In a vehicle, keep the windows closed and the air-con on.',
+  },
+  carryInhaler: {
+    label: 'Carry inhaler',
+    sentence: 'Keep your reliever inhaler with you, and follow your asthma plan if symptoms start.',
+    family: 'Remind them to carry their reliever inhaler.',
+  },
+  // "Follow your care plan" in the design draft — one word over the limit.
+  followCarePlan: {
+    label: 'Follow care plan',
+    sentence: 'Follow the care plan from your doctor or nurse, and get help if you feel worse than usual.',
+    family: 'Remind them to follow their care plan, and check on them if they feel worse than usual.',
+  },
+  restOften: {
+    label: 'Rest often',
+    sentence: 'Take regular breaks, keep cool and drink water.',
+    family: 'Remind them to rest often, keep cool and drink water.',
+  },
+  drinkBeforeThirsty: {
+    label: 'Drink before thirsty',
+    sentence: "Drink water regularly; don't wait until you feel thirsty.",
+    family: "Make sure they drink water regularly, without waiting until they're thirsty.",
+  },
+  keepMedicineCool: {
+    label: 'Keep medicine cool',
+    sentence: 'Store your medicines somewhere cool, out of the sun and hot cars.',
+    family: 'Remind them to keep their medicines somewhere cool, out of the sun.',
+  },
+  enjoyOutdoors: {
+    label: 'Enjoy outdoors',
+    sentence: 'A good time to be outdoors.',
+    family: 'A good time for them to be outdoors.',
+  },
+};
+
+// Personal advice around the card's keywords. Users see what the advice is
+// based on, never how the index itself is worked out.
+export const ENVI_FOR_YOU_COPY = {
+  // The card's line, e.g. "For you: Pregnant +1 · Outdoors now" — "For
+  // them" at a family place.
+  lead: { self: 'For you', family: 'For them' } as Voiced,
+  line: (lead: string, who: string, where: string | null) =>
+    `${lead}: ${where ? `${who} · ${where}` : who}`,
+  moreIdentities: (count: number) => `+${count}`,
+  // Where the owner is, when the app can tell.
+  where: {
+    indoors: 'Indoors now',
+    outdoors: 'Outdoors now',
+    transit: 'On the move',
+  } as Record<KnownLocationContext, string>,
+  // Tracking off, and About you says "Often outdoors": a habit, not a sighting.
+  usuallyOutdoors: DAILY_ACTIVITY_COPY.outdoors.label,
+  hint: 'Opens where you are now and your details',
+  // Top of the recommendations sheet: "Based on: Pregnant · Outdoors now".
+  basedOn: (parts: readonly string[]) => `Based on: ${parts.join(' · ')}`,
+  basedOnMedicine: PERSON_SUMMARY_COPY.medicine,
+  // For anyone on regular medicine. The app never names, judges, stops or
+  // changes a medicine.
+  medicineNote: {
+    self: 'Ask your doctor or pharmacist whether your medicine affects you in hot weather.',
+    family: 'They can ask their doctor or pharmacist whether their medicine affects them in hot weather.',
+  } as Voiced,
+  // Bottom of the recommendations sheet while tracking is off — the only
+  // place it is said; never a pop-up.
+  trackingHint: 'Turn on location tracking for advice that fits where you are.',
+};
+
+// The one-tap correction sheet the "For you" line opens.
+export const LOCATION_CONTEXT_SHEET_COPY = {
+  changeDetails: 'Change your details',
+  title: 'Where are you now?',
+  options: {
+    indoors: 'Indoors',
+    outdoors: 'Outdoors',
+    transit: 'On the move',
+  } as Record<KnownLocationContext, string>,
+  // Under the options: where the current answer came from.
+  status: {
+    tracking: 'From your recent locations.',
+    override: 'Set by you. Lasts until you leave this spot or midnight.',
+    dailyActivity: 'From your answer "Often outdoors". Location tracking is off.',
+    none: "We can't tell right now, so the advice is general.",
+  } as Record<LocationContextSource, string>,
+  backToAutomatic: 'Back to automatic',
+  savePlace: 'Save this place as indoors',
 };
 
 // Labels of Home's side bar blocks — full words, never "Air" or "RH".

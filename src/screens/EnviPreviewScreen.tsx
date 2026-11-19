@@ -60,10 +60,13 @@ const EnviPreviewScreen: React.FC<Props> = ({ visible, onClose }) => {
               <Text style={styles.note}>
                 Heat index {s.current.heat ?? '--'}°C · AQHI {s.current.aqhi ?? '--'} — {s.note}
               </Text>
+              {/* No onOpenForYou: the "For you" line shows what Home
+                  would say, but a sample has no stay to correct. */}
               <EnviCard
                 current={s.current}
                 peakLevel={s.peakLevel}
                 nowMs={s.nowMs}
+                advice={s.advice}
                 onOpenForecast={() => setForecastFor(s)}
                 onOpenDetails={() => setDetailsFor(s)}
               />
@@ -79,6 +82,8 @@ const EnviPreviewScreen: React.FC<Props> = ({ visible, onClose }) => {
           current={detailsFor.current}
           peakLevel={detailsFor.peakLevel}
           liveAdvice={detailsFor.liveAdvice}
+          advice={detailsFor.advice}
+          trackingOn={detailsFor.trackingOn}
           nowMs={detailsFor.nowMs}
         />
       )}

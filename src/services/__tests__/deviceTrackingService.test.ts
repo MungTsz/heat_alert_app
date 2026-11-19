@@ -21,6 +21,7 @@ import BackgroundGeolocation, {
 import {
   handleTrackingHeadlessEvent,
   toIngestablePings,
+  toLocationFixes,
 } from '../deviceTrackingService';
 import { EXPOSURE_TRACKING_CONFIG } from '../../config/exposureTrackingConfig';
 
@@ -95,5 +96,52 @@ describe('toIngestablePings', () => {
       location({ mock: true, timestamp: '2026-08-29T16:10:00.000Z' }),
     ]);
     expect(pings.map(p => p.properties.time)).toEqual(['2026-08-29T16:10:00.000Z']);
+  });
+});
+
+describe('toLocationFixes', () => {
+  const since = Date.parse('2026-08-29T15:55:00.000Z');
+  const withAccuracy = (accuracy: number, timestamp: string) =>
+    location({
+      timestamp,
+      coords: { latitude: 22.3399579, longitude: 114.2632457, accuracy } as Location['coords'],
+    });
+
+  it('keeps recent fixes, oldest first, with their accuracy', () => {
+    expect(
+      toLocationFixes(
+        [
+          withAccuracy(12, '2026-08-29T16:05:00.000Z'),
+          withAccuracy(30, '2026-08-29T16:00:00.000Z'),
+          withAccuracy(5, '2026-08-29T15:50:00.000Z'),
+        ],
+        since,
+      ),
+    ).toEqual([
+      {
+        timeMs: Date.parse('2026-08-29T16:00:00.000Z'),
+        latitude: 22.3399579,
+        longitude: 114.2632457,
+        accuracyMeters: 30,
+      },
+      {
+        timeMs: Date.parse('2026-08-29T16:05:00.000Z'),
+        latitude: 22.3399579,
+        longitude: 114.2632457,
+        accuracyMeters: 12,
+      },
+    ]);
+  });
+
+  it('drops transient samples and reads an unknown accuracy (-1) as null', () => {
+    const fixes = toLocationFixes(
+      [
+        location({ sample: true }),
+        withAccuracy(-1, '2026-08-29T16:10:00.000Z'),
+      ],
+      since,
+    );
+    expect(fixes).toHaveLength(1);
+    expect(fixes[0].accuracyMeters).toBeNull();
   });
 });

@@ -12,26 +12,32 @@ Detailed recommendations: hidden
 ## Warm summer day (heat 30, AQHI 2)
 Index: 2 Moderate
 Line: Air quality is good, but it's warm.
+For you: General adult
 Tiles: Drink water · Rest in shade
 Detailed recommendations: shown
 Health risk: Tiredness possible
+Based on: General adult
 - Drink water regularly, before you feel thirsty.
 - Take breaks in the shade if you're active outdoors.
 
 ## Level tie in winter (heat 30, AQHI 5)
 Index: 2 Moderate
 Line: Air quality is fair and it's warm.
+For you: General adult
 Tiles: Watch symptoms
 Detailed recommendations: shown
 Health risk: Mild risk
+Based on: General adult
 - If you have a heart or lung condition, ease off outdoors when you notice symptoms.
 
 ## Poor air, mild heat (heat 25, AQHI 9)
 Index: 4 Very High
 Line: It's not too hot, but air quality is very poor.
+For you: General adult
 Tiles: Less exertion · Avoid busy roads · Less time outside
 Detailed recommendations: shown
 Health risk: Risk for everyone
+Based on: General adult
 - Cut down on strenuous activity outdoors.
 - Keep away from busy roads, where traffic pollution is highest.
 - Cut down the time you spend outdoors.
@@ -39,9 +45,11 @@ Health risk: Risk for everyone
 ## Dangerous heat (heat 45, AQHI 5)
 Index: 4 Very High
 Line: It's very hot and air quality is fair.
+For you: General adult
 Tiles: Avoid midday · Stay cool · Drink water
 Detailed recommendations: shown
 Health risk: Heat stroke possible
+Based on: General adult
 - Keep outdoor activity to early morning or evening, away from the hottest hours.
 - Stay somewhere cool, such as an air-conditioned room.
 - Drink water regularly, before you feel thirsty.
@@ -49,9 +57,11 @@ Health risk: Heat stroke possible
 ## Heat and poor air together (heat 35, AQHI 7)
 Index: 3 High
 Line: It's hot and air quality is poor.
-Tiles: Stay indoors · Air-con on · Windows closed
+For you: General adult
+Tiles: Stay indoors · Use air-con · Windows closed
 Detailed recommendations: shown
 Health risk: Heat exhaustion possible / Risk for sensitive groups
+Based on: General adult
 - Stay indoors as much as you can.
 - Use air conditioning to keep cool indoors.
 - Keep windows closed to keep polluted air out.
@@ -59,9 +69,11 @@ Health risk: Heat exhaustion possible / Risk for sensitive groups
 ## Extreme heat (heat 55, AQHI 2)
 Index: 5 Serious
 Line: Air quality is good, but it's dangerously hot.
+For you: General adult
 Tiles: Stay indoors · Stay cool · Drink water
 Detailed recommendations: shown
 Health risk: Heat stroke likely
+Based on: General adult
 - Stay indoors as much as you can.
 - Stay somewhere cool, such as an air-conditioned room.
 - Drink water regularly, before you feel thirsty.
@@ -69,37 +81,45 @@ Health risk: Heat stroke likely
 ## Serious air pollution (heat 25, AQHI 11)
 Index: 5 Serious
 Line: It's not too hot, but air quality is hazardous.
+For you: General adult
 Tiles: Stay indoors · Avoid exertion
 Detailed recommendations: shown
 Health risk: Serious risk
+Based on: General adult
 - Stay indoors as much as you can.
 - Avoid strenuous activity, indoors or out.
 
 ## Today's peak, next level up (heat 30, AQHI 2)
 Index: 2 Moderate · today's peak 3
 Line: Air quality is good, but it's warm.
+For you: General adult
 Tiles: Drink water · Rest in shade
 Detailed recommendations: shown
 Health risk: Tiredness possible
+Based on: General adult
 - Drink water regularly, before you feel thirsty.
 - Take breaks in the shade if you're active outdoors.
 
 ## Today's peak, later (heat 30, AQHI 2)
 Index: 2 Moderate · today's peak 4
 Line: Air quality is good, but it's warm.
+For you: General adult
 Tiles: Drink water · Rest in shade
 Detailed recommendations: shown
 Health risk: Tiredness possible
+Based on: General adult
 - Drink water regularly, before you feel thirsty.
 - Take breaks in the shade if you're active outdoors.
 
 ## Live heat alert at your location (heat 45, AQHI 2)
 Index: 4 Very High
 Line: Air quality is good, but it's very hot.
+For you: General adult
 Tiles: Avoid midday · Stay cool · Drink water
 Detailed recommendations: shown
 Health risk: Heat stroke possible
-For you: Drink water, keep outdoor activity to early morning or evening, and watch for dizziness, headache or nausea.
+Based on: General adult
+Alert advice: Drink water, keep outdoor activity to early morning or evening, and watch for dizziness, headache or nausea.
 - Keep outdoor activity to early morning or evening, away from the hottest hours.
 - Stay somewhere cool, such as an air-conditioned room.
 - Drink water regularly, before you feel thirsty.
@@ -107,9 +127,11 @@ For you: Drink water, keep outdoor activity to early morning or evening, and wat
 ## Air quality unavailable (heat 35, AQHI --)
 Index: 3 High
 Line: It's hot.
+For you: General adult
 Tiles: Drink water · Rest in shade · Avoid midday
 Detailed recommendations: shown
 Health risk: Heat exhaustion possible
+Based on: General adult
 - Drink water regularly, before you feel thirsty.
 - Take breaks in the shade if you're active outdoors.
 - Keep outdoor activity to early morning or evening, away from the hottest hours.
@@ -119,5 +141,227 @@ Index: --
 Line: (none)
 Tiles: (none)
 Detailed recommendations: hidden
+
+## Dangerous heat, at a saved place (heat 45, AQHI 2)
+Index: 4 Very High
+Line: Air quality is good, but it's very hot.
+For you: General adult · Indoors now
+Tiles: Use air-con · Drink water · Avoid midday outings
+Detailed recommendations: shown
+Health risk: Heat stroke possible
+Based on: General adult · Indoors now
+- Use air conditioning to keep cool indoors.
+- Drink water regularly, before you feel thirsty.
+- If you need to go out, go in the early morning or evening, not the hottest hours.
+
+## Dangerous heat, outdoors (heat 45, AQHI 2)
+Index: 4 Very High
+Line: Air quality is good, but it's very hot.
+For you: General adult · Outdoors now
+Tiles: Move to shade · Drink water · Slow down
+Detailed recommendations: shown
+Health risk: Heat stroke possible
+Based on: General adult · Outdoors now
+- Get out of the sun and into the shade now.
+- Drink water regularly, before you feel thirsty.
+- Take it slower and cut down on effort until you are somewhere cooler.
+
+## Dangerous heat, on the move (heat 45, AQHI 2)
+Index: 4 Very High
+Line: Air quality is good, but it's very hot.
+For you: General adult · On the move
+Tiles: Carry water · Wait indoors · Rest if unwell
+Detailed recommendations: shown
+Health risk: Heat stroke possible
+Based on: General adult · On the move
+- Take water with you and sip it on the way.
+- Wait indoors, such as in a station or shop, rather than out in the heat.
+- If you feel dizzy, sick or very tired, stop and rest somewhere cool.
+
+## Dangerous heat, tracking off (heat 45, AQHI 2)
+Index: 4 Very High
+Line: Air quality is good, but it's very hot.
+For you: General adult
+Tiles: Avoid midday · Stay cool · Drink water
+Detailed recommendations: shown
+Health risk: Heat stroke possible
+Based on: General adult
+- Keep outdoor activity to early morning or evening, away from the hottest hours.
+- Stay somewhere cool, such as an air-conditioned room.
+- Drink water regularly, before you feel thirsty.
+Bottom: Turn on location tracking for advice that fits where you are.
+
+## Hot, "Often outdoors", tracking off (heat 35, AQHI 2)
+Index: 3 High
+Line: Air quality is good, but it's hot.
+For you: General adult · Often outdoors
+Tiles: Rest in shade · Drink water · Slow down
+Detailed recommendations: shown
+Health risk: Heat exhaustion possible
+Based on: General adult · Often outdoors
+- Take breaks in the shade if you're active outdoors.
+- Drink water regularly, before you feel thirsty.
+- Take it slower and cut down on effort until you are somewhere cooler.
+Bottom: Turn on location tracking for advice that fits where you are.
+
+## Corrected to indoors (heat 35, AQHI 2)
+Index: 3 High
+Line: Air quality is good, but it's hot.
+For you: General adult · Indoors now
+Tiles: Keep rooms cool · Drink water · Avoid midday outings
+Detailed recommendations: shown
+Health risk: Heat exhaustion possible
+Based on: General adult · Indoors now
+- Keep the room cool: draw the curtains against the sun, and use a fan or air-con.
+- Drink water regularly, before you feel thirsty.
+- If you need to go out, go in the early morning or evening, not the hottest hours.
+
+## Heat and poor air, on the move (heat 35, AQHI 7)
+Index: 3 High
+Line: It's hot and air quality is poor.
+For you: General adult · On the move
+Tiles: Air-con, windows up · Carry water · Head indoors
+Detailed recommendations: shown
+Health risk: Heat exhaustion possible / Risk for sensitive groups
+Based on: General adult · On the move
+- In a vehicle, keep the windows closed and the air-con on.
+- Take water with you and sip it on the way.
+- Go indoors as soon as you reach where you are going.
+
+## Asthma, poor air (heat 25, AQHI 7)
+Index: 3 High
+Line: It's not too hot, but air quality is poor.
+For you: Asthma
+Tiles: Less exertion · Avoid busy roads · Carry inhaler
+Detailed recommendations: shown
+Health risk: Risk for sensitive groups
+Based on: Asthma
+- Cut down on strenuous activity outdoors.
+- Keep away from busy roads, where traffic pollution is highest.
+- Keep your reliever inhaler with you, and follow your asthma plan if symptoms start.
+
+## Heart or lung condition, hot (heat 35, AQHI 2)
+Index: 3 High
+Line: Air quality is good, but it's hot.
+For you: Heart or lung condition
+Tiles: Drink water · Rest in shade · Follow care plan
+Detailed recommendations: shown
+Health risk: Heat exhaustion possible
+Based on: Heart or lung condition
+- Drink water regularly, before you feel thirsty.
+- Take breaks in the shade if you're active outdoors.
+- Follow the care plan from your doctor or nurse, and get help if you feel worse than usual.
+
+## Pregnant, warm, at home (heat 30, AQHI 2)
+Index: 2 Moderate
+Line: Air quality is good, but it's warm.
+For you: Pregnant · Indoors now
+Tiles: Drink water · Keep rooms cool · Rest often
+Detailed recommendations: shown
+Health risk: Tiredness possible
+Based on: Pregnant · Indoors now
+- Drink water regularly, before you feel thirsty.
+- Keep the room cool: draw the curtains against the sun, and use a fan or air-con.
+- Take regular breaks, keep cool and drink water.
+
+## Older adult, hot, outdoors (heat 35, AQHI 2)
+Index: 3 High
+Line: Air quality is good, but it's hot.
+For you: Older adult · Outdoors now
+Tiles: Rest in shade · Drink before thirsty · Slow down
+Detailed recommendations: shown
+Health risk: Heat exhaustion possible
+Based on: Older adult · Outdoors now
+- Take breaks in the shade if you're active outdoors.
+- Drink water regularly; don't wait until you feel thirsty.
+- Take it slower and cut down on effort until you are somewhere cooler.
+
+## Other long-term condition, poor air only (heat 25, AQHI 9)
+Index: 4 Very High
+Line: It's not too hot, but air quality is very poor.
+For you: Long-term condition
+Tiles: Less exertion · Avoid busy roads · Less time outside
+Detailed recommendations: shown
+Health risk: Risk for everyone
+Based on: Long-term condition
+- Cut down on strenuous activity outdoors.
+- Keep away from busy roads, where traffic pollution is highest.
+- Cut down the time you spend outdoors.
+
+## Regular medicine, hot (heat 35, AQHI 2)
+Index: 3 High
+Line: Air quality is good, but it's hot.
+For you: General adult
+Tiles: Drink water · Rest in shade · Keep medicine cool
+Detailed recommendations: shown
+Health risk: Heat exhaustion possible
+Based on: General adult · Regular medicine
+- Drink water regularly, before you feel thirsty.
+- Take breaks in the shade if you're active outdoors.
+- Store your medicines somewhere cool, out of the sun and hot cars.
+Ask your doctor or pharmacist whether your medicine affects you in hot weather.
+
+## Several answers at once (heat 45, AQHI 2)
+Index: 4 Very High
+Line: Air quality is good, but it's very hot.
+For you: Asthma +1 · Indoors now
+Tiles: Use air-con · Drink water · Carry inhaler
+Detailed recommendations: shown
+Health risk: Heat stroke possible
+Based on: Asthma, Older adult · Regular medicine · Indoors now
+- Use air conditioning to keep cool indoors.
+- Drink water regularly; don't wait until you feel thirsty.
+- Keep your reliever inhaler with you, and follow your asthma plan if symptoms start.
+- Store your medicines somewhere cool, out of the sun and hot cars.
+Ask your doctor or pharmacist whether your medicine affects you in hot weather.
+
+## Pregnant, outdoors, dangerous heat (heat 45, AQHI 2)
+Index: 4 Very High
+Line: Air quality is good, but it's very hot.
+For you: Pregnant · Outdoors now
+Tiles: Go indoors soon · Drink water · Rest often
+Detailed recommendations: shown
+Health risk: Heat stroke possible
+Based on: Pregnant · Outdoors now
+- These conditions are riskier for you outdoors, so head indoors soon.
+- Drink water regularly, before you feel thirsty.
+- Take regular breaks, keep cool and drink water.
+
+## Asthma, outdoors, very poor air (heat 25, AQHI 9)
+Index: 4 Very High
+Line: It's not too hot, but air quality is very poor.
+For you: Asthma · Outdoors now
+Tiles: Go indoors soon · Avoid busy roads · Carry inhaler
+Detailed recommendations: shown
+Health risk: Risk for everyone
+Based on: Asthma · Outdoors now
+- These conditions are riskier for you outdoors, so head indoors soon.
+- Keep away from busy roads, where traffic pollution is highest.
+- Keep your reliever inhaler with you, and follow your asthma plan if symptoms start.
+
+## Family place: Mum's home (heat 45, AQHI 2)
+Index: 4 Very High
+Line: Air quality is good, but it's very hot.
+For them: Older adult
+Tiles: Avoid midday · Stay cool · Drink before thirsty
+Detailed recommendations: shown
+Health risk: Heat stroke possible
+Based on: Older adult · Regular medicine
+- Remind them to keep outdoor activity to early morning or evening, away from the hottest hours.
+- Make sure they stay somewhere cool, such as an air-conditioned room.
+- Make sure they drink water regularly, without waiting until they're thirsty.
+- Remind them to keep their medicines somewhere cool, out of the sun.
+They can ask their doctor or pharmacist whether their medicine affects them in hot weather.
+
+## Family place: a child (heat 30, AQHI 2)
+Index: 2 Moderate
+Line: Air quality is good, but it's warm.
+For them: Child
+Tiles: Drink before thirsty · Rest in shade
+Detailed recommendations: shown
+Health risk: Tiredness possible
+Based on: Child
+- Make sure they drink water regularly, without waiting until they're thirsty.
+- Remind them to take breaks in the shade if they're active outdoors.
 "
 `;

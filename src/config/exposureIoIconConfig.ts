@@ -10,6 +10,7 @@ import {
   TrainFront,
 } from 'lucide-react-native';
 import { ExposureIo } from '../types/exposure';
+import { KnownLocationContext } from '../types/envi';
 
 // Per-io icons, next to (not inside) EXPOSURE_IO_CONFIG: pure utils such as
 // the hourly-row adapter import that config for normalizeExposureIo, and
@@ -32,4 +33,12 @@ export const EXPOSURE_IO_ICONS: Record<ExposureIo, LucideIcon> = {
   School: GraduationCap,
   Office: Briefcase,
   Home: House,
+};
+
+// Home's "Where are you now?" choices wear the Exposure tab's icons for the
+// same idea, so indoors / outdoors / on the move look alike everywhere.
+export const LOCATION_CONTEXT_ICONS: Record<KnownLocationContext, LucideIcon> = {
+  indoors: EXPOSURE_IO_ICONS['Other Indoor'],
+  outdoors: EXPOSURE_IO_ICONS.Outdoor,
+  transit: EXPOSURE_IO_ICONS.Vehicle,
 };

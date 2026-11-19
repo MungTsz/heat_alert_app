@@ -4,11 +4,17 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Linking } from 'r
 import ForecastSheet from './ForecastSheet';
 import EnviBand from './EnviBand';
 import EnviLevelSquare from './EnviLevelSquare';
-import { ENVI_ACTION_COPY, ENVI_COPY, OFFICIAL_LINKS } from '../config/alertCopy';
+import { ENVI_COPY, ENVI_FOR_YOU_COPY, OFFICIAL_LINKS } from '../config/alertCopy';
 import { ENVI_ACTION_ICONS, ENVI_WARNING_ICON } from '../config/enviKeywordIcons';
 import { ENVI_TONES } from '../config/enviConfig';
 import { HazardReadings, getEnviLevel, getEnviLevelInfo } from '../utils/enviUtils';
-import { enviKeywordsFor } from '../utils/enviKeywords';
+import {
+  EnviAdviceFor,
+  GENERAL_ADVICE_FOR,
+  enviActionSentence,
+  enviKeywordsFor,
+} from '../utils/enviKeywords';
+import { basedOnFor } from '../utils/enviForYou';
 import { enviSummaryFor } from '../utils/enviSummary';
 
 type Props = {
@@ -18,6 +24,12 @@ type Props = {
   peakLevel: number | null;
   // A live alert's personalised advice (utils/homeAdvice); null = none.
   liveAdvice: string | null;
+  // Who the advice is for and where they are, as on the card. Left out:
+  // the general advice, with no "Based on".
+  advice?: EnviAdviceFor;
+  // false adds the one quiet line suggesting location tracking (only here,
+  // never a pop-up). Left out: no line.
+  trackingOn?: boolean;
   // Settles a tie by season; left out on Home (now), set by the dev preview.
   nowMs?: number;
 };
@@ -29,9 +41,13 @@ const TONE = ENVI_TONES.sheet;
 // 1. the same square, level name and band as the card;
 // 2. what it means: what the index is, and the card's plain-language line;
 // 3. the health risk at this level;
-// 4. recommended actions as full sentences, led during a live alert by that
-//    alert's own advice for the user;
-// 5. the official HKO and EPD pages.
+// 4. recommended actions as full sentences: "Based on: …" first, led during
+//    a live alert by that alert's own advice for the user, then the card's
+//    tiles, every other tip for this person, and for regular medicine the
+//    "ask your doctor or pharmacist" line;
+// 5. the official HKO and EPD pages;
+// 6. with tracking off, one line saying it would fit the advice to where
+//    the user is.
 // Built on ForecastSheet, a Modal with onRequestClose, so Android's back
 // button closes it first.
 const EnviDetailSheet: React.FC<Props> = ({
@@ -40,12 +56,16 @@ const EnviDetailSheet: React.FC<Props> = ({
   current,
   peakLevel,
   liveAdvice,
+  advice,
+  trackingOn,
   nowMs,
 }) => {
   const level = getEnviLevel(current);
   const info = level === null ? null : getEnviLevelInfo(level);
   const summary = enviSummaryFor(current, nowMs);
-  const { warnings, actions } = enviKeywordsFor(current, nowMs);
+  const adviceFor = advice ?? GENERAL_ADVICE_FOR;
+  const { warnings, sheetActions, medicineNote } = enviKeywordsFor(current, nowMs, adviceFor);
+  const hasAdvice = liveAdvice !== null || sheetActions.length > 0;
 
   return (
     <ForecastSheet visible={visible} title={ENVI_COPY.recommendationsTitle} onClose={onClose}>
@@ -81,19 +101,27 @@ const EnviDetailSheet: React.FC<Props> = ({
           </>
         )}
 
-        {(liveAdvice !== null || actions.length > 0) && (
+        {hasAdvice && (
           <>
             <Text style={styles.heading}>{ENVI_COPY.adviceHeading}</Text>
+            {/* Only when the advice is personal; at level 1 everyone gets
+                the same calm tile. */}
+            {advice && level !== null && level > 1 && (
+              <Text style={styles.basedOn}>{basedOnFor(advice)}</Text>
+            )}
             {liveAdvice !== null && <Text style={styles.liveAdvice}>{liveAdvice}</Text>}
-            {actions.map(id => {
+            {sheetActions.map(id => {
               const Icon = ENVI_ACTION_ICONS[id];
               return (
                 <View key={id} style={styles.row}>
                   <Icon size={18} color={TONE.marker} />
-                  <Text style={styles.rowText}>{ENVI_ACTION_COPY[id].sentence}</Text>
+                  <Text style={styles.rowText}>{enviActionSentence(id, adviceFor.caringFor)}</Text>
                 </View>
               );
             })}
+            {medicineNote && (
+              <Text style={styles.body}>{ENVI_FOR_YOU_COPY.medicineNote[adviceFor.caringFor]}</Text>
+            )}
           </>
         )}
 
@@ -107,6 +135,10 @@ const EnviDetailSheet: React.FC<Props> = ({
             <Text style={styles.link}>{link.label}</Text>
           </TouchableOpacity>
         ))}
+
+        {trackingOn === false && adviceFor.caringFor === 'self' && (
+          <Text style={styles.trackingHint}>{ENVI_FOR_YOU_COPY.trackingHint}</Text>
+        )}
       </ScrollView>
     </ForecastSheet>
   );
@@ -137,7 +169,17 @@ const styles = StyleSheet.create({
   },
   row: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 8 },
   rowText: { flex: 1, fontSize: 14, lineHeight: 20, color: '#333' },
+  basedOn: { fontSize: 13, lineHeight: 18, color: TONE.mutedText, marginBottom: 8 },
   link: { fontSize: 14, color: '#1E66D0', paddingVertical: 4 },
+  trackingHint: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: TONE.mutedText,
+    marginTop: 18,
+    paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#DDD',
+  },
 });
 
 export default EnviDetailSheet;

@@ -6,6 +6,7 @@ import BackgroundGeolocation, {
 } from 'react-native-background-geolocation';
 import { EXPOSURE_TRACKING_CONFIG } from '../config/exposureTrackingConfig';
 import { GeoJsonPointFeature } from '../types/exposure';
+import type { LocationFix } from '../utils/locationContext';
 
 // The user's opt-in for background tracking (see useExposureTrackingSettings).
 export const TRACKING_ENABLED_STORAGE_KEY = 'exposure_tracking_enabled';
@@ -136,6 +137,37 @@ export const toGeoJsonPing = (location: Location): GeoJsonPointFeature => ({
 // Fake-GPS (`mock`) locations are kept, matching the backend's old behavior.
 export const toIngestablePings = (locations: Location[]): GeoJsonPointFeature[] =>
   locations.filter(location => !location.sample).map(toGeoJsonPing);
+
+// Recorded locations from sinceMs on, as plain fixes for
+// utils/locationContext (oldest first). `sample` reads are dropped as for
+// ingest; the plugin reports an unknown accuracy as -1, kept as null.
+export const toLocationFixes = (locations: Location[], sinceMs: number): LocationFix[] =>
+  locations
+    .filter(location => !location.sample)
+    .map(location => ({
+      timeMs: new Date(location.timestamp).getTime(),
+      latitude: location.coords.latitude,
+      longitude: location.coords.longitude,
+      accuracyMeters: location.coords.accuracy >= 0 ? location.coords.accuracy : null,
+    }))
+    .filter(fix => fix.timeMs >= sinceMs)
+    .sort((a, b) => a.timeMs - b.timeMs);
+
+// The last lookbackMs of tracked positions — what Home judges "where am I
+// now" from. Never throws: no positions simply means "unknown".
+export const getRecentFixes = async (
+  lookbackMs: number,
+  nowMs: number = Date.now(),
+): Promise<LocationFix[]> => {
+  try {
+    await configure();
+    const locations = (await BackgroundGeolocation.getLocations()) as Location[];
+    return toLocationFixes(locations, nowMs - lookbackMs);
+  } catch (error) {
+    console.log('Failed to read recent positions:', error);
+    return [];
+  }
+};
 
 // Reads back everything the library has recorded since local midnight — it
 // persists locations itself, so no separate AsyncStorage log is needed.

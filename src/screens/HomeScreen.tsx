@@ -43,14 +43,22 @@ import { useHeatConditions } from '../hooks/useHeatData';
 import { useActiveAlerts } from '../hooks/useActiveAlerts';
 import { useNotificationSettings } from '../hooks/useNotificationSettings';
 import { useMapPlacePins } from '../hooks/useMapPlacePins';
+import { useBookmarkList } from '../hooks/useBookmarkList';
+import { useLocationContext } from '../hooks/useLocationContext';
 import { useHomeInfoBar } from '../hooks/useHomeInfoBar';
 import HomeAlertBanner from '../components/alerts/HomeAlertBanner';
+import AlertProfileSheet from '../components/alerts/AlertProfileSheet';
+import LocationContextSheet from '../components/LocationContextSheet';
+import AddBookmarkModal from '../components/AddBookmarkModal';
+import { ABOUT_YOU_COPY, PERSON_SUMMARY_COPY } from '../config/alertCopy';
 import { CURRENT_LOCATION_PLACE_ID } from '../config/alertConfig';
 import { HOME_LAYOUT_CONFIG } from '../config/homeLayoutConfig';
 import { DEFAULT_MAP_LAYER_CONFIG } from '../config/mapLayerConfig';
 import { isPraiseConfigured } from '../config/praiseConfig';
 import { pickForecastHazard } from '../utils/forecastHazard';
 import { homeAdviceFor } from '../utils/homeAdvice';
+import { personOf, summarizeDailyLife, summarizeIdentities } from '../utils/alertProfile';
+import { EnviAdviceFor } from '../utils/enviKeywords';
 import { HazardReadings, getEnviLevel } from '../utils/enviUtils';
 import { todaysPeakLevel } from '../utils/enviPeak';
 import { openPlace } from '../services/navigationBus';
@@ -111,11 +119,31 @@ const HomeScreen = () => {
   // With an alert measured NOW (a heads-up is about later, and has its
   // banner), its own advice — voiced for the owner's About you answer —
   // leads the detail sheet. The card itself doesn't change.
-  const aboutYou = useNotificationSettings().settings.currentLocationProfile;
+  const { settings: notificationSettings, update: updateNotificationSettings } =
+    useNotificationSettings();
+  const aboutYou = notificationSettings.currentLocationProfile;
   const liveAdvice = homeAdviceFor({
     liveAlerts: locationAlerts.filter(b => b.kind === 'now'),
     aboutYou,
   });
+
+  // Saved places: map pins, and the indoor circles "where am I now" is
+  // judged against. One list, so a place saved from the correction sheet
+  // counts at once.
+  const { bookmarks, addBookmark } = useBookmarkList();
+  const located = useLocationContext({
+    places: bookmarks,
+    dailyActivity: aboutYou.dailyActivity,
+    fallbackPosition: coords,
+  });
+  // Who the card's words are for (About you) and where they are now. Only
+  // the advice changes with it — never the index number or colour.
+  const enviAdvice: EnviAdviceFor = {
+    person: personOf(aboutYou),
+    caringFor: 'self',
+    context: located.context,
+    source: located.source,
+  };
 
   // The hazard the forecast sheet opens on: the one setting the index (or
   // the season's on a tie; heat without PRAISE).
@@ -125,7 +153,7 @@ const HomeScreen = () => {
     nowMs: Date.now(),
   });
   // Saved places on the map — fetched once here for both maps.
-  const placePins = useMapPlacePins();
+  const placePins = useMapPlacePins(bookmarks);
 
   const [contentAboveHeight, setContentAboveHeight] = useState(0);
   const onContentAboveLayout = useCallback((e: LayoutChangeEvent) => {
@@ -152,6 +180,10 @@ const HomeScreen = () => {
   const [enviPreviewOpen, setEnviPreviewOpen] = useState(false);
   const [mapFullscreen, setMapFullscreen] = useState(false);
   const [heatExplainerOpen, setHeatExplainerOpen] = useState(false);
+  // The "For you" line's correction sheet, and the two things it leads to.
+  const [forYouOpen, setForYouOpen] = useState(false);
+  const [editingAboutYou, setEditingAboutYou] = useState(false);
+  const [savingPlace, setSavingPlace] = useState(false);
 
   // The side bar's four blocks (the same builder as the map's point card).
   // Only the two hazards open a forecast; Temp and Humidity are read-only.
@@ -230,6 +262,8 @@ const HomeScreen = () => {
             peakLevel={peakLevel}
             onOpenForecast={() => setEnviForecastOpen(true)}
             onOpenDetails={() => setEnviSheetOpen(true)}
+            advice={enviAdvice}
+            onOpenForYou={() => setForYouOpen(true)}
             onLongPressIndex={__DEV__ ? () => setEnviPreviewOpen(true) : undefined}
           />
 
@@ -272,6 +306,61 @@ const HomeScreen = () => {
         current={currentReadings}
         peakLevel={peakLevel}
         liveAdvice={liveAdvice}
+        advice={enviAdvice}
+        trackingOn={located.trackingOn}
+      />
+
+      <LocationContextSheet
+        visible={forYouOpen}
+        onClose={() => setForYouOpen(false)}
+        context={located.context}
+        source={located.source}
+        onPick={context => {
+          located.setOverride(context);
+          // The advice changes at once — closing shows it on the card.
+          setForYouOpen(false);
+        }}
+        onBackToAutomatic={() => {
+          located.clearOverride();
+          setForYouOpen(false);
+        }}
+        detailsSummary={[summarizeIdentities(aboutYou.identities), summarizeDailyLife(aboutYou)].join(
+          PERSON_SUMMARY_COPY.partSeparator,
+        )}
+        onChangeDetails={() => {
+          setForYouOpen(false);
+          setEditingAboutYou(true);
+        }}
+        onSavePlace={() => {
+          setForYouOpen(false);
+          setSavingPlace(true);
+        }}
+      />
+
+      {/* The same About you sheet as the Alerts tab's row. */}
+      {editingAboutYou && (
+        <AlertProfileSheet
+          title={ABOUT_YOU_COPY.sheetTitle}
+          initialProfile={aboutYou}
+          onSave={currentLocationProfile => {
+            // Saving here answers the first-launch question too.
+            updateNotificationSettings({ currentLocationProfile, aboutYouConfirmed: true });
+            setEditingAboutYou(false);
+          }}
+          onCancel={() => setEditingAboutYou(false)}
+        />
+      )}
+
+      {/* The usual Add place flow, its map starting where the phone is now.
+          Every place category is an indoor one, so a saved place makes the
+          next "where am I" here say indoors — for Exposure too. */}
+      <AddBookmarkModal
+        visible={savingPlace}
+        onClose={() => setSavingPlace(false)}
+        existingPlaces={bookmarks}
+        currentLocation={coords}
+        initialCenter={located.position ?? undefined}
+        onAdd={addBookmark}
       />
 
       <EnviForecastSheet
