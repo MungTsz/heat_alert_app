@@ -4,16 +4,11 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Linking } from 'r
 import ForecastSheet from './ForecastSheet';
 import EnviBand from './EnviBand';
 import EnviLevelSquare from './EnviLevelSquare';
-import { ENVI_COPY, ENVI_FOR_YOU_COPY, OFFICIAL_LINKS } from '../config/alertCopy';
+import { ENVI_ACTION_COPY, ENVI_COPY, ENVI_FOR_YOU_COPY, OFFICIAL_LINKS } from '../config/alertCopy';
 import { ENVI_ACTION_ICONS, ENVI_WARNING_ICON } from '../config/enviKeywordIcons';
 import { ENVI_TONES } from '../config/enviConfig';
 import { HazardReadings, getEnviLevel, getEnviLevelInfo } from '../utils/enviUtils';
-import {
-  EnviAdviceFor,
-  GENERAL_ADVICE_FOR,
-  enviActionSentence,
-  enviKeywordsFor,
-} from '../utils/enviKeywords';
+import { EnviAdviceFor, GENERAL_ADVICE_FOR, enviKeywordsFor } from '../utils/enviKeywords';
 import { basedOnFor } from '../utils/enviForYou';
 import { enviSummaryFor } from '../utils/enviSummary';
 
@@ -115,12 +110,12 @@ const EnviDetailSheet: React.FC<Props> = ({
               return (
                 <View key={id} style={styles.row}>
                   <Icon size={18} color={TONE.marker} />
-                  <Text style={styles.rowText}>{enviActionSentence(id, adviceFor.caringFor)}</Text>
+                  <Text style={styles.rowText}>{ENVI_ACTION_COPY[id].sentence}</Text>
                 </View>
               );
             })}
             {medicineNote && (
-              <Text style={styles.body}>{ENVI_FOR_YOU_COPY.medicineNote[adviceFor.caringFor]}</Text>
+              <Text style={styles.body}>{ENVI_FOR_YOU_COPY.medicineNote}</Text>
             )}
           </>
         )}
@@ -136,7 +131,7 @@ const EnviDetailSheet: React.FC<Props> = ({
           </TouchableOpacity>
         ))}
 
-        {trackingOn === false && adviceFor.caringFor === 'self' && (
+        {trackingOn === false && (
           <Text style={styles.trackingHint}>{ENVI_FOR_YOU_COPY.trackingHint}</Text>
         )}
       </ScrollView>

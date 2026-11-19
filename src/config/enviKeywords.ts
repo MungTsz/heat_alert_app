@@ -92,9 +92,10 @@ export const ENVI_DUAL_ACTIONS: ContextActions = {
 // Environmental Index 1: one tile, nothing to warn about, for everyone.
 export const ENVI_CALM_ACTIONS: readonly EnviActionId[] = ['enjoyOutdoors'];
 
-// Who a person tip is for: one of the About you identities, or anyone who
-// takes regular medicine.
-export type EnviTipAudience = IdentityGroup | 'medicine';
+// Who a person tip is for: one of the owner's About you identities, or an
+// owner who takes regular medicine. Never "Child": that answer exists only
+// for a family place's alerts, and the card always advises the owner.
+export type EnviTipAudience = Exclude<IdentityGroup, 'child'> | 'medicine';
 
 export type EnviPersonTip = {
   audience: EnviTipAudience;
@@ -109,14 +110,12 @@ export type EnviPersonTip = {
 // Tips for particular people, in priority order: the card shows only the
 // first that applies (in place of the general set's last tile), the
 // recommendations sheet lists them all. The same order picks which
-// identity the "For you" line names. Children (family places only) get the
-// same tip at the same level as older adults.
+// identity the "For you" line names.
 export const ENVI_PERSON_TIPS: readonly EnviPersonTip[] = [
   { audience: 'asthma', action: 'carryInhaler', minLevel: { heat: 3, aqhi: 3 } },
   { audience: 'heartLung', action: 'followCarePlan', minLevel: { heat: 3, aqhi: 3 } },
   { audience: 'pregnant', action: 'restOften', minLevel: { heat: 2 } },
   { audience: 'older', action: 'drinkBeforeThirsty', minLevel: { heat: 2 }, refines: 'drinkWater' },
-  { audience: 'child', action: 'drinkBeforeThirsty', minLevel: { heat: 2 }, refines: 'drinkWater' },
   { audience: 'otherChronic', action: 'followCarePlan', minLevel: { heat: 3 } },
   { audience: 'medicine', action: 'keepMedicineCool', minLevel: { heat: 3 } },
 ];

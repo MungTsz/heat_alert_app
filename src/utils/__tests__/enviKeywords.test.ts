@@ -1,9 +1,4 @@
-import {
-  EnviAdviceFor,
-  GENERAL_ADVICE_FOR,
-  enviActionSentence,
-  enviKeywordsFor,
-} from '../enviKeywords';
+import { EnviAdviceFor, GENERAL_ADVICE_FOR, enviKeywordsFor } from '../enviKeywords';
 import { HAZARD_LEVELS } from '../hazardLevels';
 import { DEFAULT_ALERT_PERSON, HAZARD_KINDS } from '../../config/alertConfig';
 import { ENVI_ACTION_COPY, ENVI_WARNING_COPY } from '../../config/alertCopy';
@@ -45,10 +40,8 @@ const WINTER = hkNoon(1);
 const adviceFor = (
   person: Partial<AlertPerson> = {},
   context: LocationContext = 'unknown',
-  caringFor: EnviAdviceFor['caringFor'] = 'self',
 ): EnviAdviceFor => ({
   person: { ...DEFAULT_ALERT_PERSON, ...person },
-  caringFor,
   context,
   source: context === 'unknown' ? 'none' : 'tracking',
 });
@@ -62,7 +55,6 @@ describe('enviKeywordsFor — general advice', () => {
       actions: [],
       sheetActions: [],
       medicineNote: false,
-      context: 'unknown',
     });
   });
 
@@ -156,13 +148,12 @@ describe('enviKeywordsFor — where you are', () => {
     });
   });
 
-  it('judges a family place as unknown whatever it is given', () => {
-    const family = adviceFor(who('older'), 'outdoors', 'family');
-    const result = enviKeywordsFor({ heat: 45, aqhi: 2 }, SUMMER, family);
-    expect(result.context).toBe('unknown');
-    // The general Danger set, Drink water said the older adult's way — and
-    // no "Go indoors soon", which needs someone known to be outdoors.
-    expect(result.actions).toEqual(['avoidMidday', 'stayCool', 'drinkBeforeThirsty']);
+  it('advises the owner wherever they are — at Mum’s home it is the owner’s indoor advice', () => {
+    // Visiting an older parent: indoors (a saved place), advice for the
+    // owner's asthma, never the older adult's "Drink before thirsty".
+    const atMums = enviKeywordsFor({ heat: 45, aqhi: 2 }, SUMMER, adviceFor(who('asthma'), 'indoors'));
+    expect(atMums.actions).toEqual(['airConOn', 'drinkWater', 'carryInhaler']);
+    expect(atMums.sheetActions).not.toContain('drinkBeforeThirsty');
   });
 });
 
@@ -183,13 +174,6 @@ describe('enviKeywordsFor — who you are', () => {
     expect(
       enviKeywordsFor({ heat: 35, aqhi: 2 }, SUMMER, adviceFor(who('older'), 'indoors')).actions,
     ).toEqual(['keepRoomsCool', 'drinkBeforeThirsty', 'avoidMiddayOutings']);
-  });
-
-  it('gives children the older-adult tip at the same level', () => {
-    const child = enviKeywordsFor({ heat: 30, aqhi: 2 }, SUMMER, adviceFor(who('child'), 'unknown', 'family'));
-    const older = enviKeywordsFor({ heat: 30, aqhi: 2 }, SUMMER, adviceFor(who('older'), 'unknown', 'family'));
-    expect(child.actions).toEqual(older.actions);
-    expect(child.actions).toContain('drinkBeforeThirsty');
   });
 
   it('puts the highest-priority tip on the card and the rest in the sheet', () => {
@@ -343,21 +327,6 @@ describe('keyword tables', () => {
     expect([...used].sort()).toEqual(Object.keys(ENVI_ACTION_COPY).sort());
   });
 
-  it('give every keyword a family place can get a "remind them" sentence', () => {
-    const familyReachable = new Set<EnviActionId>([
-      ...HAZARD_KINDS.flatMap(hazard =>
-        Object.values(ENVI_HAZARD_ACTIONS[hazard]).flatMap(byContext => byContext.unknown),
-      ),
-      ...ENVI_DUAL_ACTIONS.unknown,
-      ...ENVI_CALM_ACTIONS,
-      ...ENVI_PERSON_TIPS.map(tip => tip.action),
-    ]);
-    familyReachable.forEach(id => {
-      expect(ENVI_ACTION_COPY[id].family).toBeDefined();
-      expect(enviActionSentence(id, 'family')).not.toBe(enviActionSentence(id, 'self'));
-    });
-  });
-
   const actionIds = Object.keys(ENVI_ACTION_COPY) as EnviActionId[];
 
   it.each(actionIds)('"%s" has an icon, a short label and a sentence', id => {
@@ -368,7 +337,7 @@ describe('keyword tables', () => {
   });
 
   it('use the general advice when nothing is known', () => {
-    expect(GENERAL_ADVICE_FOR).toMatchObject({ caringFor: 'self', context: 'unknown' });
+    expect(GENERAL_ADVICE_FOR).toMatchObject({ context: 'unknown', source: 'none' });
     expect(GENERAL_ADVICE_FOR.person).toEqual(DEFAULT_ALERT_PERSON);
   });
 });

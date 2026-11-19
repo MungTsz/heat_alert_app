@@ -128,19 +128,20 @@ const HomeScreen = () => {
   });
 
   // Saved places: map pins, and the indoor circles "where am I now" is
-  // judged against. One list, so a place saved from the correction sheet
-  // counts at once.
+  // judged against — every one, whoever it is for: being at Mum's home
+  // means you are indoors. One list, so a place saved from the correction
+  // sheet counts at once.
   const { bookmarks, addBookmark } = useBookmarkList();
   const located = useLocationContext({
     places: bookmarks,
     dailyActivity: aboutYou.dailyActivity,
     fallbackPosition: coords,
   });
-  // Who the card's words are for (About you) and where they are now. Only
-  // the advice changes with it — never the index number or colour.
+  // The card always advises you: your About you answers and where you are
+  // now — never the people of the place you are at. Only the advice changes
+  // with it, never the index number or colour.
   const enviAdvice: EnviAdviceFor = {
     person: personOf(aboutYou),
-    caringFor: 'self',
     context: located.context,
     source: located.source,
   };

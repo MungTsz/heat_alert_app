@@ -1,15 +1,10 @@
 // src/utils/enviSamples.ts
 import { DEFAULT_ALERT_PERSON, DEFAULT_PLACE_ALERT_PROFILE } from '../config/alertConfig';
 import { ENVI_ACTION_COPY, ENVI_COPY, ENVI_FOR_YOU_COPY } from '../config/alertCopy';
-import { AlertPerson, CaringFor } from '../types/alerts';
+import { AlertPerson } from '../types/alerts';
 import { LocationContext, LocationContextSource } from '../types/envi';
 import { HazardReadings, getEnviLevel, getEnviLevelInfo } from './enviUtils';
-import {
-  EnviAdviceFor,
-  GENERAL_ADVICE_FOR,
-  enviActionSentence,
-  enviKeywordsFor,
-} from './enviKeywords';
+import { EnviAdviceFor, GENERAL_ADVICE_FOR, enviKeywordsFor } from './enviKeywords';
 import { basedOnFor, forYouLineFor } from './enviForYou';
 import { enviSummaryFor } from './enviSummary';
 import { homeAdviceFor } from './homeAdvice';
@@ -62,16 +57,13 @@ const sample = (
   trackingOn: extra.trackingOn ?? true,
 });
 
-// The owner (or, with caringFor 'family', a family place) as About you
-// would answer, somewhere.
+// The phone's owner, as About you would answer, somewhere.
 const forPerson = (
   person: Partial<AlertPerson>,
   context: LocationContext = 'unknown',
   source: LocationContextSource = context === 'unknown' ? 'none' : 'tracking',
-  caringFor: CaringFor = 'self',
 ): EnviAdviceFor => ({
   person: { ...DEFAULT_ALERT_PERSON, ...person },
-  caringFor,
   context,
   source,
 });
@@ -274,27 +266,14 @@ export const ENVI_SAMPLES: EnviSample[] = [
     { nowMs: WINTER, advice: forPerson({ identities: ['asthma'] }, 'outdoors') },
   ),
 
-  // A family place: never tracked, so always "unknown", in the family voice.
+  // Visiting a saved place someone else lives at: it only says where you
+  // are. The advice is still yours — your answers, never theirs.
   sample(
-    'family-place',
-    "Family place: Mum's home",
-    'Older adult on regular medicine: their tips, "remind them" wording, no "where".',
-    HEAT_DANGER,
-    {
-      advice: forPerson(
-        { identities: ['older'], takesRegularMedicine: true },
-        'outdoors',
-        'tracking',
-        'family',
-      ),
-    },
-  ),
-  sample(
-    'family-child',
-    'Family place: a child',
-    'Children get the older-adult tip at the same level.',
-    { heat: 30, aqhi: 2 },
-    { advice: forPerson({ identities: ['child'] }, 'unknown', 'none', 'family') },
+    'at-mums-home',
+    "You (asthma) at Mum's home",
+    'Mum\'s home is a saved place, so you are indoors; the advice is for you and your asthma, not for Mum.',
+    { heat: 35, aqhi: 7 },
+    { advice: forPerson({ identities: ['asthma'] }, 'indoors') },
   ),
 ];
 
@@ -324,12 +303,8 @@ export const describeEnviSample = (s: EnviSample): string => {
   if (warnings.length > 0) lines.push(`Health risk: ${warnings.join(' / ')}`);
   if (personal) lines.push(basedOnFor(s.advice));
   if (s.liveAdvice) lines.push(`Alert advice: ${s.liveAdvice}`);
-  sheetActions.forEach(id =>
-    lines.push(`- ${enviActionSentence(id, s.advice.caringFor)}`),
-  );
-  if (medicineNote) lines.push(ENVI_FOR_YOU_COPY.medicineNote[s.advice.caringFor]);
-  if (!s.trackingOn && s.advice.caringFor === 'self') {
-    lines.push(`Bottom: ${ENVI_FOR_YOU_COPY.trackingHint}`);
-  }
+  sheetActions.forEach(id => lines.push(`- ${ENVI_ACTION_COPY[id].sentence}`));
+  if (medicineNote) lines.push(ENVI_FOR_YOU_COPY.medicineNote);
+  if (!s.trackingOn) lines.push(`Bottom: ${ENVI_FOR_YOU_COPY.trackingHint}`);
   return lines.join('\n');
 };

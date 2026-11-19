@@ -1,6 +1,6 @@
 // src/utils/enviKeywords.ts
 import { DEFAULT_ALERT_PERSON, HAZARD_KINDS } from '../config/alertConfig';
-import { ENVI_ACTION_COPY, ENVI_WARNING_COPY } from '../config/alertCopy';
+import { ENVI_WARNING_COPY } from '../config/alertCopy';
 import { ENVI_CONFIG } from '../config/enviConfig';
 import {
   ENVI_CALM_ACTIONS,
@@ -12,16 +12,18 @@ import {
   ENVI_PERSON_TIPS,
   EnviPersonTip,
 } from '../config/enviKeywords';
-import { AlertPerson, CaringFor, HazardKind } from '../types/alerts';
+import { AlertPerson, HazardKind } from '../types/alerts';
 import { EnviActionId, LocationContext, LocationContextSource } from '../types/envi';
 import { levelOf } from './hazardLevels';
 import { HazardReadings, getEnviLevel, hazardLevelOf, leadHazard } from './enviUtils';
 
-// Who the advice is for and where they are. The index itself never depends
-// on any of this — only the words around it do.
+// The phone's owner — always: the card advises the person holding the
+// phone, from their About you answers and where they are right now. A saved
+// place only says where they are (at Mum's home = indoors); it never makes
+// the card advise the people who live there. The index itself never
+// depends on any of this — only the words around it do.
 export type EnviAdviceFor = {
   person: AlertPerson;
-  caringFor: CaringFor;
   context: LocationContext;
   // Where the context came from — only changes how it is worded.
   source: LocationContextSource;
@@ -30,7 +32,6 @@ export type EnviAdviceFor = {
 // Nobody in particular, nowhere in particular: the general advice.
 export const GENERAL_ADVICE_FOR: EnviAdviceFor = {
   person: DEFAULT_ALERT_PERSON,
-  caringFor: 'self',
   context: 'unknown',
   source: 'none',
 };
@@ -46,8 +47,6 @@ export type EnviKeywords = {
   sheetActions: EnviActionId[];
   // Regular medicine: the sheet's "ask your doctor or pharmacist" line.
   medicineNote: boolean;
-  // The context the advice was chosen for (family places: always unknown).
-  context: LocationContext;
 };
 
 type HazardLevels = Record<HazardKind, number | null>;
@@ -127,24 +126,16 @@ const withSheetTip = (sentences: EnviActionId[], tip: EnviPersonTip): EnviAction
 //   the shade" next to "keep windows closed".
 // - Otherwise the higher hazard's chip and tiles for where the person is;
 //   on a tie, the season's hazard (leadHazard). `nowMs` only settles that.
-// Then, for this person: someone more at risk who is outdoors from
+// Then, for the owner: someone more at risk who is outdoors from
 // ENVI_ESCALATION.minLevel gets "Go indoors soon" first; their most
 // important tip takes one tile; the rest of their tips go to the sheet.
-// A family place is always judged as 'unknown' — the app never tracks
-// other people — so its advice is the general set plus their tips.
 export const enviKeywordsFor = (
   current: HazardReadings,
   nowMs: number = Date.now(),
   advice: EnviAdviceFor = GENERAL_ADVICE_FOR,
 ): EnviKeywords => {
-  const context: LocationContext = advice.caringFor === 'family' ? 'unknown' : advice.context;
-  const none: EnviKeywords = {
-    warnings: [],
-    actions: [],
-    sheetActions: [],
-    medicineNote: false,
-    context,
-  };
+  const { person, context } = advice;
+  const none: EnviKeywords = { warnings: [], actions: [], sheetActions: [], medicineNote: false };
   const envi = getEnviLevel(current);
   if (envi === null) return none;
   if (envi === 1) {
@@ -173,7 +164,6 @@ export const enviKeywordsFor = (
   }
   actions = actions.slice(0, ENVI_KEYWORD_LIMITS.maxTiles);
 
-  const { person } = advice;
   if (context === 'outdoors' && envi >= ENVI_ESCALATION.minLevel && isMoreAtRisk(person)) {
     actions = escalate(actions);
   }
@@ -186,13 +176,5 @@ export const enviKeywordsFor = (
     sheetActions: tips.slice(1).reduce(withSheetTip, actions),
     medicineNote:
       person.takesRegularMedicine && (levels.heat ?? 0) >= ENVI_MEDICINE_NOTE_MIN_HEAT_LEVEL,
-    context,
   };
-};
-
-// A keyword's full sentence, in the voice of whoever the advice is for —
-// "Remind them to …" at a family place.
-export const enviActionSentence = (id: EnviActionId, caringFor: CaringFor): string => {
-  const copy = ENVI_ACTION_COPY[id];
-  return caringFor === 'family' && copy.family ? copy.family : copy.sentence;
 };

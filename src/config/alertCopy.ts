@@ -339,27 +339,22 @@ export const ENVI_WARNING_COPY: Record<HazardKind, Record<string, string>> = {
 
 // Each action keyword: `label` under its icon on the card (at most
 // ENVI_KEYWORD_LIMITS.maxTileWords words, held there by tests), `sentence`
-// as the detail sheet's full advice. `family` is the sentence for a family
-// place, in the same "remind them" voice as alert messages — present on
-// every keyword a family place can get (the general 'unknown' sets, the
-// calm tile and the person tips; tests hold this), since the app never
-// knows where family members are. Which actions show when is in
+// as the detail sheet's full advice — always spoken to the phone's owner,
+// wherever they are (at Mum's home too). Which actions show when is in
 // config/enviKeywords.ts. Health advice: needs a public-health review
 // before release.
 export const ENVI_ACTION_COPY: Record<
   EnviActionId,
-  { label: string; sentence: string; family?: string }
+  { label: string; sentence: string }
 > = {
   drinkWater: {
     label: 'Drink water',
     sentence: 'Drink water regularly, before you feel thirsty.',
-    family: 'Remind them to drink water regularly, before they feel thirsty.',
   },
   carryWater: { label: 'Carry water', sentence: 'Take water with you and sip it on the way.' },
   restInShade: {
     label: 'Rest in shade',
     sentence: "Take breaks in the shade if you're active outdoors.",
-    family: "Remind them to take breaks in the shade if they're active outdoors.",
   },
   waitInShade: {
     label: 'Wait in shade',
@@ -369,8 +364,6 @@ export const ENVI_ACTION_COPY: Record<
   avoidMidday: {
     label: 'Avoid midday',
     sentence: 'Keep outdoor activity to early morning or evening, away from the hottest hours.',
-    family:
-      'Remind them to keep outdoor activity to early morning or evening, away from the hottest hours.',
   },
   avoidMiddayOutings: {
     label: 'Avoid midday outings',
@@ -379,7 +372,6 @@ export const ENVI_ACTION_COPY: Record<
   stayCool: {
     label: 'Stay cool',
     sentence: 'Stay somewhere cool, such as an air-conditioned room.',
-    family: 'Make sure they stay somewhere cool, such as an air-conditioned room.',
   },
   keepRoomsCool: {
     label: 'Keep rooms cool',
@@ -388,7 +380,6 @@ export const ENVI_ACTION_COPY: Record<
   airConOn: {
     label: 'Use air-con',
     sentence: 'Use air conditioning to keep cool indoors.',
-    family: 'Make sure they use air conditioning to keep cool indoors.',
   },
   slowDown: {
     label: 'Slow down',
@@ -405,7 +396,6 @@ export const ENVI_ACTION_COPY: Record<
   stayIndoors: {
     label: 'Stay indoors',
     sentence: 'Stay indoors as much as you can.',
-    family: 'Remind them to stay indoors as much as they can.',
   },
   waitIndoors: {
     label: 'Wait indoors',
@@ -434,18 +424,15 @@ export const ENVI_ACTION_COPY: Record<
   lessExertion: {
     label: 'Less exertion',
     sentence: 'Cut down on strenuous activity outdoors.',
-    family: 'Remind them to cut down on strenuous activity outdoors.',
   },
   avoidExertion: {
     label: 'Avoid exertion',
     sentence: 'Avoid strenuous activity, indoors or out.',
-    family: 'Remind them to avoid strenuous activity, indoors or out.',
   },
   exerciseIndoors: { label: 'Exercise indoors', sentence: 'Exercise indoors today, not outside.' },
   avoidBusyRoads: {
     label: 'Avoid busy roads',
     sentence: 'Keep away from busy roads, where traffic pollution is highest.',
-    family: 'Remind them to keep away from busy roads, where traffic pollution is highest.',
   },
   avoidRoadsideWaits: {
     label: 'Avoid roadside waits',
@@ -454,7 +441,6 @@ export const ENVI_ACTION_COPY: Record<
   lessTimeOutside: {
     label: 'Less time outside',
     sentence: 'Cut down the time you spend outdoors.',
-    family: 'Remind them to cut down the time they spend outdoors.',
   },
   fewerOutings: {
     label: 'Fewer outings',
@@ -463,13 +449,10 @@ export const ENVI_ACTION_COPY: Record<
   watchSymptoms: {
     label: 'Watch symptoms',
     sentence: 'If you have a heart or lung condition, ease off outdoors when you notice symptoms.',
-    family:
-      'If they have a heart or lung condition, remind them to ease off outdoors when they notice symptoms.',
   },
   windowsClosed: {
     label: 'Windows closed',
     sentence: 'Keep windows closed to keep polluted air out.',
-    family: 'Remind them to keep windows closed to keep polluted air out.',
   },
   windowsUp: { label: 'Windows up', sentence: 'In a car, taxi or minibus, keep the windows closed.' },
   // "Windows up, air-con on" in the design draft — four words, one over the
@@ -481,44 +464,36 @@ export const ENVI_ACTION_COPY: Record<
   carryInhaler: {
     label: 'Carry inhaler',
     sentence: 'Keep your reliever inhaler with you, and follow your asthma plan if symptoms start.',
-    family: 'Remind them to carry their reliever inhaler.',
   },
   // "Follow your care plan" in the design draft — one word over the limit.
   followCarePlan: {
     label: 'Follow care plan',
     sentence: 'Follow the care plan from your doctor or nurse, and get help if you feel worse than usual.',
-    family: 'Remind them to follow their care plan, and check on them if they feel worse than usual.',
   },
   restOften: {
     label: 'Rest often',
     sentence: 'Take regular breaks, keep cool and drink water.',
-    family: 'Remind them to rest often, keep cool and drink water.',
   },
   drinkBeforeThirsty: {
     label: 'Drink before thirsty',
     sentence: "Drink water regularly; don't wait until you feel thirsty.",
-    family: "Make sure they drink water regularly, without waiting until they're thirsty.",
   },
   keepMedicineCool: {
     label: 'Keep medicine cool',
     sentence: 'Store your medicines somewhere cool, out of the sun and hot cars.',
-    family: 'Remind them to keep their medicines somewhere cool, out of the sun.',
   },
   enjoyOutdoors: {
     label: 'Enjoy outdoors',
     sentence: 'A good time to be outdoors.',
-    family: 'A good time for them to be outdoors.',
   },
 };
 
-// Personal advice around the card's keywords. Users see what the advice is
-// based on, never how the index itself is worked out.
+// Personal advice around the card's keywords — always for the phone's
+// owner. Users see what the advice is based on, never how the index itself
+// is worked out.
 export const ENVI_FOR_YOU_COPY = {
-  // The card's line, e.g. "For you: Pregnant +1 · Outdoors now" — "For
-  // them" at a family place.
-  lead: { self: 'For you', family: 'For them' } as Voiced,
-  line: (lead: string, who: string, where: string | null) =>
-    `${lead}: ${where ? `${who} · ${where}` : who}`,
+  // The card's line, e.g. "For you: Pregnant +1 · Outdoors now".
+  line: (who: string, where: string | null) => `For you: ${where ? `${who} · ${where}` : who}`,
   moreIdentities: (count: number) => `+${count}`,
   // Where the owner is, when the app can tell.
   where: {
@@ -534,10 +509,7 @@ export const ENVI_FOR_YOU_COPY = {
   basedOnMedicine: PERSON_SUMMARY_COPY.medicine,
   // For anyone on regular medicine. The app never names, judges, stops or
   // changes a medicine.
-  medicineNote: {
-    self: 'Ask your doctor or pharmacist whether your medicine affects you in hot weather.',
-    family: 'They can ask their doctor or pharmacist whether their medicine affects them in hot weather.',
-  } as Voiced,
+  medicineNote: 'Ask your doctor or pharmacist whether your medicine affects you in hot weather.',
   // Bottom of the recommendations sheet while tracking is off — the only
   // place it is said; never a pop-up.
   trackingHint: 'Turn on location tracking for advice that fits where you are.',

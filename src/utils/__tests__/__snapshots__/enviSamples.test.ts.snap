@@ -339,29 +339,16 @@ Based on: Asthma · Outdoors now
 - Keep away from busy roads, where traffic pollution is highest.
 - Keep your reliever inhaler with you, and follow your asthma plan if symptoms start.
 
-## Family place: Mum's home (heat 45, AQHI 2)
-Index: 4 Very High
-Line: Air quality is good, but it's very hot.
-For them: Older adult
-Tiles: Avoid midday · Stay cool · Drink before thirsty
+## You (asthma) at Mum's home (heat 35, AQHI 7)
+Index: 3 High
+Line: It's hot and air quality is poor.
+For you: Asthma · Indoors now
+Tiles: Use air-con · Windows closed · Carry inhaler
 Detailed recommendations: shown
-Health risk: Heat stroke possible
-Based on: Older adult · Regular medicine
-- Remind them to keep outdoor activity to early morning or evening, away from the hottest hours.
-- Make sure they stay somewhere cool, such as an air-conditioned room.
-- Make sure they drink water regularly, without waiting until they're thirsty.
-- Remind them to keep their medicines somewhere cool, out of the sun.
-They can ask their doctor or pharmacist whether their medicine affects them in hot weather.
-
-## Family place: a child (heat 30, AQHI 2)
-Index: 2 Moderate
-Line: Air quality is good, but it's warm.
-For them: Child
-Tiles: Drink before thirsty · Rest in shade
-Detailed recommendations: shown
-Health risk: Tiredness possible
-Based on: Child
-- Make sure they drink water regularly, without waiting until they're thirsty.
-- Remind them to take breaks in the shade if they're active outdoors.
+Health risk: Heat exhaustion possible / Risk for sensitive groups
+Based on: Asthma · Indoors now
+- Use air conditioning to keep cool indoors.
+- Keep windows closed to keep polluted air out.
+- Keep your reliever inhaler with you, and follow your asthma plan if symptoms start.
 "
 `;

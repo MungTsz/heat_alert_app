@@ -8,8 +8,7 @@ const advice = (
   person: Partial<AlertPerson>,
   context: LocationContext,
   source: LocationContextSource = context === 'unknown' ? 'none' : 'tracking',
-  caringFor: EnviAdviceFor['caringFor'] = 'self',
-): EnviAdviceFor => ({ person: { ...DEFAULT_ALERT_PERSON, ...person }, caringFor, context, source });
+): EnviAdviceFor => ({ person: { ...DEFAULT_ALERT_PERSON, ...person }, context, source });
 
 describe('forYouLineFor', () => {
   it('names who and where', () => {
@@ -35,11 +34,6 @@ describe('forYouLineFor', () => {
     );
   });
 
-  it('speaks of family as "them", and never says where they are', () => {
-    expect(forYouLineFor(advice({ identities: ['child'] }, 'outdoors', 'tracking', 'family'))).toBe(
-      'For them: Child',
-    );
-  });
 });
 
 describe('basedOnFor', () => {

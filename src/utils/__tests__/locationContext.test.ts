@@ -66,6 +66,11 @@ describe('judgeLocationContext', () => {
     expect(judgeLocationContext([fix(1, -1000, 0, blurry)], PLACES, NOW)).toBe('unknown');
   });
 
+  it('is indoors at any saved place — someone else’s home too, such as Mum’s', () => {
+    const mumsHome: ContextPlace = { ...at(2000), radiusMeters: 30 };
+    expect(judgeLocationContext([fix(2, 2000)], [HOME, mumsHome], NOW)).toBe('indoors');
+  });
+
   it('is indoors inside a saved place, allowing for indoor GPS drift', () => {
     expect(judgeLocationContext([fix(2, -1000)], PLACES, NOW)).toBe('indoors');
     // Outside the 25 m circle, inside the drift margin.
