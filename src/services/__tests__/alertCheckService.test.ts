@@ -65,7 +65,13 @@ const mumsHome: BookmarkEntry = {
   category: 'Home',
   radiusMeters: 100,
   updatedAt: 1,
-  alertProfile: { audience: 'sensitive', caringFor: 'family', hazards: { heat: true, aqhi: true } },
+  alertProfile: {
+    identities: ['older'],
+    takesRegularMedicine: false,
+    dailyActivity: 'indoors',
+    caringFor: 'family',
+    hazards: { heat: true, aqhi: true },
+  },
 };
 
 const setNow = (ms: number) => jest.spyOn(Date, 'now').mockReturnValue(ms);

@@ -281,7 +281,7 @@ const PlacesScreen = ({ focusPlaceId = null, onFocusHandled }: Props) => {
           key={alertingBookmark.id}
           title={PROFILE_EDITOR_COPY.sheetTitle}
           subtitle={alertingBookmark.label}
-          forPlace={{ aboutYouAudience: aboutYou.audience }}
+          forPlace={{ aboutYou }}
           initialProfile={resolvePlaceAlertProfile(alertingBookmark.alertProfile, aboutYou)}
           onSave={profile => {
             setBookmarkAlertProfile(alertingBookmark.id, profile);

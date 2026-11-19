@@ -1,10 +1,11 @@
 // src/utils/alertMessages.ts
 import {
+  AdviceGroup,
   AlertEvent,
   AlertMessage,
   AlertMessageGroup,
   AlertMessageRecord,
-  AudienceGroup,
+  AlertPerson,
   CaringFor,
   HazardKind,
   PlaceAlertProfile,
@@ -35,7 +36,7 @@ import {
 import { addHkDays, diffHkDays, parseHkTimestamp, toHkDateKey, toHkTimestamp } from './hkDate';
 import { formatHazardValue, levelAtRank, levelOf } from './hazardLevels';
 import { noticeGroupOf } from './alertEvents';
-import { urgentRankFor } from './alertProfile';
+import { adviceGroupFor, personOf, urgentRankFor } from './alertProfile';
 
 // Turns due notices into push notifications. Structure from Sutton's
 // complete-warning elements, trimmed for a lock screen: what and how bad
@@ -59,7 +60,7 @@ export type AlertPlace = {
 // more places than its lead part re-words it for all of them.
 type MessagePart = Omit<AlertMessage, 'id' | 'body'> & {
   facts: string;
-  profiles: AdviceProfile[];
+  profiles: AdviceSource[];
   actionFor: (profile: AdviceProfile) => string;
 };
 
@@ -172,27 +173,36 @@ export const describeSentAt = (sentMs: number, nowMs: number): string => {
   return DETAIL_COPY.sentAt(clock, day);
 };
 
-type AdviceProfile = { audience: AudienceGroup; caringFor: CaringFor };
+// Whoever a message's advice is for: a place's (or About you's) answers
+// and who it is set up for — a PlaceAlertProfile or an AlertDetailItem.
+export type AdviceSource = AlertPerson & { caringFor: CaringFor };
 
-// Groups whose advice is the more careful one when places are mixed.
-const CAREFUL_AUDIENCES: readonly AudienceGroup[] = ['sensitive', 'chronic'];
+// The advice a message gives: which sentence per hazard, in whose voice.
+export type AdviceProfile = { groups: Record<HazardKind, AdviceGroup>; caringFor: CaringFor };
+
+// Several places' advice groups for one hazard, merged: the shared one if
+// they agree, otherwise the careful one if anyone needs it, otherwise the
+// everyday one — outdoor-work advice never stands in for an office.
+const mergeAdviceGroups = (groups: readonly AdviceGroup[]): AdviceGroup => {
+  const distinct = new Set(groups);
+  if (distinct.size === 1) return groups[0];
+  return distinct.has('sensitive') ? 'sensitive' : 'general';
+};
 
 // Whose advice a merged message gives. One message may cover Mum's home
 // (family, older adult) and the Office (self, general): speak to a carer
 // ("call them") only when EVERY place is set up for family, and when the
-// audiences differ, give the more careful advice if anyone needs it —
-// outdoor-work advice never stands in for an office.
-export const adviceProfileFor = (profiles: readonly AdviceProfile[]): AdviceProfile => {
-  const audiences = new Set(profiles.map(p => p.audience));
-  const audience: AudienceGroup =
-    audiences.size === 1
-      ? profiles[0].audience
-      : profiles.some(p => CAREFUL_AUDIENCES.includes(p.audience))
-        ? 'sensitive'
-        : 'general';
+// places' answers differ, give the more careful advice if anyone needs it.
+export const adviceProfileFor = (profiles: readonly AdviceSource[]): AdviceProfile => {
+  const groups = Object.fromEntries(
+    HAZARD_KINDS.map(hazard => [
+      hazard,
+      mergeAdviceGroups(profiles.map(p => adviceGroupFor(p, hazard))),
+    ]),
+  ) as Record<HazardKind, AdviceGroup>;
   const caringFor: CaringFor =
     profiles.length > 0 && profiles.every(p => p.caringFor === 'family') ? 'family' : 'self';
-  return { audience, caringFor };
+  return { groups, caringFor };
 };
 
 // The one action sentence for a message — also shown in the detail sheet,
@@ -205,9 +215,9 @@ export const adviceFor = (
   const voice = profile.caringFor;
   if (hazards.length > 1) return DUAL_ADVICE[voice];
   if (hazards[0] === 'aqhi') {
-    return severe ? AQHI_URGENT_ADVICE[voice] : AQHI_ADVICE[profile.audience][voice];
+    return severe ? AQHI_URGENT_ADVICE[voice] : AQHI_ADVICE[profile.groups.aqhi][voice];
   }
-  return severe ? HEAT_URGENT_ADVICE[voice] : HEAT_ADVICE[profile.audience][voice];
+  return severe ? HEAT_URGENT_ADVICE[voice] : HEAT_ADVICE[profile.groups.heat][voice];
 };
 
 // Worst first, so the title and the first-named place come from the place
@@ -609,7 +619,7 @@ export const buildMessageRecord = (
         value: ev.latestValue,
         rank: ev.pending?.rank ?? ev.toldRank,
         forecast: ev.forecast,
-        audience: place.profile.audience,
+        ...personOf(place.profile),
         caringFor: place.profile.caringFor,
       },
     ];

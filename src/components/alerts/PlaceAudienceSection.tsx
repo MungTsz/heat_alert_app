@@ -1,18 +1,23 @@
 // src/components/alerts/PlaceAudienceSection.tsx
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { AudienceGroup, CaringFor, PlaceAlertProfile } from '../../types/alerts';
-import { AUDIENCE_COPY, CARING_FOR_COPY, PROFILE_EDITOR_COPY } from '../../config/alertCopy';
+import { AlertPerson, CaringFor, PlaceAlertProfile } from '../../types/alerts';
+import { CARING_FOR_COPY, PROFILE_EDITOR_COPY } from '../../config/alertCopy';
 import { ALERT_UI } from '../../config/alertUiConfig';
-import { withCaringFor, withPlaceAudience } from '../../utils/alertProfile';
+import {
+  summarizeDailyLife,
+  summarizeIdentities,
+  withCaringFor,
+  withPlacePerson,
+} from '../../utils/alertProfile';
 import SegmentedControl from '../SegmentedControl';
-import AudiencePicker from './AudiencePicker';
+import AlertPersonQuestions from './AlertPersonQuestions';
 
 type Props = {
   profile: PlaceAlertProfile;
   onChange: (profile: PlaceAlertProfile) => void;
-  // The owner's About you answer — what a place for yourself uses.
-  aboutYouAudience: AudienceGroup;
+  // The owner's About you answers — what a place for yourself uses.
+  aboutYou: AlertPerson;
 };
 
 const CARING_FOR_OPTIONS: { value: CaringFor; label: string }[] = [
@@ -22,24 +27,22 @@ const CARING_FOR_OPTIONS: { value: CaringFor; label: string }[] = [
 
 // "Who is this place for?" first, because it decides whether there is
 // anything left to ask: who the owner is was answered once at first launch,
-// so a place for yourself just shows that answer (changeable, for a home
+// so a place for yourself just shows those answers (changeable, for a home
 // shared with someone who needs more care). Only a place for someone else
-// opens the full audience list.
-const PlaceAudienceSection = ({ profile, onChange, aboutYouAudience }: Props) => {
+// opens the full questions.
+const PlaceAudienceSection = ({ profile, onChange, aboutYou }: Props) => {
   const following = profile.caringFor === 'self' && profile.followsAboutYou === true;
-  // Open from the start when this place already has its own answer, so
-  // that answer is never hidden from the person who chose it.
-  const [pickerOpen, setPickerOpen] = useState(!following);
-  const ownPicker = profile.caringFor === 'self' && (pickerOpen || !following);
+  // Open from the start when this place already has its own answers, so
+  // they are never hidden from the person who chose them.
+  const [questionsOpen, setQuestionsOpen] = useState(!following);
+  const ownQuestions = profile.caringFor === 'self' && (questionsOpen || !following);
 
-  const audiencePicker = (
-    <>
-      <Text style={styles.hint}>{PROFILE_EDITOR_COPY.pickMostCare}</Text>
-      <AudiencePicker
-        value={profile.audience}
-        onChange={audience => onChange(withPlaceAudience(profile, audience, aboutYouAudience))}
-      />
-    </>
+  const questions = (
+    <AlertPersonQuestions
+      voice="place"
+      person={profile}
+      onChange={person => onChange(withPlacePerson(profile, person, aboutYou))}
+    />
   );
 
   return (
@@ -51,41 +54,45 @@ const PlaceAudienceSection = ({ profile, onChange, aboutYouAudience }: Props) =>
           value={profile.caringFor}
           onChange={caringFor => {
             // Back to "same as me" whenever the person switches to themself.
-            if (caringFor === 'self') setPickerOpen(false);
-            onChange(withCaringFor(profile, caringFor, aboutYouAudience));
+            if (caringFor === 'self') setQuestionsOpen(false);
+            onChange(withCaringFor(profile, caringFor, aboutYou));
           }}
         />
       </View>
 
       {profile.caringFor === 'family' && (
         <View style={styles.block}>
-          <Text style={styles.subheading}>{PROFILE_EDITOR_COPY.placeQuestion}</Text>
-          {audiencePicker}
+          {questions}
           <Text style={styles.hint}>{PROFILE_EDITOR_COPY.familyHint}</Text>
         </View>
       )}
 
-      {profile.caringFor === 'self' && !ownPicker && (
+      {profile.caringFor === 'self' && !ownQuestions && (
         <View style={styles.ownCard}>
           <View style={styles.ownText}>
-            <Text style={styles.ownLabel}>{AUDIENCE_COPY[aboutYouAudience].label}</Text>
+            <Text style={styles.ownLabel}>{summarizeIdentities(aboutYou.identities)}</Text>
+            <Text style={styles.ownDetail}>{summarizeDailyLife(aboutYou)}</Text>
             <Text style={styles.ownHint}>{PROFILE_EDITOR_COPY.ownAudienceHint}</Text>
           </View>
-          <TouchableOpacity onPress={() => setPickerOpen(true)} hitSlop={8} accessibilityRole="button">
+          <TouchableOpacity
+            onPress={() => setQuestionsOpen(true)}
+            hitSlop={8}
+            accessibilityRole="button"
+          >
             <Text style={styles.link}>{PROFILE_EDITOR_COPY.change}</Text>
           </TouchableOpacity>
         </View>
       )}
 
-      {ownPicker && (
+      {ownQuestions && (
         <View style={styles.block}>
           <View style={styles.headerRow}>
-            <Text style={styles.subheading}>{PROFILE_EDITOR_COPY.placeQuestion}</Text>
+            <Text style={styles.subheading}>{PROFILE_EDITOR_COPY.ownAnswersTitle}</Text>
             {/* Only once this place differs from About you — the same
                 "Reset after a change" rule as the Advanced levels. */}
             {!following && (
               <TouchableOpacity
-                onPress={() => onChange(withPlaceAudience(profile, aboutYouAudience, aboutYouAudience))}
+                onPress={() => onChange(withPlacePerson(profile, aboutYou, aboutYou))}
                 hitSlop={8}
                 accessibilityRole="button"
               >
@@ -93,7 +100,7 @@ const PlaceAudienceSection = ({ profile, onChange, aboutYouAudience }: Props) =>
               </TouchableOpacity>
             )}
           </View>
-          {audiencePicker}
+          {questions}
         </View>
       )}
     </View>
@@ -112,7 +119,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     textTransform: 'uppercase',
   },
-  hint: { fontSize: 12, lineHeight: 17, color: ALERT_UI.mutedTextColor, marginTop: 6 },
+  hint: { fontSize: 12, lineHeight: 17, color: ALERT_UI.mutedTextColor, marginTop: 10 },
   ownCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -126,6 +133,7 @@ const styles = StyleSheet.create({
   },
   ownText: { flex: 1 },
   ownLabel: { fontSize: 15, fontWeight: '600', color: '#333' },
+  ownDetail: { fontSize: 13, color: '#555', marginTop: 2 },
   ownHint: { fontSize: 12, color: ALERT_UI.mutedTextColor, marginTop: 3 },
   link: { fontSize: 13, fontWeight: '600', color: ALERT_UI.accentColor },
 });

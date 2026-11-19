@@ -10,6 +10,9 @@ export const ALERT_UI = {
   selectedTint: '#FDECEC',
   optionBorderColor: '#E4E4E4',
   optionRadius: 12,
+  // The square (select all) / circle (pick one) on each answer card.
+  optionIconSize: 20,
+  optionIconIdleColor: '#BBB',
   // The audience editor scrolls inside bottom sheets past this share of the
   // screen height, so Save stays on screen on small phones.
   sheetScrollMaxHeightRatio: 0.62,

@@ -10,9 +10,10 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { AudienceGroup, PlaceAlertProfile } from '../../types/alerts';
+import { AlertPerson, PlaceAlertProfile } from '../../types/alerts';
 import { PROFILE_EDITOR_COPY } from '../../config/alertCopy';
 import { ALERT_UI } from '../../config/alertUiConfig';
+import { withoutReview } from '../../utils/alertProfile';
 import AlertProfileEditor from './AlertProfileEditor';
 import InfoNote from '../addPlace/InfoNote';
 
@@ -22,7 +23,7 @@ type Props = {
   title: string;
   subtitle?: string;
   // See AlertProfileEditor: set for a place, absent for About you.
-  forPlace?: { aboutYouAudience: AudienceGroup };
+  forPlace?: { aboutYou: AlertPerson };
   initialProfile: PlaceAlertProfile;
   onSave: (profile: PlaceAlertProfile) => void;
   onCancel: () => void;
@@ -59,8 +60,8 @@ const AlertProfileSheet = ({
 
           <ScrollView style={{ maxHeight: height * ALERT_UI.sheetScrollMaxHeightRatio }}>
             <AlertProfileEditor profile={profile} onChange={setProfile} forPlace={forPlace} />
-            {/* "Long-term condition" is health information — say plainly
-                where it goes. */}
+            {/* Conditions and medicine are health information — say
+                plainly where they go. */}
             <InfoNote>{PROFILE_EDITOR_COPY.privacyNote}</InfoNote>
           </ScrollView>
 
@@ -68,7 +69,9 @@ const AlertProfileSheet = ({
             <TouchableOpacity style={styles.cancelButton} onPress={onCancel}>
               <Text style={styles.cancelText}>{PROFILE_EDITOR_COPY.cancel}</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.saveButton} onPress={() => onSave(profile)}>
+            {/* Saving means the answers have been looked at, so it also
+                settles a "Please check" left by the old-answer conversion. */}
+            <TouchableOpacity style={styles.saveButton} onPress={() => onSave(withoutReview(profile))}>
               <Text style={styles.saveText}>{PROFILE_EDITOR_COPY.save}</Text>
             </TouchableOpacity>
           </View>

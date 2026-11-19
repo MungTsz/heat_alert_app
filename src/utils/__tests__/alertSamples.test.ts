@@ -8,7 +8,7 @@ const NOW = Date.UTC(2026, 10, 4, 7);
 const mum: AlertPlace = {
   id: 'mum',
   label: "Mum's home",
-  profile: { ...DEFAULT_PLACE_ALERT_PROFILE, audience: 'sensitive', caringFor: 'family' },
+  profile: { ...DEFAULT_PLACE_ALERT_PROFILE, identities: ['older'], caringFor: 'family' },
 };
 const you: AlertPlace = { id: 'current', label: 'Your location', profile: DEFAULT_PLACE_ALERT_PROFILE };
 

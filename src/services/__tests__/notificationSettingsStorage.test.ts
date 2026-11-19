@@ -24,7 +24,7 @@ describe('normalizeNotificationSettings', () => {
     expect(settings).not.toHaveProperty('alertLevels');
     expect(settings).not.toHaveProperty('aqhiAlertLevels');
     expect(settings.notifyCurrentLocation).toBe(false);
-    expect(settings.currentLocationProfile.audience).toBe('general');
+    expect(settings.currentLocationProfile.identities).toEqual(['general']);
   });
 
   it('asks "About you" once — until it is answered, and never again after', () => {
@@ -36,12 +36,37 @@ describe('normalizeNotificationSettings', () => {
 
   it('always treats your own location as for yourself', () => {
     const settings = normalizeNotificationSettings({
-      currentLocationProfile: { audience: 'chronic', caringFor: 'family', hazards: { heat: false } },
+      currentLocationProfile: {
+        identities: ['asthma'],
+        takesRegularMedicine: true,
+        dailyActivity: 'outdoors',
+        caringFor: 'family',
+        hazards: { heat: false },
+      },
     });
     expect(settings.currentLocationProfile).toEqual({
-      audience: 'chronic',
+      identities: ['asthma'],
+      takesRegularMedicine: true,
+      dailyActivity: 'outdoors',
       caringFor: 'self',
       hazards: { heat: false, aqhi: true },
     });
+  });
+
+  it('converts an old one-choice About you answer and asks to check a guessed one', () => {
+    const settings = normalizeNotificationSettings({
+      aboutYouConfirmed: true,
+      currentLocationProfile: { audience: 'chronic', caringFor: 'self', hazards: {} },
+    });
+    expect(settings.currentLocationProfile).toEqual({
+      identities: ['heartLung'],
+      takesRegularMedicine: false,
+      dailyActivity: 'indoors',
+      caringFor: 'self',
+      hazards: { heat: true, aqhi: true },
+      needsReview: true,
+    });
+    // Still answered — the check is a separate, one-off prompt.
+    expect(settings.aboutYouConfirmed).toBe(true);
   });
 });

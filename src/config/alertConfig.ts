@@ -1,7 +1,10 @@
 // src/config/alertConfig.ts
 import {
-  AudienceGroup,
+  AdviceGroup,
+  AlertPerson,
+  DailyActivity,
   HazardKind,
+  IdentityGroup,
   PlaceAlertProfile,
 } from '../types/alerts';
 import {
@@ -16,20 +19,43 @@ const HOUR_MS = 60 * MINUTE_MS;
 // How often the engine re-checks while the app is open.
 export const ALERT_CHECK_INTERVAL_MS = 5 * MINUTE_MS;
 
-// Order the audience options appear in — the most common answer first.
-export const AUDIENCE_GROUPS: readonly AudienceGroup[] = [
+// Order the "Who are you?" options appear in — the most common answer
+// first. Child is not offered here: it describes someone else.
+export const SELF_IDENTITY_GROUPS: readonly IdentityGroup[] = [
   'general',
-  'sensitive',
-  'chronic',
-  'outdoor',
+  'older',
+  'pregnant',
+  'asthma',
+  'heartLung',
+  'otherChronic',
 ];
 
-// The level at which each audience starts getting alerts.
+// "Who's usually here?" at a place — the same list plus Child, next to the
+// other group the old "Older adult, child or pregnant" choice covered.
+export const PLACE_IDENTITY_GROUPS: readonly IdentityGroup[] = [
+  'general',
+  'older',
+  'child',
+  'pregnant',
+  'asthma',
+  'heartLung',
+  'otherChronic',
+];
+
+export const DAILY_ACTIVITIES: readonly DailyActivity[] = ['indoors', 'outdoors'];
+
+// Every answer an alert level can come from: identities, medicine and the
+// daily pattern. A profile alerts at the most careful (lowest) level any of
+// its answers asks for (see personAlertLevelFor), so ticking one more box
+// can only make alerts come earlier, never later.
+type HazardLevels = { heat: HeatLevel; aqhi: AqhiLevel };
+
 // AQHI follows EPD's health advice: "High" is where children, older adults
 // and people with heart or lung disease are advised to cut outdoor
 // exertion; "Very High" is where the general public and outdoor workers are.
-// EPD's advice doesn't name pregnancy — grouping it with "High" is the
-// conservative choice, taken from HKO's hot-weather advice.
+// EPD's advice doesn't name pregnancy or other long-term conditions —
+// grouping them with "High" is the conservative choice, kept from the old
+// "sensitive" / "chronic" groups (HKO's hot-weather advice names both).
 // Heat uses the app's NWS heat index levels (the Spatial Temperature API's
 // scale), NOT HKO warnings or the Labour Department's Hong Kong Heat Index
 // bands — those are a different scale from a different source. Extreme
@@ -37,15 +63,54 @@ export const AUDIENCE_GROUPS: readonly AudienceGroup[] = [
 // physical activity", which is what sensitive groups and outdoor workers face.
 // These heat defaults are this app's proposal and still need a public-health
 // review before release.
-export const AUDIENCE_ALERT_LEVELS: Record<
-  AudienceGroup,
-  { heat: HeatLevel; aqhi: AqhiLevel }
-> = {
-  general: { heat: 'Danger', aqhi: 'Very High' },
-  sensitive: { heat: 'Extreme Caution', aqhi: 'High' },
-  chronic: { heat: 'Extreme Caution', aqhi: 'High' },
-  outdoor: { heat: 'Extreme Caution', aqhi: 'Very High' },
+const GENERAL_LEVELS: HazardLevels = { heat: 'Danger', aqhi: 'Very High' };
+const SENSITIVE_LEVELS: HazardLevels = { heat: 'Extreme Caution', aqhi: 'High' };
+const CHRONIC_LEVELS: HazardLevels = { heat: 'Extreme Caution', aqhi: 'High' };
+
+export const IDENTITY_ALERT_LEVELS: Record<IdentityGroup, HazardLevels> = {
+  general: GENERAL_LEVELS,
+  older: SENSITIVE_LEVELS,
+  pregnant: SENSITIVE_LEVELS,
+  child: SENSITIVE_LEVELS,
+  asthma: CHRONIC_LEVELS,
+  heartLung: CHRONIC_LEVELS,
+  otherChronic: CHRONIC_LEVELS,
 };
+
+// Many everyday medicines (heart, blood pressure, mental health, allergy)
+// weaken the body's response to heat, so regular medicine moves the heat
+// level to the long-term-condition one. Air quality is unchanged: the
+// medicine itself doesn't make polluted air worse.
+export const MEDICINE_ALERT_LEVELS: Partial<HazardLevels> = { heat: CHRONIC_LEVELS.heat };
+
+// Often outdoors keeps the old "outdoor work or exercise" levels: earlier
+// heat alerts (exertion in the sun), the general public's AQHI level (EPD
+// groups outdoor workers with everyone else).
+export const DAILY_ACTIVITY_ALERT_LEVELS: Record<DailyActivity, Partial<HazardLevels>> = {
+  indoors: {},
+  outdoors: { heat: 'Extreme Caution', aqhi: 'Very High' },
+};
+
+// Which push advice sentence each answer asks for (alertCopy's
+// HEAT_ADVICE / AQHI_ADVICE). Anyone who needs more care gets the careful
+// sentence; medicine asks for it on heat only, like its level above.
+export const IDENTITY_ADVICE_GROUP: Record<IdentityGroup, AdviceGroup> = {
+  general: 'general',
+  older: 'sensitive',
+  pregnant: 'sensitive',
+  child: 'sensitive',
+  asthma: 'sensitive',
+  heartLung: 'sensitive',
+  otherChronic: 'sensitive',
+};
+export const MEDICINE_ADVICE_GROUP: Partial<Record<HazardKind, AdviceGroup>> = { heat: 'sensitive' };
+export const DAILY_ACTIVITY_ADVICE_GROUP: Record<DailyActivity, AdviceGroup> = {
+  indoors: 'general',
+  outdoors: 'outdoor',
+};
+// For one person, the first of these any answer asks for wins: a pregnant
+// delivery rider gets the careful advice, not the outdoor-work one.
+export const ADVICE_GROUP_PRECEDENCE: readonly AdviceGroup[] = ['sensitive', 'outdoor', 'general'];
 
 // Levels offered under Advanced. Levels below these are too mild to warrant
 // a push (the old engine also never alerted below Extreme Caution).
@@ -133,14 +198,23 @@ export const CURRENT_LOCATION_PLACE_ID = 'current';
 
 export const HAZARD_KINDS: readonly HazardKind[] = ['heat', 'aqhi'];
 
+// What applies when a question is skipped: a general adult, no regular
+// medicine, mostly indoors — the least careful answers, so a skipped
+// question never makes alerts come earlier than someone asked for.
+export const DEFAULT_ALERT_PERSON: AlertPerson = {
+  identities: ['general'],
+  takesRegularMedicine: false,
+  dailyActivity: 'indoors',
+};
+
 export const DEFAULT_PLACE_ALERT_PROFILE: PlaceAlertProfile = {
-  audience: 'general',
+  ...DEFAULT_ALERT_PERSON,
   caringFor: 'self',
   hazards: { heat: true, aqhi: true },
 };
 
 // Where Add place starts: a place for yourself, alerting at your About you
-// answer — most places people save are their own.
+// answers — most places people save are their own.
 export const NEW_PLACE_ALERT_PROFILE: PlaceAlertProfile = {
   ...DEFAULT_PLACE_ALERT_PROFILE,
   followsAboutYou: true,

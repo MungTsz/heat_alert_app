@@ -9,7 +9,7 @@ import {
 import { PlaceAlertProfile } from '../../types/alerts';
 
 const general = DEFAULT_PLACE_ALERT_PROFILE;
-const sensitive: PlaceAlertProfile = { ...general, audience: 'sensitive' };
+const sensitive: PlaceAlertProfile = { ...general, identities: ['older'] };
 const family: PlaceAlertProfile = { ...general, caringFor: 'family' };
 
 // The personalised sentence that leads the Environmental Index detail sheet

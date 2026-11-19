@@ -19,7 +19,6 @@ import {
   ABOUT_YOU_COPY,
   ALERTS_SCREEN_COPY,
   ALL_CLEAR_COPY,
-  AUDIENCE_COPY,
   CURRENT_LOCATION_LABEL,
   DELIVERY_SETTINGS_COPY,
   HAZARD_COPY,
@@ -33,7 +32,11 @@ import {
 } from '../config/alertConfig';
 import { ALERT_UI } from '../config/alertUiConfig';
 import { sendSampleNotification } from '../services/alertCheckService';
-import { summarizeAlertLevels } from '../utils/alertProfile';
+import {
+  summarizeAlertLevels,
+  summarizeDailyLife,
+  summarizeIdentities,
+} from '../utils/alertProfile';
 import { describeSentAt } from '../utils/alertMessages';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -177,9 +180,13 @@ const AlertsScreen = () => {
             onPress={() => setEditingAboutYou(true)}
             accessibilityRole="button"
           >
+            {/* Who (label), then everyday life, then what it adds up to. */}
             <View style={styles.summaryText}>
-              <Text style={styles.rowLabel}>
-                {AUDIENCE_COPY[settings.currentLocationProfile.audience].label}
+              <Text style={styles.rowLabel} numberOfLines={2}>
+                {summarizeIdentities(settings.currentLocationProfile.identities)}
+              </Text>
+              <Text style={styles.rowDescription}>
+                {summarizeDailyLife(settings.currentLocationProfile)}
               </Text>
               <Text style={styles.rowDescription}>
                 {summarizeAlertLevels(settings.currentLocationProfile)}

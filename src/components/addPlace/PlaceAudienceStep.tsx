@@ -1,7 +1,7 @@
 // src/components/addPlace/PlaceAudienceStep.tsx
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, useWindowDimensions } from 'react-native';
-import { AudienceGroup, PlaceAlertProfile } from '../../types/alerts';
+import { AlertPerson, PlaceAlertProfile } from '../../types/alerts';
 import { PROFILE_EDITOR_COPY } from '../../config/alertCopy';
 import { ADD_PLACE_STEPS, ALERT_UI } from '../../config/alertUiConfig';
 import AlertProfileEditor from '../alerts/AlertProfileEditor';
@@ -10,19 +10,19 @@ import InfoNote from './InfoNote';
 
 type Props = {
   profile: PlaceAlertProfile;
-  aboutYouAudience: AudienceGroup;
+  aboutYou: AlertPerson;
   onChange: (profile: PlaceAlertProfile) => void;
   onBack: () => void;
   onNext: () => void;
 };
 
 // Step 2 of Add place: who the place is for. It starts as "for myself" with
-// the About you answer, so the common case is just Next — and, unlike the
+// the About you answers, so the common case is just Next — and, unlike the
 // category step, a wrong guess here only changes when alerts arrive and is
 // easy to fix from the card later.
 const PlaceAudienceStep: React.FC<Props> = ({
   profile,
-  aboutYouAudience,
+  aboutYou,
   onChange,
   onBack,
   onNext,
@@ -33,7 +33,7 @@ const PlaceAudienceStep: React.FC<Props> = ({
       <StepDots current={ADD_PLACE_STEPS.audience} total={ADD_PLACE_STEPS.total} />
 
       <ScrollView style={{ maxHeight: height * ALERT_UI.sheetScrollMaxHeightRatio }}>
-        <AlertProfileEditor profile={profile} onChange={onChange} forPlace={{ aboutYouAudience }} />
+        <AlertProfileEditor profile={profile} onChange={onChange} forPlace={{ aboutYou }} />
         <InfoNote>{PROFILE_EDITOR_COPY.privacyNote}</InfoNote>
       </ScrollView>
 

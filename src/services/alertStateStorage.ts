@@ -4,6 +4,7 @@ import { AlertEvent, AlertMessageRecord } from '../types/alerts';
 import { ALERT_MESSAGE_LOG_CONFIG } from '../config/alertConfig';
 import { DeliveryLogEntry } from '../utils/alertDelivery';
 import { DigestLog } from '../utils/alertDigest';
+import { migrateStoredDetailItem } from '../utils/profileMigration';
 
 const EVENTS_KEY = 'alert_events';
 const DELIVERY_LOG_KEY = 'alert_delivery_log';
@@ -81,8 +82,13 @@ export const readLastKnownLocation = (
       : null,
   );
 
+// Records sent before the About you questions changed carry the old
+// one-choice `audience` instead of the person's answers; they stay in the
+// log for a few days, so they are converted as they are read.
 export const readMessageLog = (): Promise<AlertMessageRecord[]> =>
-  readJson<AlertMessageRecord[]>(MESSAGE_LOG_KEY, []);
+  readJson<AlertMessageRecord[]>(MESSAGE_LOG_KEY, []).then(records =>
+    records.map(record => ({ ...record, items: record.items.map(migrateStoredDetailItem) })),
+  );
 
 // Newest first, trimmed by count and age.
 export const appendMessageRecords = async (

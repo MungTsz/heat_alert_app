@@ -27,7 +27,7 @@ type Props = {
 // crowd the alert settings people do come back to. The map style is also
 // on the map's own layer picker; both write the same stored value.
 const AppSettingsScreen = ({ visible, onClose }: Props) => {
-  const { update } = useNotificationSettings();
+  const { settings: notificationSettings, update } = useNotificationSettings();
   const { settings: mapSettings, update: updateMapSettings } = useMapSettings();
   const { granted, requestPermission, openAppSettings } = useLocationPermissionStatus();
   const { enabled: exposureTrackingEnabled, setEnabled: setExposureTrackingEnabled } =
@@ -159,6 +159,22 @@ const AppSettingsScreen = ({ visible, onClose }: Props) => {
                 onPress={() => update({ aboutYouConfirmed: false })}
               >
                 <Text style={styles.testButtonText}>Show First-Launch Question Again</Text>
+              </TouchableOpacity>
+              <View style={styles.divider} />
+              {/* What someone upgrading from the old one-choice question
+                  sees once when their answer had to be guessed. */}
+              <TouchableOpacity
+                style={styles.testButton}
+                onPress={() =>
+                  update({
+                    currentLocationProfile: {
+                      ...notificationSettings.currentLocationProfile,
+                      needsReview: true,
+                    },
+                  })
+                }
+              >
+                <Text style={styles.testButtonText}>Show "Please Check Your Details"</Text>
               </TouchableOpacity>
               <View style={styles.divider} />
               {/* The real Environmental Index card in every situation, from

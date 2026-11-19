@@ -2,23 +2,23 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { ChevronDown, ChevronUp } from 'lucide-react-native';
-import { AudienceGroup, HazardKind, PlaceAlertProfile } from '../../types/alerts';
+import { AlertPerson, HazardKind, PlaceAlertProfile } from '../../types/alerts';
 import { ADVANCED_LEVEL_CHOICES, HAZARD_KINDS } from '../../config/alertConfig';
 import { HAZARD_COPY, PROFILE_EDITOR_COPY } from '../../config/alertCopy';
 import { ALERT_UI } from '../../config/alertUiConfig';
 import { formatLevelWithRange } from '../../utils/hazardLevels';
 import { alertLevelFor, hasLevelOverride, withAlertLevel } from '../../utils/alertProfile';
 import SettingsToggleRow from '../SettingsToggleRow';
-import AudiencePicker from './AudiencePicker';
+import AlertPersonQuestions from './AlertPersonQuestions';
 import PlaceAudienceSection from './PlaceAudienceSection';
 
 type Props = {
   profile: PlaceAlertProfile;
   onChange: (profile: PlaceAlertProfile) => void;
   // Set when editing a saved place (who it's for, and the owner's About
-  // you answer a place for yourself uses). Absent for About you itself,
-  // which is always for yourself and simply asks who you are.
-  forPlace?: { aboutYouAudience: AudienceGroup };
+  // you answers a place for yourself uses). Absent for About you itself,
+  // which is always for yourself and simply asks the three questions.
+  forPlace?: { aboutYou: AlertPerson };
 };
 
 // The one editor for "who is here and what to alert on" — used by the
@@ -37,19 +37,13 @@ const AlertProfileEditor = ({ profile, onChange, forPlace }: Props) => {
   return (
     <View>
       {forPlace ? (
-        <PlaceAudienceSection
-          profile={profile}
-          onChange={onChange}
-          aboutYouAudience={forPlace.aboutYouAudience}
-        />
+        <PlaceAudienceSection profile={profile} onChange={onChange} aboutYou={forPlace.aboutYou} />
       ) : (
-        <>
-          <Text style={styles.question}>{PROFILE_EDITOR_COPY.selfQuestion}</Text>
-          <AudiencePicker
-            value={profile.audience}
-            onChange={audience => onChange({ ...profile, audience })}
-          />
-        </>
+        <AlertPersonQuestions
+          voice="self"
+          person={profile}
+          onChange={person => onChange({ ...profile, ...person })}
+        />
       )}
 
       <Text style={[styles.subheading, styles.block]}>{PROFILE_EDITOR_COPY.hazardsTitle}</Text>
@@ -82,7 +76,7 @@ const AlertProfileEditor = ({ profile, onChange, forPlace }: Props) => {
           {HAZARD_KINDS.map(hazard => {
             const enabled = profile.hazards[hazard];
             // The chip shown selected is simply the level in effect — the
-            // audience's until someone picks another. No separate "Default"
+            // answers' until someone picks another. No separate "Default"
             // chip repeating the same level.
             const current = alertLevelFor(profile, hazard);
             const overridden = hasLevelOverride(profile, hazard);
@@ -129,7 +123,6 @@ const AlertProfileEditor = ({ profile, onChange, forPlace }: Props) => {
 };
 
 const styles = StyleSheet.create({
-  question: { fontSize: 17, fontWeight: '700', color: '#222', marginTop: 12 },
   hint: { fontSize: 12, lineHeight: 17, color: ALERT_UI.mutedTextColor, marginTop: 6 },
   block: { marginTop: 18 },
   subheading: {

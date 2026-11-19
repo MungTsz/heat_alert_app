@@ -98,7 +98,7 @@ const AddBookmarkModal = ({
             ) : (
               <PlaceAudienceStep
                 profile={resolvedProfile}
-                aboutYouAudience={aboutYou.audience}
+                aboutYou={aboutYou}
                 onChange={setAlertProfile}
                 onBack={() => setStep('category')}
                 onNext={() => setStep('location')}

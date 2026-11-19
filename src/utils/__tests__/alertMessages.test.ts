@@ -23,9 +23,9 @@ const place = (id: string, label: string, profile: Partial<PlaceAlertProfile> = 
 });
 
 const PLACES: Record<string, AlertPlace> = {
-  mum: place('mum', "Mum's home", { audience: 'sensitive', caringFor: 'family' }),
+  mum: place('mum', "Mum's home", { identities: ['older'], caringFor: 'family' }),
   office: place('office', 'Office'),
-  school: place('school', 'School', { audience: 'sensitive' }),
+  school: place('school', 'School', { identities: ['child'] }),
 };
 
 const event = (over: Partial<AlertEvent> & Pick<AlertEvent, 'placeId' | 'hazard'>): AlertEvent => ({
@@ -251,12 +251,29 @@ describe('adviceProfileFor', () => {
     expect(adviceProfileFor([PLACES.mum.profile, PLACES.office.profile]).caringFor).toBe('self');
   });
 
-  it('gives the more careful advice when audiences differ', () => {
-    expect(adviceProfileFor([PLACES.office.profile, PLACES.school.profile]).audience).toBe('sensitive');
-    const outdoor = { ...DEFAULT_PLACE_ALERT_PROFILE, audience: 'outdoor' as const };
+  it('gives the more careful advice when places differ', () => {
+    expect(adviceProfileFor([PLACES.office.profile, PLACES.school.profile]).groups).toEqual({
+      heat: 'sensitive',
+      aqhi: 'sensitive',
+    });
+    const outdoor = { ...DEFAULT_PLACE_ALERT_PROFILE, dailyActivity: 'outdoors' as const };
     // Outdoor-work advice never stands in for an office.
-    expect(adviceProfileFor([PLACES.office.profile, outdoor]).audience).toBe('general');
-    expect(adviceProfileFor([outdoor, outdoor]).audience).toBe('outdoor');
+    expect(adviceProfileFor([PLACES.office.profile, outdoor]).groups.heat).toBe('general');
+    expect(adviceProfileFor([outdoor, outdoor]).groups.heat).toBe('outdoor');
+  });
+
+  it('picks the careful advice over outdoor work for one person who needs both', () => {
+    const rider: PlaceAlertProfile = {
+      ...DEFAULT_PLACE_ALERT_PROFILE,
+      identities: ['pregnant'],
+      dailyActivity: 'outdoors',
+    };
+    expect(adviceProfileFor([rider]).groups).toEqual({ heat: 'sensitive', aqhi: 'sensitive' });
+  });
+
+  it('gives regular medicine the careful heat advice only', () => {
+    const medicine = { ...DEFAULT_PLACE_ALERT_PROFILE, takesRegularMedicine: true };
+    expect(adviceProfileFor([medicine]).groups).toEqual({ heat: 'sensitive', aqhi: 'general' });
   });
 });
 

@@ -4,35 +4,65 @@ import type { AqhiLevel, HeatLevel } from './settings';
 // The two peer hazards every alert feature must treat the same way.
 export type HazardKind = 'heat' | 'aqhi';
 
-// "Who is mainly here?" — asked per place instead of a numeric threshold,
-// because people know who lives or works somewhere far better than they
-// know what an index value means. Options describe people, never "risk":
-// older adults rarely see themselves as high-risk, so a "vulnerable?"
-// question gets answered "no". The levels each group maps to live in
-// alertConfig.ts. Kept on the phone only (see BookmarkEntry.alertProfile).
-export type AudienceGroup =
-  | 'general' // general adult
-  | 'sensitive' // older adult, child or pregnant
-  | 'chronic' // heart, lung or other long-term condition
-  | 'outdoor'; // outdoor work or exercise
+// "Who are you?" / "Who's usually here?" — asked instead of a numeric
+// threshold, because people know who they are far better than they know
+// what an index value means. Several can apply (pregnant AND asthma), so it
+// is a list. Options describe people, never "risk": older adults rarely see
+// themselves as high-risk, so a "vulnerable?" question gets answered "no".
+// The levels each one maps to live in alertConfig.ts. Health data: kept on
+// the phone only (see BookmarkEntry.alertProfile).
+export type IdentityGroup =
+  | 'general' // general adult — only ever on its own
+  | 'older' // older adult (65+)
+  | 'pregnant'
+  | 'asthma'
+  | 'heartLung' // heart or other lung condition
+  | 'otherChronic' // other long-term condition, e.g. kidney disease, diabetes
+  | 'child'; // places only: never offered for "Who are you?"
+
+// "Where do you spend most of your day?" — the everyday pattern, asked once.
+// Where someone is right now is a separate, automatic question (not built yet).
+export type DailyActivity = 'indoors' | 'outdoors';
+
+// Whoever a profile is about — the phone's owner (About you) or the people
+// at a place. These three answers decide the alert level and the advice.
+export type AlertPerson = {
+  // Never empty: ['general'] alone, or any mix of the others (never general
+  // with others). Write it through toggleIdentity / normalizeIdentities.
+  identities: IdentityGroup[];
+  // Asked without the medicine's name: the app never judges a medicine,
+  // only lowers the heat level and suggests asking a doctor or pharmacist.
+  takesRegularMedicine: boolean;
+  dailyActivity: DailyActivity;
+};
+
+// Which of the push advice sentences fits: the careful one (any group that
+// needs more care), the outdoor-work one, or the everyday one. Push advice
+// stays at this coarse grain for now.
+export type AdviceGroup = 'general' | 'sensitive' | 'outdoor';
 
 // Set up for myself, or for a family member / someone else. A family place
 // gets "call to remind them" wording — research shows older adults act on
 // advice from people they know more than on push messages.
 export type CaringFor = 'self' | 'family';
 
-export type PlaceAlertProfile = {
-  audience: AudienceGroup;
+export type PlaceAlertProfile = AlertPerson & {
   caringFor: CaringFor;
   hazards: Record<HazardKind, boolean>;
   // Advanced: replaces the audience's default alert level for one hazard.
   // Absent = follow the audience, which is what almost everyone should use.
   levelOverride?: { heat?: HeatLevel; aqhi?: AqhiLevel };
-  // Places only, and only 'self' ones: the audience is the owner's "About
-  // you" answer, looked up on every read, so changing About you moves all
-  // of your own places with it. Absent on About you itself and on places
-  // saved before it existed — read places through resolvePlaceAlertProfile().
+  // Places only, and only 'self' ones: the three AlertPerson answers are the
+  // owner's "About you" answers, looked up on every read, so changing About
+  // you moves all of your own places with it. Absent on About you itself and
+  // on places saved before it existed — read places through
+  // resolvePlaceAlertProfile().
   followsAboutYou?: boolean;
+  // The answers were converted from the old one-choice audience and were a
+  // guess ("Older adult, child or pregnant" became Older adult), so the
+  // person is asked to check them once. Cleared by saving the profile.
+  // Present only when true.
+  needsReview?: boolean;
 };
 
 // Where an event is in its life:
@@ -132,8 +162,8 @@ export type AlertMessage = {
 
 // One place × hazard as it stood when a message went out — a snapshot, so
 // the detail sheet shows what the user was told even after the event moves
-// on or the place is renamed.
-export type AlertDetailItem = {
+// on or the place is renamed. Its AlertPerson answers voice the advice.
+export type AlertDetailItem = AlertPerson & {
   eventKey: string;
   placeId: string;
   placeLabel: string;
@@ -144,7 +174,6 @@ export type AlertDetailItem = {
   value: number | null;
   rank: number;
   forecast: ForecastWindow | null;
-  audience: AudienceGroup;
   caringFor: CaringFor;
 };
 

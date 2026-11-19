@@ -1,9 +1,8 @@
 // src/utils/homeAdvice.ts
 import { HazardKind } from '../types/alerts';
-import { adviceFor, adviceProfileFor } from './alertMessages';
+import { AdviceSource, adviceFor, adviceProfileFor } from './alertMessages';
 
 type LiveAlert = { hazard: HazardKind; urgent: boolean };
-type AdviceProfile = Parameters<typeof adviceFor>[1];
 
 // The personalised sentence that leads the Environmental Index detail
 // sheet's advice while an alert is measured NOW at your location: that
@@ -14,7 +13,7 @@ type AdviceProfile = Parameters<typeof adviceFor>[1];
 // either way.
 export const homeAdviceFor = (params: {
   liveAlerts: readonly LiveAlert[];
-  aboutYou: AdviceProfile;
+  aboutYou: AdviceSource;
 }): string | null => {
   const { liveAlerts, aboutYou } = params;
   if (liveAlerts.length === 0) return null;

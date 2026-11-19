@@ -1,5 +1,11 @@
 // src/config/alertCopy.ts
-import { AudienceGroup, CaringFor, HazardKind } from '../types/alerts';
+import {
+  AdviceGroup,
+  CaringFor,
+  DailyActivity,
+  HazardKind,
+  IdentityGroup,
+} from '../types/alerts';
 import { AllClearMode, NoEventDays } from '../types/settings';
 import { EnviActionId } from '../types/envi';
 import { MapLayer } from '../types/mapSettings';
@@ -10,11 +16,49 @@ import { MapLayer } from '../types/mapSettings';
 // AQHI/HKHI in titles), lead with the action, say "expected" for forecasts,
 // no exclamation marks or scare words, describe people objectively.
 
-export const AUDIENCE_COPY: Record<AudienceGroup, { label: string }> = {
+// `label` is also what summaries show ("Older adult (65+), Asthma"), so it
+// stands on its own; `hint` is the smaller line under it in the picker.
+export const IDENTITY_COPY: Record<IdentityGroup, { label: string; hint?: string }> = {
   general: { label: 'General adult' },
-  sensitive: { label: 'Older adult, child or pregnant' },
-  chronic: { label: 'Heart, lung or other long-term condition' },
-  outdoor: { label: 'Outdoor work or exercise' },
+  older: { label: 'Older adult (65+)' },
+  pregnant: { label: 'Pregnant' },
+  asthma: { label: 'Asthma' },
+  heartLung: { label: 'Heart or other lung condition' },
+  otherChronic: { label: 'Other long-term condition', hint: 'e.g. kidney disease, diabetes' },
+  child: { label: 'Child' },
+};
+
+export const DAILY_ACTIVITY_COPY: Record<DailyActivity, { label: string; hint?: string }> = {
+  indoors: { label: 'Mostly indoors' },
+  outdoors: { label: 'Often outdoors', hint: 'e.g. outdoor work, deliveries' },
+};
+
+// The three questions, asked of the phone's owner (About you) or about the
+// people at a place. The medicine question never asks for a name: the app
+// doesn't judge medicines.
+export const PERSON_QUESTION_COPY = {
+  self: {
+    identities: 'Who are you?',
+    identitiesHint: 'Select all that apply.',
+    medicine: 'Do you take regular medicine?',
+    medicineHint: 'For example for your heart, blood pressure, mental health or allergies.',
+    activity: 'Where do you spend most of your day?',
+  },
+  place: {
+    identities: "Who's usually here?",
+    identitiesHint: 'If several people are here, select all that apply.',
+    medicine: 'Does anyone here take regular medicine?',
+    medicineHint: 'For example for the heart, blood pressure, mental health or allergies.',
+    activity: 'Where do they spend most of their day?',
+  },
+  yes: 'Yes',
+  no: 'No',
+};
+
+export const PERSON_SUMMARY_COPY = {
+  identitySeparator: ', ',
+  partSeparator: ' · ',
+  medicine: 'Regular medicine',
 };
 
 export const CARING_FOR_COPY: Record<CaringFor, string> = {
@@ -49,12 +93,11 @@ export const ALL_CLEAR_COPY: Record<AllClearMode, string> = {
 
 export const PROFILE_EDITOR_COPY = {
   placeForQuestion: 'Who is this place for?',
-  placeQuestion: "Who's usually here?",
-  // Under the About you answer a place for yourself uses, until changed.
-  ownAudienceHint: 'Your answer in About you',
+  // Under the About you answers a place for yourself uses, until changed.
+  ownAudienceHint: 'Your answers in About you',
+  // Heading over a place for yourself's own answers (with a Reset link).
+  ownAnswersTitle: 'Answers for this place',
   change: 'Change',
-  selfQuestion: 'Which best describes you?',
-  pickMostCare: 'If several people are here, pick the one who needs the most care.',
   familyHint: 'Alerts will suggest calling them.',
   hazardsTitle: 'Alert me about',
   advancedTitle: 'Advanced',
@@ -65,7 +108,9 @@ export const PROFILE_EDITOR_COPY = {
   sheetTitle: 'Alert settings',
   save: 'Save',
   cancel: 'Cancel',
-  audienceResult: (heatLevel: string, aqhiLevel: string) =>
+  // Under the questions: what the answers add up to, shown as they're
+  // given, so people start learning the levels before any alert arrives.
+  levelsResult: (heatLevel: string, aqhiLevel: string) =>
     `Alerts at heat index ${heatLevel} · air quality ${aqhiLevel}`,
 };
 
@@ -113,15 +158,24 @@ export const ABOUT_YOU_COPY = {
   sheetTitle: 'About you',
 };
 
-// The one question asked on first launch. Who the phone's owner is rarely
-// changes, so it is asked once up front instead of sitting open in the Alerts tab.
+// The three questions asked on first launch. Who the phone's owner is
+// rarely changes, so they are asked once up front instead of sitting open in
+// the Alerts tab. Every question has an answer filled in already, so each
+// can be skipped by leaving it as it is.
 export const ONBOARDING_COPY = {
   eyebrow: 'WELCOME',
   title: 'Alerts that fit you',
   intro:
-    'Heat and air quality affect people differently. Tell us who you are and we’ll alert you at the right level.',
+    'Heat and air quality affect people differently. Answer three quick questions and we’ll alert you at the right level. Skip any you’d rather not answer.',
   laterHint: 'You can change this any time in Alerts.',
   continue: 'Continue',
+  // Shown once instead, to people whose earlier one-choice answer had to
+  // be converted with a guess (see profileMigration).
+  reviewEyebrow: 'UPDATED',
+  reviewTitle: 'Please check your details',
+  reviewIntro:
+    'We now ask a little more, so alerts can fit you better. We’ve filled this in from your earlier answer — change anything that isn’t right.',
+  reviewContinue: 'Confirm',
 };
 
 // The one-line summary of a profile's levels, e.g. "Heat index Danger ·
@@ -135,8 +189,11 @@ export const LEVEL_SUMMARY_COPY = {
 
 export const PLACE_ALERT_SUMMARY_COPY = {
   off: 'Alerts off',
-  // e.g. "Older adult, child or pregnant · For family or others"
-  summary: (audience: string, caringFor: string) => `${audience} · ${caringFor}`,
+  // e.g. "Older adult (65+), Asthma · For family or others"
+  summary: (identities: string, caringFor: string) => `${identities} · ${caringFor}`,
+  // A place whose old one-choice answer was converted with a guess, until
+  // its alert sheet is saved.
+  needsReview: 'Please check who is here',
 };
 
 export const CURRENT_LOCATION_LABEL = 'Your location';
@@ -154,10 +211,10 @@ const AQHI_SENSITIVE_ADVICE: Voiced = {
   family: 'Call to remind them to stay indoors and cut down outdoor exertion.',
 };
 
-export const AQHI_ADVICE: Record<AudienceGroup, Voiced> = {
+// Keyed by AdviceGroup (adviceGroupFor picks it from the answers).
+export const AQHI_ADVICE: Record<AdviceGroup, Voiced> = {
   general: AQHI_GENERAL_ADVICE,
   sensitive: AQHI_SENSITIVE_ADVICE,
-  chronic: AQHI_SENSITIVE_ADVICE,
   outdoor: {
     self: 'Cut down hard physical work outdoors and take more breaks.',
     family: 'Call to remind them to cut down hard outdoor work and take more breaks.',
@@ -183,10 +240,9 @@ const HEAT_SENSITIVE_ADVICE: Voiced = {
   family: 'Call to remind them to stay somewhere cool, drink water and avoid the hottest hours.',
 };
 
-export const HEAT_ADVICE: Record<AudienceGroup, Voiced> = {
+export const HEAT_ADVICE: Record<AdviceGroup, Voiced> = {
   general: HEAT_GENERAL_ADVICE,
   sensitive: HEAT_SENSITIVE_ADVICE,
-  chronic: HEAT_SENSITIVE_ADVICE,
   outdoor: {
     self: 'Rest in the shade, drink water often, and stop work at once if you feel unwell.',
     family: 'Call to remind them to rest in the shade and drink water often.',
