@@ -11,9 +11,9 @@ export type HourlyValue = { timestampMs: number; value: number };
 export type HazardReading = {
   // Latest observed value; null = the lookup failed or isn't available.
   current: number | null;
-  // Hourly forecast values; null = this hazard has no real forecast (heat
-  // while the API has none, AQHI without PRAISE) or the fetch failed. Past
-  // hours may be included — they're ignored here.
+  // Hourly forecast values; null = this hazard has no forecast (AQHI
+  // without PRAISE) or the fetch failed. Past hours may be included —
+  // they're ignored here.
   forecast: HourlyValue[] | null;
 };
 

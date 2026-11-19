@@ -26,18 +26,6 @@ const aqhiDay = (values: number[]): AqhiDayForecast => ({
 });
 
 describe('todaysPeakLevel', () => {
-  it('is hidden while the heat forecast repeats old readings', () => {
-    expect(
-      todaysPeakLevel({
-        heatDays: [heatDay([30, 30, 30, 45], 3)],
-        aqhiDays: [aqhiDay([2, 2, 2, 9])],
-        nowLevel: 2,
-        nowMs: NOW,
-        forecastFromHistory: true,
-      }),
-    ).toBeNull();
-  });
-
   it('is the highest level still to come today, from either hazard', () => {
     // Heat reaches Danger (4) later today.
     expect(
@@ -46,7 +34,6 @@ describe('todaysPeakLevel', () => {
         aqhiDays: [aqhiDay([2, 2, 2, 2])],
         nowLevel: 2,
         nowMs: NOW,
-        forecastFromHistory: false,
       }),
     ).toBe(4);
     // AQHI reaches Very High (4) while heat stays at Caution.
@@ -56,7 +43,6 @@ describe('todaysPeakLevel', () => {
         aqhiDays: [aqhiDay([2, 2, 2, 9])],
         nowLevel: 2,
         nowMs: NOW,
-        forecastFromHistory: false,
       }),
     ).toBe(4);
   });
@@ -69,7 +55,6 @@ describe('todaysPeakLevel', () => {
         aqhiDays: [aqhiDay([9, 2, 2, 2])],
         nowLevel: 2,
         nowMs: NOW,
-        forecastFromHistory: false,
       }),
     ).toBeNull();
   });
@@ -79,7 +64,6 @@ describe('todaysPeakLevel', () => {
       heatDays: [heatDay([30, 30, 30, 30], 3)],
       aqhiDays: [aqhiDay([2, 2, 2, 2])],
       nowMs: NOW,
-      forecastFromHistory: false,
     };
     expect(todaysPeakLevel({ ...days, nowLevel: 2 })).toBeNull();
     expect(todaysPeakLevel({ ...days, nowLevel: null })).toBeNull();
@@ -92,7 +76,6 @@ describe('todaysPeakLevel', () => {
         aqhiDays: [],
         nowLevel: 2,
         nowMs: NOW,
-        forecastFromHistory: false,
       }),
     ).toBeNull();
   });

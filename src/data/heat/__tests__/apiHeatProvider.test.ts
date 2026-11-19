@@ -1,6 +1,6 @@
 import { apiHeatProvider } from '../apiHeatProvider';
 import {
-  fetchLatestTime,
+  currentDataHour,
   fetchPointValue,
 } from '../../../services/spatialTempApi';
 
@@ -14,7 +14,7 @@ const VALUES: Record<string, number> = {
 
 describe('apiHeatProvider', () => {
   beforeEach(() => {
-    (fetchLatestTime as jest.Mock).mockResolvedValue('2026110408');
+    (currentDataHour as jest.Mock).mockReturnValue('2026110408');
     (fetchPointValue as jest.Mock).mockImplementation(
       async (family: string) => VALUES[family],
     );
@@ -32,7 +32,7 @@ describe('apiHeatProvider', () => {
       relativeHumidityPct: 83.4,
       heatIndexC: 25.4,
     });
-    // Every family is queried at the same anchored hour, never the phone's clock.
+    // Every family is queried at the same current hour.
     (fetchPointValue as jest.Mock).mock.calls.forEach(call => {
       expect(call.slice(1)).toEqual([22.3, 114.17, '2026110408']);
     });

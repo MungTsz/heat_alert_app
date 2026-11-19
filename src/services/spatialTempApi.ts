@@ -1,6 +1,7 @@
 // src/services/spatialTempApi.ts
 import { SPATIAL_TEMP_CONFIG } from '../config/spatialTempConfig';
 import { fetchWithTimeout } from '../utils/fetchWithTimeout';
+import { toHkTimestamp } from '../utils/hkDate';
 import { MapOverlayBounds } from '../types/mapSettings';
 
 export type SpatialTempFamily = 'temperature' | 'humidity' | 'heat-index';
@@ -69,31 +70,15 @@ const toAreaTile = (
   ],
 });
 
-const latestTimeCache = new Map<
-  SpatialTempFamily,
-  { fetchedAt: number; promise: Promise<string> }
->();
-
-// The newest hour the pipeline has produced. Always anchor queries on this
-// rather than the phone's clock: data lands an hour or two late, and asking
-// for "now" returns status 1 ("No ... data found").
-export const fetchLatestTime = (family: SpatialTempFamily): Promise<string> => {
-  const cached = latestTimeCache.get(family);
-  if (
-    cached &&
-    Date.now() - cached.fetchedAt < SPATIAL_TEMP_CONFIG.latestTimeCacheMs
-  ) {
-    return cached.promise;
-  }
-  // Caches the in-flight promise too, so screens mounting together share a
-  // single request; a failure is evicted so the next caller retries.
-  const promise = getJson(`/${family}/latest`).then(
-    data => data.latest_time as string,
-  );
-  latestTimeCache.set(family, { fetchedAt: Date.now(), promise });
-  promise.catch(() => latestTimeCache.delete(family));
-  return promise;
-};
+// The hour every "now" value is read at: the phone's HK clock rounded down
+// to the hour (12:15 → the 12:00 data); every later hour is forecast. The
+// API serves one continuous hourly timeline — past hours and about 8 days
+// of forecast — so /latest is now the *end of the forecast*, never "now",
+// and must not be used as an anchor. If the current hour is missing, the
+// lookup fails (status 1) and the screen shows "--" rather than an older
+// or later hour standing in for it.
+export const currentDataHour = (now: Date = new Date()): string =>
+  toHkTimestamp(now);
 
 // Hourly series at one coordinate, t0..t1 inclusive (YYYYMMDDhh, HKT).
 export const fetchPointSeries = async (
@@ -155,8 +140,7 @@ const fetchDataFootprint = (
 ): Promise<SpatialTempBounds> => {
   const cached = footprintCache.get(family);
   if (cached) return cached;
-  const promise = fetchLatestTime(family)
-    .then(ts => getJson(`/${family}/area`, { ts }))
+  const promise = getJson(`/${family}/area`, { ts: currentDataHour() })
     .then(data => {
       const { lng0, lat0, lng1, lat1 } = data.tiles;
       return { lng0, lat0, lng1, lat1 };

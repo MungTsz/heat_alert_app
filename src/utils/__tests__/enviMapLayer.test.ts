@@ -39,16 +39,11 @@ describe('enviTileSource', () => {
 
 describe('enviForecastSupported', () => {
   it('has no frames in the AQHI demo', () => {
-    expect(enviForecastSupported({ source: 'aqhi-demo', forecastFromHistory: false })).toBe(false);
-    expect(enviForecastSupported({ source: 'aqhi-demo', forecastFromHistory: true })).toBe(false);
+    expect(enviForecastSupported('aqhi-demo')).toBe(false);
   });
 
-  it('has no frames while the heat forecast is the demo copy of 48 h ago', () => {
-    expect(enviForecastSupported({ source: 'tile', forecastFromHistory: true })).toBe(false);
-  });
-
-  it('has frames only with a real index tile and a real heat forecast', () => {
-    expect(enviForecastSupported({ source: 'tile', forecastFromHistory: false })).toBe(true);
+  it('has frames with a real index tile', () => {
+    expect(enviForecastSupported('tile')).toBe(true);
   });
 });
 

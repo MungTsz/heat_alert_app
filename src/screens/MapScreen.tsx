@@ -218,9 +218,9 @@ const MapScreen = forwardRef<MapScreenHandle, Props>(function MapScreenView(
   const layerTile =
     mapLayer === 'heat' ? heatIndexTile : mapLayer === 'aqhi' ? praiseAqhiTile : enviTile;
 
-  // The index layer's frames, if it has any. None during the AQHI demo or
-  // while heat has no real forecast (useEnviForecastTiles), and with none
-  // there is no Play button on this layer.
+  // The index layer's frames, if it has any. None during the AQHI demo
+  // (useEnviForecastTiles), and with none there is no Play button on this
+  // layer.
   const enviForecast = useEnviForecastTiles(
     region,
     enableForecastPlayback && mapLayer === 'envi',

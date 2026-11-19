@@ -6,10 +6,9 @@ export type HourlyForecastPoint = {
   // the heat index so the gap between them (humidity's effect) is visible.
   // null when the API had no reading for that hour.
   temperature: number | null;
-  // true = a measured hour, false = a forecast hour. "Now" is the last
-  // observed point, not the phone's clock — the API's data lands an hour or
-  // two late, and the chart/alerts must line up with the current-conditions
-  // card, which also shows the latest observed hour.
+  // true = the current hour or earlier, false = a forecast hour. The last
+  // observed point is "now" — the current HK hour (currentDataHour), the
+  // same hour the current-conditions card shows, so chart and card agree.
   observed: boolean;
 };
 

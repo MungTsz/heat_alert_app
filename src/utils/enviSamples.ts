@@ -20,8 +20,7 @@ export type EnviSample = {
   // What the situation shows off, for whoever is reviewing it.
   note: string;
   current: HazardReadings;
-  // The dashed "Today's peak" arrow. Real screens hide it until the heat
-  // API has a real forecast; the preview shows what it will look like.
+  // The dashed "Today's peak" arrow (todaysPeakLevel on Home).
   peakLevel: number | null;
   // Settles ties by season (AQHI December to May, heat June to November).
   nowMs: number;
@@ -115,7 +114,7 @@ export const ENVI_SAMPLES: EnviSample[] = [
   sample(
     'peak-later',
     "Today's peak, later",
-    'Peak two levels above now. Hidden on Home until the heat API has a real forecast.',
+    'Peak two levels above now, later today.',
     { heat: 30, aqhi: 2 },
     { peakLevel: 4 },
   ),

@@ -2,16 +2,14 @@ jest.mock('../../config/spatialTempConfig', () => ({
   SPATIAL_TEMP_CONFIG: {
     baseUrl: 'http://api.test:8001',
     timeoutMs: 1000,
-    latestTimeCacheMs: 60000,
     forecastHorizonHours: 48,
-    forecastFromHistory: true,
   },
 }));
 
 import {
   clipToDataFootprint,
+  currentDataHour,
   fetchAreaTile,
-  fetchLatestTime,
   fetchPointSeries,
   fetchPointValue,
 } from '../spatialTempApi';
@@ -92,38 +90,33 @@ describe('spatialTempApi', () => {
     );
   });
 
-  it('shares one /latest request between concurrent callers', async () => {
-    fetchMock.mockResolvedValue(
-      jsonResponse({ status: 0, msg: null, latest_time: '2026110408' }),
+  it('reads "now" as the current HK hour, rounded down (12:15 → 12:00)', () => {
+    // 04:15 UTC = 12:15 HKT
+    expect(currentDataHour(new Date(Date.UTC(2026, 10, 19, 4, 15)))).toBe(
+      '2026111912',
     );
-
-    const [a, b] = await Promise.all([
-      fetchLatestTime('humidity'),
-      fetchLatestTime('humidity'),
-    ]);
-
-    expect(a).toBe('2026110408');
-    expect(b).toBe('2026110408');
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    // 15:59 UTC = 23:59 HKT, still the 23:00 hour of the same HK day
+    expect(currentDataHour(new Date(Date.UTC(2026, 10, 19, 15, 59)))).toBe(
+      '2026111923',
+    );
   });
 
   it('trims a map box to the data footprint so no white out-of-bound pixels are requested', async () => {
-    fetchMock.mockImplementation(async (url: string) =>
-      url.includes('/latest')
-        ? jsonResponse({ status: 0, msg: null, latest_time: '2026110409' })
-        : jsonResponse({
-            status: 0,
-            msg: null,
-            ts: '2026110409',
-            param: 'heat_index',
-            tiles: {
-              lng0: 113.8195,
-              lat0: 22.15,
-              lng1: 114.4505,
-              lat1: 22.58,
-              url: ['http://hqlx188.ust.hk:8000/static/full.png'],
-            },
-          }),
+    jest.useFakeTimers().setSystemTime(new Date(Date.UTC(2026, 10, 4, 1, 15))); // 09:15 HKT
+    fetchMock.mockResolvedValue(
+      jsonResponse({
+        status: 0,
+        msg: null,
+        ts: '2026110409',
+        param: 'heat_index',
+        tiles: {
+          lng0: 113.8195,
+          lat0: 22.15,
+          lng1: 114.4505,
+          lat1: 22.58,
+          url: ['http://hqlx188.ust.hk:8000/static/full.png'],
+        },
+      }),
     );
 
     // Box sticking out past the east and south edges → clipped to them
@@ -146,24 +139,12 @@ describe('spatialTempApi', () => {
       }),
     ).resolves.toBeNull();
 
-    // The footprint is looked up once and reused
-    const areaCalls = fetchMock.mock.calls.filter(([url]) =>
-      String(url).includes('/area'),
-    );
-    expect(areaCalls).toHaveLength(1);
-    expect(areaCalls[0][0]).toBe(
+    // The footprint is looked up once, at the current hour, and reused —
+    // never via /latest, which is now the end of the forecast.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][0]).toBe(
       'http://api.test:8001/heat-index/area?ts=2026110409',
     );
-  });
-
-  it('does not cache a failed /latest lookup', async () => {
-    fetchMock
-      .mockRejectedValueOnce(new Error('network down'))
-      .mockResolvedValueOnce(
-        jsonResponse({ status: 0, msg: null, latest_time: '2026110408' }),
-      );
-
-    await expect(fetchLatestTime('temperature')).rejects.toThrow('network down');
-    await expect(fetchLatestTime('temperature')).resolves.toBe('2026110408');
+    jest.useRealTimers();
   });
 });

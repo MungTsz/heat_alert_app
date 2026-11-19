@@ -4,7 +4,6 @@ import { heatDataProvider } from '../data/heat';
 import { forecastDataProvider } from '../data/forecast';
 import { aqhiDataProvider } from '../data/aqhi';
 import { aqhiForecastProvider } from '../data/aqhiForecast';
-import { SPATIAL_TEMP_CONFIG } from '../config/spatialTempConfig';
 import { isPraiseConfigured } from '../config/praiseConfig';
 import { HazardReading, HourlyValue } from '../utils/alertSignals';
 
@@ -27,11 +26,7 @@ const round = (value: number | null) => (value === null ? null : Math.round(valu
 const fetchHeatReading = async (coords: Coordinates): Promise<HazardReading> => {
   const [current, days] = await Promise.all([
     orNull(heatDataProvider.getHeatIndexAt(coords), 'heat index'),
-    // While the "forecast" is history replayed as demo data, it must never
-    // open a heads-up — heat events then start at "active", from readings.
-    SPATIAL_TEMP_CONFIG.forecastFromHistory
-      ? Promise.resolve(null)
-      : orNull(forecastDataProvider.getForecast(coords), 'heat forecast'),
+    orNull(forecastDataProvider.getForecast(coords), 'heat forecast'),
   ]);
   const forecast: HourlyValue[] | null =
     days === null

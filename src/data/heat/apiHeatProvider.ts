@@ -1,15 +1,15 @@
 import { HeatDataProvider } from './types';
 import {
-  fetchLatestTime,
+  currentDataHour,
   fetchPointValue,
 } from '../../services/spatialTempApi';
 
 export const apiHeatProvider: HeatDataProvider = {
   getConditionsAt: async ({ latitude, longitude }) => {
-    // All three families come out of the same hourly pipeline run, so anchor
-    // them on one hour — otherwise a pipeline update landing between calls
-    // could pair this hour's heat index with last hour's temperature.
-    const ts = await fetchLatestTime('heat-index');
+    // All three families are read at one hour, so an hour boundary passing
+    // between calls can't pair this hour's heat index with last hour's
+    // temperature.
+    const ts = currentDataHour();
     const [temperatureC, relativeHumidityPct, heatIndexC] = await Promise.all([
       fetchPointValue('temperature', latitude, longitude, ts),
       fetchPointValue('humidity', latitude, longitude, ts),
@@ -18,8 +18,6 @@ export const apiHeatProvider: HeatDataProvider = {
     return { ts, temperatureC, relativeHumidityPct, heatIndexC };
   },
 
-  getHeatIndexAt: async ({ latitude, longitude }) => {
-    const ts = await fetchLatestTime('heat-index');
-    return fetchPointValue('heat-index', latitude, longitude, ts);
-  },
+  getHeatIndexAt: async ({ latitude, longitude }) =>
+    fetchPointValue('heat-index', latitude, longitude, currentDataHour()),
 };

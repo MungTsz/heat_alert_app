@@ -3,8 +3,8 @@ import { useEffect, useState } from 'react';
 import { Region } from 'react-native-maps';
 import {
   clipToDataFootprint,
+  currentDataHour,
   fetchAreaTile,
-  fetchLatestTime,
 } from '../services/spatialTempApi';
 import { MapTile } from '../types/mapSettings';
 import { regionToBounds } from '../utils/mapRegion';
@@ -26,13 +26,10 @@ export const useHeatIndexTile = (region: Region, active: boolean) => {
     let cancelled = false;
     setLoading(true);
 
-    Promise.all([
-      fetchLatestTime('heat-index'),
-      clipToDataFootprint('heat-index', regionToBounds(region)),
-    ])
-      .then(([ts, bounds]) =>
+    clipToDataFootprint('heat-index', regionToBounds(region))
+      .then(bounds =>
         // A view entirely outside the data area simply has no tile.
-        bounds ? fetchAreaTile('heat-index', ts, bounds) : null,
+        bounds ? fetchAreaTile('heat-index', currentDataHour(), bounds) : null,
       )
       .then(data => {
         if (!cancelled) {

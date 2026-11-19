@@ -21,13 +21,9 @@ export const enviTileSource = (
 
 // Whether the index layer can have Play Forecast frames at all. Never in
 // the demo: the borrowed AQHI forecast is not an index forecast. With a
-// real index tile, only once heat has a real forecast too — while heat's
-// "forecast" repeats the reading from 48 h earlier (forecastFromHistory), an
-// index forecast built on it would be made up.
-export const enviForecastSupported = (params: {
-  source: EnviMapSource;
-  forecastFromHistory: boolean;
-}): boolean => params.source === 'tile' && !params.forecastFromHistory;
+// real index tile, yes — heat and AQHI both have real forecasts.
+export const enviForecastSupported = (source: EnviMapSource): boolean =>
+  source === 'tile';
 
 // A saved place's (or tapped point's) index level on the map: the same
 // getEnviLevel as Home's card, so a pin never disagrees with it. One missing

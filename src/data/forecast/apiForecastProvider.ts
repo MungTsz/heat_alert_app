@@ -1,7 +1,7 @@
 import { ForecastDataProvider, DayForecast, HourlyForecastPoint } from './types';
 import { SPATIAL_TEMP_CONFIG } from '../../config/spatialTempConfig';
 import {
-  fetchLatestTime,
+  currentDataHour,
   fetchPointSeries,
 } from '../../services/spatialTempApi';
 import { parseHkTimestamp, shiftHkTimestamp } from '../../utils/hkDate';
@@ -55,23 +55,21 @@ const groupByHkDay = (
 
 export const apiForecastProvider: ForecastDataProvider = {
   getForecast: async ({ latitude, longitude }) => {
-    const { forecastHorizonHours: horizon, forecastFromHistory } =
-      SPATIAL_TEMP_CONFIG;
-    const latest = await fetchLatestTime('heat-index');
-    const todayKey = latest.slice(0, 8);
+    const { forecastHorizonHours: horizon } = SPATIAL_TEMP_CONFIG;
+    const now = currentDataHour();
+    const todayKey = now.slice(0, 8);
     const todayStart = `${todayKey}00`;
+    const end = shiftHkTimestamp(now, horizon);
 
-    // One request covers both halves of the chart: today's observed hours
-    // (todayStart..latest) and, for the demo forecast, the hours the future
-    // is borrowed from (latest-horizon+1..latest). Fixed-width YYYYMMDDhh
-    // keys compare correctly as strings.
-    const historySource = shiftHkTimestamp(latest, -horizon + 1);
-    const t0 = historySource < todayStart ? historySource : todayStart;
+    // The API is one continuous timeline, so one request per family covers
+    // the whole chart: today's hours up to now, then the forecast. Near the
+    // end of the forecast run the API answers with fewer hours (status 0 +
+    // a "Partial data" warning) — the chart simply ends earlier.
     // Air temperature only adds context to the chart, so losing it degrades
     // to a heat-index-only chart instead of failing the whole forecast.
     const [heatIndexSeries, temperatureSeries] = await Promise.all([
-      fetchPointSeries('heat-index', latitude, longitude, t0, latest),
-      fetchPointSeries('temperature', latitude, longitude, t0, latest).catch(
+      fetchPointSeries('heat-index', latitude, longitude, todayStart, end),
+      fetchPointSeries('temperature', latitude, longitude, todayStart, end).catch(
         err => {
           console.log('Forecast air temperature fetch error:', err);
           return { ts: [], values: [] };
@@ -82,26 +80,16 @@ export const apiForecastProvider: ForecastDataProvider = {
     const temperatureByTs = toValueByTs(temperatureSeries);
 
     const entries: { ts: string; point: HourlyForecastPoint }[] = [];
-    const addPoint = (ts: string, sourceTs: string, observed: boolean) => {
-      const heatIndex = heatIndexByTs.get(sourceTs);
-      if (heatIndex === undefined) return;
-      const temperature = temperatureByTs.get(sourceTs) ?? null;
-      entries.push({ ts, point: toPoint(ts, heatIndex, temperature, observed) });
-    };
-
-    // Today up to now: real observations, so "now" on the chart is the same
-    // value the current-conditions card shows.
-    for (let ts = todayStart; ts <= latest; ts = shiftHkTimestamp(ts, 1)) {
-      addPoint(ts, ts, true);
-    }
-
-    // Demo forecast (see SPATIAL_TEMP_CONFIG.forecastFromHistory): each
-    // future hour repeats the observation from `horizon` hours before it.
-    if (forecastFromHistory) {
-      for (let h = 1; h <= horizon; h++) {
-        const ts = shiftHkTimestamp(latest, h);
-        addPoint(ts, shiftHkTimestamp(ts, -horizon), false);
-      }
+    // Walk the hours ourselves (not the response's ts list) so the points
+    // are in order and an hour the API skipped just leaves a gap. Fixed-width
+    // YYYYMMDDhh keys compare correctly as strings.
+    for (let ts = todayStart; ts <= end; ts = shiftHkTimestamp(ts, 1)) {
+      const heatIndex = heatIndexByTs.get(ts);
+      if (heatIndex === undefined) continue;
+      const temperature = temperatureByTs.get(ts) ?? null;
+      // Up to and including the current hour = what the card shows as now;
+      // every later hour is forecast.
+      entries.push({ ts, point: toPoint(ts, heatIndex, temperature, ts <= now) });
     }
 
     return groupByHkDay(entries, todayKey);
